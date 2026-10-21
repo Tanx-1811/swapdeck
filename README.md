@@ -89,6 +89,11 @@ npm run build
 Rồi tải **thư mục `dist`** như trên (không phải thư mục dự án). Sau khi cập nhật mã, chạy lại `npm run build` rồi bấm
 nút tải lại trên thẻ Swapdeck.
 
+**Cập nhật bản mới mà không mất dữ liệu:** giải nén bản mới **đè lên đúng thư mục đã tải trước đó**, rồi bấm nút tải
+lại trên thẻ Swapdeck. Đừng bấm **Gỡ** (xoá hết tài khoản và phiên đã lưu) và đừng tải một thư mục khác (Chrome coi là
+tiện ích mới, dữ liệu nằm lại ở bản cũ). Trước khi cập nhật hay đổi máy, nên xuất tệp sao lưu (trang quản lý → Sao
+lưu).
+
 ### Cách dùng
 
 1. Mở Swapdeck (`Alt+Shift+A`) → **Thêm Supabase** (hoặc trang khác) và cho phép truy cập đúng trang đó. Muốn thêm
@@ -214,6 +219,11 @@ npm run build
 
 Then load the **`dist` folder** the same way (not the project folder). After pulling changes, run `npm run build` again
 and press the reload icon on the Swapdeck card.
+
+**Updating without losing anything:** unzip the new version **over the folder you loaded before**, then press the reload
+icon on the Swapdeck card. Don't press **Remove** (it deletes the saved accounts and sessions) and don't load a different
+folder (Chrome treats it as a new extension; your data stays with the old one). Export a backup (manager → Backup)
+before updating or moving to another computer.
 
 ### Usage
 

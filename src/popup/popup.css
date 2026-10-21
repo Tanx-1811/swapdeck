@@ -1,0 +1,736 @@
+html,
+body {
+  width: 380px;
+  font-size: 13px;
+}
+
+body {
+  min-height: 220px;
+}
+
+.popup {
+  display: flex;
+  flex-direction: column;
+  max-height: 600px;
+  min-height: 220px;
+}
+
+/* The lid: a strip of black lacquer carrying the mark. */
+.popup__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 8px 8px 12px;
+  background: var(--lacquer);
+  color: var(--on-lacquer);
+  font-size: 16px;
+}
+
+.popup__header .logo {
+  gap: 9px;
+}
+
+.popup__header .logo svg {
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1);
+}
+
+.popup__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.popup__header .btn--ghost {
+  color: var(--on-lacquer-2);
+}
+
+.popup__header .btn--ghost:hover:not(:disabled) {
+  background: var(--lacquer-hover);
+  color: var(--on-lacquer);
+}
+
+.popup__header :focus-visible {
+  box-shadow:
+    0 0 0 2px var(--lacquer),
+    0 0 0 4px var(--lacquer-accent);
+}
+
+.popup__header .pill {
+  border: 1px solid var(--lacquer-border);
+  background: var(--lacquer-hover);
+  color: var(--on-lacquer);
+}
+
+.popup__body {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 12px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.popup__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.popup__actions .btn {
+  flex: 1 1 auto;
+}
+
+.popup__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elev);
+  font-size: 11.5px;
+}
+
+/* --- App header ------------------------------------------------------------ */
+
+.app-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 2px 0 2px;
+}
+
+.app-head__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.app-head__name {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.app-head__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 0;
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+
+/* --- Accounts: a deck of index cards ----------------------------------------- */
+
+.accounts {
+  display: grid;
+  gap: 8px;
+}
+
+.account {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--bg-elev);
+  box-shadow: var(--shadow-sm);
+  transition:
+    border-color 0.15s,
+    box-shadow 0.2s var(--ease);
+}
+
+.account:hover {
+  border-color: var(--border-strong);
+}
+
+/* The account in use sits on top of the deck. */
+.account--active {
+  border-color: var(--border-strong);
+  box-shadow:
+    3px 3px 0 -1px var(--bg-elev),
+    3px 3px 0 0 var(--border-strong),
+    var(--shadow-md);
+}
+
+.account > .btn {
+  margin-right: 6px;
+}
+
+.account__main {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  padding: 10px 6px 10px 11px;
+  border: 0;
+  border-radius: var(--r-lg);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.account__main:disabled {
+  cursor: default;
+}
+
+.account__main:disabled:not(.account--busy *) {
+  opacity: 0.6;
+}
+
+.account--busy .account__main {
+  opacity: 1;
+}
+
+.account__text {
+  display: grid;
+  flex: 1;
+  gap: 1px;
+  min-width: 0;
+}
+
+.account__name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+.account__meta {
+  color: var(--text-2);
+  font-size: 11.5px;
+}
+
+.account__note {
+  color: var(--text-3);
+  font-size: 11.5px;
+}
+
+.account__note::before {
+  content: '— ';
+}
+
+.account__side {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  color: var(--accent-text);
+}
+
+.account__side kbd {
+  opacity: 0.75;
+  transition: opacity 0.12s;
+}
+
+.account__main:hover .account__side kbd,
+.account__main:focus-visible .account__side kbd {
+  opacity: 1;
+}
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 7px 11px;
+  border: 1px solid color-mix(in srgb, var(--success) 22%, transparent);
+  border-radius: var(--r-md);
+  background: var(--success-soft);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.status-bar strong {
+  margin-left: 4px;
+  font-weight: 650;
+}
+
+.account__chips {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: -3px;
+  padding: 0 11px 10px 58px;
+}
+
+.account__chips .chip {
+  max-width: 150px;
+}
+
+/* --- Sections and the apps list ----------------------------------------------- */
+
+.section {
+  display: grid;
+  gap: 7px;
+}
+
+/* Small capitals followed by a hairline, like a ledger heading. */
+.section__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 2px 0;
+  color: var(--text-3);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.section__title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.app-list {
+  display: grid;
+  gap: 6px;
+}
+
+.app-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 9px 10px 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--bg-elev);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.app-row:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+}
+
+.app-row__text {
+  display: grid;
+  flex: 1;
+  gap: 1px;
+  min-width: 0;
+}
+
+.app-row__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+.app-row__meta {
+  color: var(--text-2);
+  font-size: 11.5px;
+}
+
+.app-row__chevron {
+  width: 16px;
+  height: 16px;
+  color: var(--text-3);
+}
+
+.app-row__warn {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--warning);
+}
+
+.site-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 10px 10px 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-lg);
+  color: var(--text-2);
+  font-size: 12.5px;
+}
+
+.site-card__icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--text-3);
+}
+
+.site-card__text {
+  flex: 1;
+}
+
+.site-card__actions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+
+.site-note {
+  margin: 4px 2px;
+  font-size: 12.5px;
+}
+
+/* A blank index card. */
+.empty {
+  display: grid;
+  gap: 4px;
+  padding: 18px 16px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--bg-elev) 55%, transparent);
+  text-align: center;
+}
+
+.empty__title {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.empty__text {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.welcome {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 20px 12px 10px;
+  text-align: center;
+}
+
+.welcome h2 {
+  margin: 4px 0 0;
+  text-wrap: balance;
+  font-family: var(--display);
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.welcome p {
+  max-width: 300px;
+  margin: 0 0 6px;
+  color: var(--text-2);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+/* --- Unlock ---------------------------------------------------------------------- */
+
+.unlock {
+  display: grid;
+  gap: 8px;
+  padding: 11px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-md);
+  background: var(--accent-soft);
+}
+
+.unlock__head {
+  display: flex;
+  gap: 10px;
+}
+
+.unlock__head > svg {
+  flex: none;
+  width: 17px;
+  height: 17px;
+  margin-top: 1px;
+  color: var(--accent-text);
+}
+
+.unlock__head p {
+  margin: 0;
+}
+
+.unlock__row {
+  display: flex;
+  gap: 6px;
+}
+
+/* --- Wide popup and side panel ---------------------------------------------------- */
+
+html.layout-wide,
+html.layout-wide body {
+  width: 720px;
+}
+
+html.mode-panel,
+html.mode-panel body {
+  width: auto;
+  min-width: 300px;
+  height: 100%;
+}
+
+html.mode-panel .popup {
+  height: 100vh;
+  max-height: none;
+}
+
+.popup--wide {
+  height: 600px;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+}
+
+/* The left column is the drawer the cards are filed in. */
+.columns__side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 10px;
+  border-right: 1px solid var(--border);
+  background: var(--bg-sunken);
+  overflow-y: auto;
+}
+
+.columns__main {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 0;
+  padding: 14px 16px;
+  overflow-y: auto;
+}
+
+.columns__side .app-list {
+  gap: 2px;
+}
+
+.columns__side .app-row {
+  padding: 8px 9px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.columns__side .app-row:hover {
+  background: var(--bg-hover);
+}
+
+.app-row--selected,
+.columns__side .app-row--selected {
+  border-color: var(--border);
+  background: var(--bg-elev);
+  box-shadow: var(--shadow-sm);
+}
+
+/* A ribbon marks the open drawer card. */
+.columns__side .app-row--selected::before {
+  content: '';
+  position: absolute;
+  top: 9px;
+  bottom: 9px;
+  left: -1px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+}
+
+.app-panel {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.pick-hint,
+.search-empty {
+  margin: 24px 8px;
+  text-align: center;
+}
+
+.search-box .input {
+  min-height: 34px;
+  background: var(--bg-elev);
+}
+
+.search-results {
+  display: grid;
+  gap: 12px;
+}
+
+.result-list {
+  display: grid;
+  gap: 6px;
+}
+
+.result-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--bg-elev);
+  text-align: left;
+  cursor: pointer;
+}
+
+.result-row:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+}
+
+.result-row:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.result-row__text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.result-row__name {
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+/* --- Workspaces bar: index tabs ------------------------------------------------- */
+
+.ws-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px 7px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+}
+
+.ws-bar__label {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-3);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ws-bar__label svg {
+  width: 13px;
+  height: 13px;
+}
+
+.ws-bar__chips {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.ws-bar__chips::-webkit-scrollbar {
+  display: none;
+}
+
+.ws-bar__empty {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ws-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  max-width: 200px;
+  min-height: 28px;
+  padding: 0 9px 0 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.ws-chip:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+}
+
+.ws-chip:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.ws-chip--active {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: var(--accent-soft);
+}
+
+.ws-chip--active:disabled {
+  opacity: 1;
+}
+
+.ws-chip--partial {
+  border-style: dashed;
+  border-color: var(--border-strong);
+}
+
+.ws-chip__check {
+  width: 14px;
+  height: 14px;
+  color: var(--accent-text);
+}
+
+.ws-chip__count {
+  color: var(--text-3);
+  font-family: var(--mono);
+  font-size: 10.5px;
+}
+
+.ws-chip .spinner {
+  width: 12px;
+  height: 12px;
+}
+
+.columns__side .site-card {
+  flex-wrap: wrap;
+  margin-top: 4px;
+}

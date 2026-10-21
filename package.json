@@ -1,0 +1,68 @@
+{
+  "name": "swapdeck",
+  "private": true,
+  "version": "1.3.0",
+  "description": "Switch between multiple accounts on Supabase and any other web app in one click.",
+  "license": "MIT",
+  "author": "Tanx-1811 (https://github.com/Tanx-1811)",
+  "homepage": "https://github.com/Tanx-1811/swapdeck#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tanx-1811/swapdeck.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Tanx-1811/swapdeck/issues"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch --mode development",
+    "build": "tsc -b && vite build",
+    "build:e2e": "vite build --mode e2e",
+    "typecheck": "tsc -b",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "npm run build && npm run build:e2e && playwright test --project=e2e --project=store-build",
+    "icons": "node scripts/generate-icons.mjs",
+    "package": "node scripts/third-party-notices.mjs && npm run build && node scripts/package-extension.mjs",
+    "screenshots": "npm run build:e2e && playwright test --project=screenshots",
+    "test:live": "npm run build:e2e && playwright test --project=live",
+    "brand": "node scripts/brand/render.mjs",
+    "notices": "node scripts/third-party-notices.mjs"
+  },
+  "dependencies": {
+    "@fontsource/be-vietnam-pro": "^5.3.0",
+    "@fontsource/fraunces": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "lucide-react": "^1.59.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.1",
+    "@resvg/resvg-js": "^2.6.2",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.8",
+    "@types/chrome": "^0.3.5",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "eslint": "^10.13.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "fake-indexeddb": "^6.2.6",
+    "globals": "^17.13.0",
+    "jsdom": "^30.1.3",
+    "prettier": "^3.9.10",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.71.2",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5"
+  }
+}

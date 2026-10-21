@@ -1,0 +1,33 @@
+name: Request a site / Đề xuất trang mới
+description: Ask for a site to be built in (a preset). / Đề xuất thêm một trang có sẵn.
+labels: [preset]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Any site already works through "Add a custom site". Built-in presets add the right sign-in page and recognise who is signed in.
+        Trang nào cũng dùng được qua "Thêm trang khác"; trang có sẵn thì biết sẵn trang đăng nhập và nhận ra ai đang đăng nhập.
+  - type: input
+    id: name
+    attributes:
+      label: Site name / Tên trang
+      placeholder: Acme Cloud
+    validations:
+      required: true
+  - type: input
+    id: dashboard
+    attributes:
+      label: Dashboard address / Địa chỉ trang quản trị
+      placeholder: https://app.acme.example/dashboard
+    validations:
+      required: true
+  - type: input
+    id: login
+    attributes:
+      label: Sign-in page / Trang đăng nhập
+      placeholder: https://app.acme.example/login
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything special? / Có gì đặc biệt?
+      description: Several domains, sign-in through another site, works already as a custom site… / Nhiều tên miền, đăng nhập qua trang khác…

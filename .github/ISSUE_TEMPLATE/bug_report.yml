@@ -1,0 +1,60 @@
+name: Bug report / Báo lỗi
+description: Something doesn't work as expected. / Có gì đó chạy chưa đúng.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! **Never paste real cookies, tokens, passwords or emails** — describe them or use made-up ones.
+        Security problems go through the private form instead (Security → Report a vulnerability).
+
+        Cảm ơn bạn đã báo lỗi! **Đừng dán cookie, token, mật khẩu hay email thật.** Lỗ hổng bảo mật hãy báo riêng (Security → Report a vulnerability).
+  - type: dropdown
+    id: product
+    attributes:
+      label: Which part? / Phần nào?
+      options:
+        - Chrome extension / Tiện ích Chrome
+        - Swapdeck Desktop (macOS)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / Phiên bản
+      description: Extension → manager → Help. Desktop → Settings.
+      placeholder: 1.3.0
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Browser and OS / Trình duyệt và hệ điều hành
+      placeholder: Chrome 141 on macOS 15
+  - type: input
+    id: site
+    attributes:
+      label: Site or app involved / Trang hoặc ứng dụng liên quan
+      placeholder: Supabase dashboard
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce / Các bước tái hiện
+      placeholder: |
+        1. …
+        2. …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What happened, and what did you expect? / Chuyện gì đã xảy ra, và bạn mong đợi gì?
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy / Quyền riêng tư
+      options:
+        - label: I removed personal data (emails, tokens, cookies) from what I pasted. / Tôi đã xoá dữ liệu cá nhân khỏi nội dung dán vào.
+          required: true

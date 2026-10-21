@@ -1,0 +1,32 @@
+{
+  "extName": {
+    "message": "Swapdeck — Đổi nhiều tài khoản"
+  },
+  "extDescription": {
+    "message": "Đổi tài khoản Supabase, Vercel, GitHub và hơn 160 trang chỉ với một cú nhấp — hoặc đổi mọi ứng dụng của một bên cùng lúc."
+  },
+  "actionTitle": {
+    "message": "Swapdeck — đổi tài khoản"
+  },
+  "commandOpen": {
+    "message": "Mở Swapdeck"
+  },
+  "commandNext": {
+    "message": "Chuyển sang tài khoản kế tiếp của trang hiện tại"
+  },
+  "commandPrevious": {
+    "message": "Chuyển về tài khoản trước của trang hiện tại"
+  },
+  "commandNewLogin": {
+    "message": "Đăng nhập trang hiện tại bằng tài khoản khác"
+  },
+  "commandManager": {
+    "message": "Mở trang quản lý Swapdeck"
+  },
+  "commandWorkspaceNext": {
+    "message": "Chuyển sang bên kế tiếp (mọi ứng dụng cùng lúc)"
+  },
+  "commandSidePanel": {
+    "message": "Mở Swapdeck ở bảng bên"
+  }
+}

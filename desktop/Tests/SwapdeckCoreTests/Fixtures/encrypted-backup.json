@@ -1,0 +1,13 @@
+{
+  "format": "swapdeck-backup",
+  "version": 1,
+  "createdAt": 1760000000000,
+  "encrypted": true,
+  "payload": {
+    "kdf": "PBKDF2-SHA-256",
+    "iterations": 310000,
+    "salt": "nL4NqKqb8nuG56PWkwzqYw==",
+    "iv": "YuuTdmDEPnGZj8yU",
+    "data": "EBjrn3PRjM2vh1SB9+DaVDorsmcdb0GTLDBnxO5h+Fh7WLC54JM1XM4jZmjUVMRr/EPX9k4Www6WzfINVs5Lt+bGK0CIa3OrUlmeB3KpF3PkAJRzIEHoK3/Z+b1N7+zq28zIFLmJO5YU/PDmsu15gQMykLhcZp0y9vk/n35N2Bm3PqehCubpcEwhxUnyCC6E7o7GEIzMqHRAEFTBFcfnM17lpUINm1hXUcuhZxXUmejZkHnPI24EBTcChsO4W/d/xrJnTjJ1F3eHscOEO4JEZ6+/UQEzscctNG477QfX+WhUwIiMIvdEZXgyeAhBUfI5/NDvdDarf4iy9/JTOH8Di1+t4yNiRP/AF2YwVSlzMeHZLr+A8kM8f2RUzhixh04FVDfByS5ABW+86zIS5NXC3Xrjaf/BskGnDLzWsVjsw6fn34Vp3Vd4wOQ4mFgTh0X28e04EBmaeRAHtrJU/c3IS8IjN+i4Yo4HxlAbW7etR+1Hem4Ba0IAy6WhBFd7tUq1sTeL/gbX+R4sLP5WOMt40nLWuT38bC9Kf5k7Ho4Wdg6Yzdr541H+cucvzQp3nAZ4"
+  }
+}

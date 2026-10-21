@@ -1,0 +1,32 @@
+{
+  "extName": {
+    "message": "Swapdeck — Multi-Account Switcher"
+  },
+  "extDescription": {
+    "message": "Switch accounts on Supabase, Vercel, GitHub and 160+ sites in one click — or every app of a client at once. No signing out."
+  },
+  "actionTitle": {
+    "message": "Swapdeck — switch accounts"
+  },
+  "commandOpen": {
+    "message": "Open Swapdeck"
+  },
+  "commandNext": {
+    "message": "Switch to the next account of the current site"
+  },
+  "commandPrevious": {
+    "message": "Switch to the previous account of the current site"
+  },
+  "commandNewLogin": {
+    "message": "Sign in to the current site with another account"
+  },
+  "commandManager": {
+    "message": "Open the Swapdeck manager"
+  },
+  "commandWorkspaceNext": {
+    "message": "Switch to the next workspace (all its apps at once)"
+  },
+  "commandSidePanel": {
+    "message": "Open Swapdeck in the side panel"
+  }
+}

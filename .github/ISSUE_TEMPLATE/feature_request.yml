@@ -1,0 +1,25 @@
+name: Idea / Ý tưởng
+description: Suggest an improvement. / Đề xuất cải tiến.
+labels: [enhancement]
+body:
+  - type: dropdown
+    id: product
+    attributes:
+      label: Which part? / Phần nào?
+      options:
+        - Chrome extension / Tiện ích Chrome
+        - Swapdeck Desktop (macOS)
+        - Both / Cả hai
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like to do? / Bạn muốn làm gì?
+      description: The situation and what gets in the way. / Tình huống và điều đang vướng.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How could Swapdeck help? / Swapdeck có thể giúp thế nào?

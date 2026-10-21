@@ -43,6 +43,9 @@ public enum DataFile {
         if let raw = input["defaultBrowser"] as? String, let browser = BrowserKind(rawValue: raw) {
             settings.defaultBrowser = browser
         }
+        if let raw = input["unmatchedLinks"] as? String, let choice = UnmatchedLinks(rawValue: raw) {
+            settings.unmatchedLinks = choice
+        }
         return settings
     }
 
@@ -56,6 +59,9 @@ public enum DataFile {
         let browser = (input["browser"] as? String).flatMap(BrowserKind.init(rawValue:)) ?? .chrome
         let profile = (input["profileDirectory"] as? String).flatMap { ProfileReader.isProfileDirectory($0) ? $0 : nil } ?? ""
         let links = (input["links"] as? [Any] ?? []).prefix(50).compactMap(sanitizeLink)
+        var ruleSet = Set<String>()
+        let rules = (input["linkRules"] as? [Any] ?? []).compactMap { ($0 as? String).flatMap(LinkRouter.normalize) }
+            .filter { ruleSet.insert($0).inserted }.prefix(50)
         return Workspace(
             id: id,
             name: name,
@@ -66,6 +72,7 @@ public enum DataFile {
             profileDirectory: profile,
             links: Array(links),
             openLinksInNewWindow: input["openLinksInNewWindow"] as? Bool ?? true,
+            linkRules: Array(rules),
             order: (input["order"] as? NSNumber)?.intValue ?? 0,
             createdAt: date(input["createdAt"]) ?? Date(timeIntervalSince1970: 0),
             lastOpenedAt: date(input["lastOpenedAt"]),

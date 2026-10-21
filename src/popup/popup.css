@@ -734,3 +734,37 @@ html.mode-panel .popup {
   flex-wrap: wrap;
   margin-top: 4px;
 }
+
+/* --- Confirmation window (popup.html?ask=…) ------------------------------------ */
+
+.ask-window {
+  min-height: 100vh;
+  max-height: none;
+}
+
+html:has(.ask-window),
+html:has(.ask-window) body {
+  width: auto;
+}
+
+.ask {
+  display: grid;
+  gap: 10px;
+}
+
+.ask__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--danger);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ask__eyebrow svg {
+  width: 14px;
+  height: 14px;
+}

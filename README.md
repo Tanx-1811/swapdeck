@@ -56,6 +56,9 @@ Không cần đăng xuất, không gõ lại mật khẩu, không cần thêm h�
   bật khoá khi bạn đã lưu từ hai tài khoản.
 - **Tài khoản quan trọng** (production, tài khoản thật của khách): nhãn đỏ, dải cảnh báo đỏ trên mọi trang của ứng dụng
   khi đang dùng tài khoản đó, và hỏi lại trước khi chuyển sang — đỡ thao tác nhầm tài khoản.
+- **Không mất nội dung đang gõ:** trước khi đổi tài khoản làm tải lại các tab, Swapdeck xem có biểu mẫu đã sửa, chữ đang
+  gõ dở hay trang đang cảnh báo khi rời không, và hỏi trước. Đổi bằng phím tắt, thanh địa chỉ hay menu cũng được hỏi
+  ngay trên trang.
 - **Sao lưu & chuyển máy:** xuất/nhập tệp sao lưu, kèm phiên đăng nhập (được mã hóa bằng mật khẩu bạn chọn).
 - Trang quản lý đầy đủ: tổng quan, các bên, ứng dụng & tài khoản, lịch sử, sao lưu, bảo mật, cài đặt, hướng dẫn.
   **Tiếng Việt và tiếng Anh**. Giao diện riêng **“sơn mài & giấy dó”** (mực trên giấy ấm, sơn mài đen, dấu son
@@ -64,8 +67,8 @@ Không cần đăng xuất, không gõ lại mật khẩu, không cần thêm h�
 ### Swapdeck Desktop: mỗi bên một hồ sơ Chrome
 
 Muốn tách hẳn từng bên? [**Swapdeck Desktop**](desktop/README.md) là app trên thanh menu macOS: mỗi bên là một hồ sơ
-Chrome riêng, một cú nhấp (hoặc <kbd>⌃⌥B</kbd>) đưa cửa sổ của bên lên trước. Không chép phiên đăng nhập nào, mở được
-nhiều bên cạnh nhau, đăng nhập Google vẫn chạy. Tiện ích này vẫn hữu ích bên trong từng hồ sơ khi một bên có nhiều tài
+Chrome riêng, một cú nhấp (hoặc <kbd>⌃⌥B</kbd>) đưa cửa sổ của bên lên trước; đặt làm trình duyệt mặc định thì link
+từ Slack, Mail… tự mở đúng bên. Không chép phiên đăng nhập nào, mở được nhiều bên cạnh nhau, đăng nhập Google vẫn chạy. Tiện ích này vẫn hữu ích bên trong từng hồ sơ khi một bên có nhiều tài
 khoản trên cùng một dịch vụ.
 
 ### Cài đặt
@@ -179,6 +182,8 @@ click. No signing out, no retyping passwords, no extra Chrome profiles.
   you to turn it on once two accounts are saved.
 - **Important accounts** (production, a client's live account): a red label, a red warning strip on every page of the
   app while that account is in use, and a confirmation before switching to it.
+- **Unsaved work is safe:** before a switch reloads an app's tabs, Swapdeck looks for edited forms, text being typed and
+  pages that warn before you leave, and asks first. Shortcut, address-bar and menu switches ask right on the page.
 - **Backup & move:** export/import a backup file, with sessions encrypted by a password you choose.
 - A full manager: overview, workspaces, apps & accounts, history, backup, security, settings, help. **English and
   Vietnamese**. Its own **lacquer & paper** look (ink on warm paper, black lacquer, a vermilion "in use" seal), light
@@ -187,8 +192,9 @@ click. No signing out, no retyping passwords, no extra Chrome profiles.
 ### Swapdeck Desktop: one Chrome profile per workspace
 
 Want each workspace fully apart? [**Swapdeck Desktop**](desktop/README.md) is a macOS menu bar app that keeps each
-workspace in its own Chrome profile and brings its window forward in one click (or <kbd>⌃⌥B</kbd>). No sign-in is ever
-copied, workspaces can sit side by side, and "Sign in with Google" keeps working. This extension stays useful inside a
+workspace in its own Chrome profile and brings its window forward in one click (or <kbd>⌃⌥B</kbd>); as the default
+browser it sends links from Slack, Mail and other apps to the workspace they belong to. No sign-in is ever copied,
+workspaces can sit side by side, and "Sign in with Google" keeps working. This extension stays useful inside a
 profile when one workspace has several accounts on the same service.
 
 ### Install

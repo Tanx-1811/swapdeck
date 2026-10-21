@@ -22,7 +22,7 @@ mới kèm các trang của bên.
 
 ## Cài đặt
 
-1. Lấy `release/swapdeck-desktop-1.0.0.zip` (hoặc tự build, xem dưới), giải nén, kéo **Swapdeck Desktop.app** vào thư
+1. Lấy `release/swapdeck-desktop-1.1.0.zip` (hoặc tự build, xem dưới), giải nén, kéo **Swapdeck Desktop.app** vào thư
    mục Ứng dụng.
 2. Mở app. App chưa ký bằng Apple Developer ID, nên lần đầu macOS có thể chặn: chuột phải vào app → **Mở** → **Mở**.
 3. Biểu tượng bộ thẻ xuất hiện trên thanh menu.
@@ -39,6 +39,24 @@ mới kèm các trang của bên.
 **Đã có các bên trong tiện ích Swapdeck?** Trong tiện ích: trang quản lý → Sao lưu → xuất tệp. Trong app: _Nhập_ →
 _Chọn tệp sao lưu…_ (nhập mật khẩu nếu tệp có mật khẩu). Chỉ tên, màu, biểu tượng và các trang của bên được đọc; phiên
 đăng nhập trong tệp bị bỏ qua.
+
+## Mở link đúng bên
+
+<img src="screenshots/chooser-vi-light.png" alt="Bảng chọn bên cho một link" width="300" align="right">
+
+Trong _Cài đặt → Link mở từ ứng dụng khác_, bấm **Đặt Swapdeck làm trình duyệt mặc định**. Từ đó, link bạn bấm trong
+Slack, Mail, Zalo, Notion… mở thẳng vào đúng hồ sơ của bên:
+
+- **Theo trang của bên:** mỗi trang đã ghim cho bên đó (ví dụ `supabase.com/dashboard/project/acme`) tự kéo các link
+  tương ứng về bên; tên miền chỉ một bên có (ví dụ `app.acme.example`) cũng vậy.
+- **Theo quy tắc bạn thêm** trong trang sửa bên, mục _Link mở vào bên này_: `acme.example` (cả các tên miền con), hoặc
+  một đường dẫn cụ thể. Quy tắc cụ thể nhất được chọn.
+- **Link không thuộc bên nào:** hiện bảng chọn bên (mặc định), hoặc mở vào bên đang dùng, hoặc mở bình thường trong
+  trình duyệt. Trong bảng chọn, đánh dấu _Luôn mở … trong bên mình chọn_ để Swapdeck nhớ luôn.
+- Giữ <kbd>⌥ Option</kbd> khi bấm link để lần nào cũng được chọn bên.
+
+**Hồ sơ mới mang sẵn tên và màu của bên:** khi bấm _Tạo hồ sơ mới_, Swapdeck tạo sẵn thư mục hồ sơ với tên và màu của
+bên, nên Chrome hiện đúng tên bên và tô khung cửa sổ theo màu đó ngay từ đầu.
 
 **Dùng cùng tiện ích:** nếu một bên có nhiều tài khoản trên cùng một dịch vụ (ví dụ hai tài khoản Supabase của cùng một
 khách), cài tiện ích Swapdeck trong hồ sơ của bên đó và bật khoá mật khẩu.
@@ -59,6 +77,8 @@ Trình duyệt hỗ trợ: Google Chrome (cả Beta, Dev, Canary), Brave, Micros
 - Lưu tên, màu, biểu tượng, thư mục hồ sơ và địa chỉ các trang của bên tại
   `~/Library/Application Support/Swapdeck Desktop/workspaces.json` — không có mật khẩu, không có phiên đăng nhập.
 - Quyền _Tự động hoá_ chỉ dùng để liệt kê, đặt tên và đưa cửa sổ trình duyệt lên trước.
+- Khi là trình duyệt mặc định, Swapdeck nhận địa chỉ các link bạn mở từ ứng dụng khác chỉ để chuyển chúng tới đúng bên;
+  không lưu lại, trừ tên miền bạn chọn _Luôn mở … trong bên này_.
 
 ## Tự build
 
@@ -67,7 +87,7 @@ Cần Xcode 16 trở lên (Swift 6) trên macOS 14 trở lên.
 ```sh
 cd desktop
 swift test                    # kiểm thử phần lõi
-./scripts/build-app.sh        # build/Swapdeck Desktop.app + release/swapdeck-desktop-1.0.0.zip
+./scripts/build-app.sh        # build/Swapdeck Desktop.app + release/swapdeck-desktop-1.1.0.zip
 ```
 
 - `"build/Swapdeck Desktop.app/Contents/MacOS/Swapdeck Desktop" --render-previews <thư mục>` vẽ các màn hình bằng dữ
@@ -92,7 +112,7 @@ a new window with the workspace's pages.
 the Keychain; Swapdeck Desktop never reads, stores or moves a sign-in. Workspaces can sit side by side in named windows,
 "Sign in with Google" keeps working, and extensions, password managers and DevTools stay as they are.
 
-**Install:** unzip `release/swapdeck-desktop-1.0.0.zip`, move **Swapdeck Desktop.app** to Applications and open it (the
+**Install:** unzip `release/swapdeck-desktop-1.1.0.zip`, move **Swapdeck Desktop.app** to Applications and open it (the
 app isn't signed with a Developer ID yet: right-click → Open the first time).
 
 **First steps:** create workspaces from your browser profiles (or create one and pick or create a profile), sign in to
@@ -101,9 +121,16 @@ each workspace keeps one named window that Swapdeck brings back (without it, eve
 using the Swapdeck extension? Export a backup there (manager → Backup) and choose _Import → Choose backup file…_ here:
 names, colors, symbols and pages come along; saved sign-ins are ignored.
 
+**Links from other apps:** make Swapdeck the default web browser (Settings → Links from other apps) and links from
+Slack, Mail and other apps open in the workspace they belong to — by the workspace's pages, and by rules you add
+("acme.example" covers its subdomains; a path narrows it). Links that match nothing show a chooser (or go to the
+workspace in use, or open normally); hold ⌥ Option while clicking to always choose. Profiles Swapdeck creates for a
+workspace get its name and color from the start.
+
 **Privacy:** offline. Reads the browser's `Local State` for profile names, the Google account signed in to Chrome and
 colors; stores names, colors, symbols, profile folders and page addresses in
 `~/Library/Application Support/Swapdeck Desktop/workspaces.json`. Automation is only used to list, name and raise
-browser windows.
+browser windows. As the default browser it sees the addresses of links you open from other apps only to route them,
+and keeps none of them except the sites you choose to always open in a workspace.
 
 **Build:** Xcode 16+ (Swift 6), macOS 14+: `cd desktop && swift test && ./scripts/build-app.sh`.

@@ -1,3 +1,4 @@
+import type { GuardedPlan, UnsavedTab } from '../core/ask';
 import type { Account, AppDef, DetectorSpec, Identity, Settings, StorageKinds, Workspace } from '../core/types';
 
 /** Fields a page may set when adding or editing an app. */
@@ -96,7 +97,14 @@ type Api = {
     res: SwitchOutcome;
   };
   fresh: { req: { appId: string; tabId?: number; focus?: boolean }; res: SwitchOutcome };
-  cycle: { req: { tabId?: number; step: 1 | -1 }; res: SwitchOutcome };
+  /** "Next/previous account" as the keyboard shortcut does it: asks on the page when needed. */
+  cycle: { req: { tabId?: number; step: 1 | -1 }; res: 'done' | 'cancelled' | 'asked' };
+  /** Tabs of these apps that may hold unsaved work (asked before a switch reloads them). */
+  unsaved: { req: { appIds: string[] }; res: UnsavedTab[] };
+  /** The confirmation window's answer for a switch asked for by a shortcut, the address bar or a menu. */
+  'ask.answer': { req: { id: string; ok: boolean }; res: boolean };
+  /** A switch as the shortcut, address bar and menus run it (asks on the page or in a window when needed). */
+  'switch.guarded': { req: { plan: GuardedPlan }; res: 'done' | 'cancelled' | 'asked' };
   /** `target`: 'new' forces a new account, an account id updates that account; default: by identity. */
   save: { req: { appId: string; tabId?: number; target?: 'new' | string }; res: SaveOutcome };
   restorePrevious: { req: { accountId: string }; res: true };

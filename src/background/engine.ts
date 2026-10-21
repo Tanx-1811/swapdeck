@@ -1,4 +1,4 @@
-import { cycleAccount, decideSave, isEmptySnapshot, type SaveDecision } from '../core/decide';
+import { decideSave, isEmptySnapshot, type SaveDecision } from '../core/decide';
 import { appForUrl, matchPatterns, originOf, parseHttpUrl } from '../core/domains';
 import { detectIdentity, hasIdentity, isSpecificDetector, sameIdentity } from '../core/identity';
 import { presetForUrl } from '../core/presets';
@@ -464,21 +464,6 @@ export function switchTo(request: SwitchRequest): Promise<SwitchOutcome> {
     for (const id of reloadLater) void chrome.tabs.reload(id).catch(() => undefined);
     return { saved, ...(skipped ? { skipped } : {}), tabId: workId };
   });
-}
-
-/** Switches the app of the given tab to the next (or previous) saved account. */
-export async function cycle(tabId: number | undefined, step: 1 | -1): Promise<SwitchOutcome> {
-  const tab = tabId !== undefined ? await getTab(tabId) : await activeTab();
-  const state = await readState();
-  const app = appForUrl(state.apps, tabUrl(tab));
-  if (!app) throw new SwapdeckError('NOT_FOUND', 'app');
-  const next = cycleAccount(
-    state.accounts.filter((account) => account.appId === app.id),
-    state.active[app.id],
-    step,
-  );
-  if (!next) throw new SwapdeckError('NO_SESSION');
-  return switchTo({ appId: app.id, accountId: next.id, kind: 'switch', tabId: tab?.id });
 }
 
 /**

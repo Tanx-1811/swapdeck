@@ -183,6 +183,15 @@ On `tabs.onUpdated` for tabs of an added app (with access, not incognito, not th
   - A pending switch toast for this tab (≤ 60 s old) is shown: success, "still signed in as …" (wrong account) or
     "session expired" (signed out with a specific detector), or the "signed out — sign in with another account"
     note after a fresh sign-in.
+- **Unsaved work** (`guarded.ts`, `settings.guardUnsaved`): before a switch that reloads an app's tabs, `findUnsaved`
+  runs `unsavedWork` in each open tab of the app, in the page's **own (MAIN) world** so it can see the page's
+  `beforeunload` handlers (a synthetic, cancelable `beforeunload`; an old-style `onbeforeunload` returning text), edited
+  form fields (not search boxes) and a focused editor holding text. It returns yes/no only, 800 ms at most per tab.
+  The popup, side panel and manager merge it into one confirmation (`askText` in `core/ask.ts`, `useAskBeforeSwitch`).
+- **Shortcut, address-bar and menu switches** go through `runGuarded`: the same checks, then `askOnPage` (a closed
+  shadow-root dialog; only trusted clicks confirm; Escape or 25 s answers no) on the current tab, or — when that tab
+  can't be scripted — a small window (`popup.html?ask=<id>`) reading the pending plan from `sd:ask` (session storage)
+  and answering with `ask.answer`. The `cycle` request is the guarded "next account".
 - **Important accounts** (`Account.important`): after each reconcile of an app that has any, `markImportant` injects
   `showRibbon` — a red strip and tag along the top of the page (closed shadow root, no pointer events) — when the
   account really signed in there (the recognised identity, else the active account unless the page shows nobody) is
@@ -292,17 +301,17 @@ detected identity, the active and matching accounts, and a status: `match`, `mis
 
 ## 12. Permissions
 
-| Permission                                | Why                                                                                                   |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `storage`, `unlimitedStorage`             | Apps, accounts, saved sessions (snapshots can be large), settings, history — on this device           |
-| `cookies`                                 | Save and restore the sign-in cookies of added sites (requires host access to those sites)             |
-| `scripting`                               | Read/replace the site's web storage during a save or switch, overlay and confirmation toast           |
-| `activeTab`                               | The popup can offer "Add this site" for the current tab                                               |
-| `contextMenus`, `alarms`, `favicon`       | Right-click switching, auto-lock, site icons in the UI                                                |
-| `declarativeNetRequestWithHostAccess`     | The script-blocking CSP rule on the staging page, in one tab, during a swap                           |
-| `sidePanel`                               | The switcher in Chrome's side panel (`side_panel.default_path: sidepanel/sidepanel.html`)             |
-| `tabGroups`                               | "Open workspace" names and colours the tab group of the workspace's pages                             |
-| Optional host access (`*://*/*` declared) | Requested **per app** when it is added, e.g. `*://*.supabase.com/*`; released when the app is removed |
+| Permission                                | Why                                                                                                                                                   |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `storage`, `unlimitedStorage`             | Apps, accounts, saved sessions (snapshots can be large), settings, history — on this device                                                           |
+| `cookies`                                 | Save and restore the sign-in cookies of added sites (requires host access to those sites)                                                             |
+| `scripting`                               | Read/replace the site's web storage during a save or switch, overlay, confirmation toast, unsaved-work check (page's own world), on-page confirmation |
+| `activeTab`                               | The popup can offer "Add this site" for the current tab                                                                                               |
+| `contextMenus`, `alarms`, `favicon`       | Right-click switching, auto-lock, site icons in the UI                                                                                                |
+| `declarativeNetRequestWithHostAccess`     | The script-blocking CSP rule on the staging page, in one tab, during a swap                                                                           |
+| `sidePanel`                               | The switcher in Chrome's side panel (`side_panel.default_path: sidepanel/sidepanel.html`)                                                             |
+| `tabGroups`                               | "Open workspace" names and colours the tab group of the workspace's pages                                                                             |
+| Optional host access (`*://*/*` declared) | Requested **per app** when it is added, e.g. `*://*.supabase.com/*`; released when the app is removed                                                 |
 
 `incognito: "not_allowed"`: incognito sign-ins vanish with the window. Google, YouTube, Gmail, Microsoft Online,
 Live and Apple domains are refused (`BLOCKED_DOMAIN`): Chrome itself relies on their sign-in. The e2e build

@@ -44,6 +44,8 @@ final class AppModel {
     var banner: Banner?
     var query = ""
     var launchAtLogin = false
+    /// Bumped after asking macOS to change the default browser, so views read it again.
+    var defaultBrowserCheck = 0
 
     @ObservationIgnored let store: DataStore
     @ObservationIgnored let applicationSupport: URL
@@ -57,6 +59,8 @@ final class AppModel {
     @ObservationIgnored var onShowManager: ((ManagerSelection?) -> Void)?
     @ObservationIgnored var onClosePopover: (() -> Void)?
     @ObservationIgnored var onHotkeyChange: (() -> Void)?
+    /// Shows the "which workspace?" chooser for a link.
+    @ObservationIgnored var onChooseLink: ((URL) -> Void)?
 
     init(store: DataStore, applicationSupport: URL, defaults: UserDefaults = .standard, offline: Bool = false) {
         self.store = store
@@ -223,6 +227,13 @@ final class AppModel {
         let onDisk = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
         let known = Set((profiles[workspace.browser] ?? []).map(\.directory)).union(onDisk)
         updated.profileDirectory = ProfileReader.newDirectoryName(existing: known)
+        // Chrome adopts the name of a new profile from its first preferences, and themes it from the color.
+        let profileFolder = folder.appendingPathComponent(updated.profileDirectory, isDirectory: true)
+        if !FileManager.default.fileExists(atPath: profileFolder.path) {
+            try? FileManager.default.createDirectory(at: profileFolder, withIntermediateDirectories: true)
+            try? ProfileSeed.preferences(name: workspace.name, color: workspace.color)
+                .write(to: profileFolder.appendingPathComponent("Preferences"), options: .atomic)
+        }
         update(updated)
         save()
         await open(updated, newWindow: true, creatingProfile: true)
@@ -387,6 +398,88 @@ final class AppModel {
             _ = await windows(of: browser)
             return
         }
+    }
+
+    // MARK: - Links from other apps
+
+    /// A link another app opened (Swapdeck is the default browser): into its
+    /// workspace, else as the setting says. `choose` (⌥ held) always asks.
+    func routeLink(_ url: URL, choose: Bool = false) {
+        guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
+            openNormally(url)
+            return
+        }
+        let all = workspaces
+        if all.isEmpty {
+            openNormally(url)
+            return
+        }
+        if !choose, let route = LinkRouter.route(url, workspaces: all), let workspace = workspace(route.workspaceId) {
+            Task { await openLink(WorkspaceLink(title: "", url: url.absoluteString), in: workspace) }
+            return
+        }
+        if !choose {
+            switch data.settings.unmatchedLinks {
+            case .browser:
+                openNormally(url)
+                return
+            case .front:
+                let recent = all.filter { $0.lastOpenedAt != nil }.max { $0.lastOpenedAt! < $1.lastOpenedAt! }
+                if let id = frontId ?? recent?.id, let workspace = workspace(id) {
+                    Task { await openLink(WorkspaceLink(title: "", url: url.absoluteString), in: workspace) }
+                    return
+                }
+            case .ask:
+                break
+            }
+        }
+        onChooseLink?(url)
+    }
+
+    /// The chooser's answer: a workspace (and maybe a rule to remember), or nil to open the link normally.
+    func openChosen(_ url: URL, in workspaceId: String?, remember: Bool) {
+        guard let workspaceId, var workspace = workspace(workspaceId) else {
+            openNormally(url)
+            return
+        }
+        if remember, let host = url.host.flatMap(LinkRouter.normalize), !workspace.linkRules.contains(host) {
+            workspace.linkRules.append(host)
+            update(workspace)
+            save()
+        }
+        Task { await openLink(WorkspaceLink(title: "", url: url.absoluteString), in: workspace) }
+    }
+
+    /// Opens a link in the browser as if Swapdeck weren't there (its last-used profile).
+    func openNormally(_ url: URL) {
+        guard !offline else { return }
+        let browser = data.settings.defaultBrowser
+        guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: browser.bundleIdentifier) else {
+            show(.error, t("error.browserMissing", ["browser": browser.displayName]))
+            return
+        }
+        NSWorkspace.shared.open([url], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration()) { [weak self] _, error in
+            guard let error else { return }
+            Task { @MainActor in self?.show(.error, self?.t("error.openLink", ["detail": error.localizedDescription]) ?? "") }
+        }
+    }
+
+    var isDefaultBrowser: Bool {
+        guard let handler = NSWorkspace.shared.urlForApplication(toOpen: URL(string: "https://example.com")!) else { return false }
+        return handler.standardizedFileURL == Bundle.main.bundleURL.standardizedFileURL
+    }
+
+    /// Asks macOS to make Swapdeck the default web browser (macOS confirms with the user).
+    func makeDefaultBrowser() async {
+        do {
+            try await NSWorkspace.shared.setDefaultApplication(at: Bundle.main.bundleURL, toOpenURLsWithScheme: "http")
+            if !isDefaultBrowser {
+                try await NSWorkspace.shared.setDefaultApplication(at: Bundle.main.bundleURL, toOpenURLsWithScheme: "https")
+            }
+        } catch {
+            show(.error, t("settings.defaultBrowserFailed", ["detail": error.localizedDescription]))
+        }
+        defaultBrowserCheck += 1
     }
 
     // MARK: - Import

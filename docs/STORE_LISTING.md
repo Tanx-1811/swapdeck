@@ -77,6 +77,7 @@ Swapdeck recognises the account, the new one is saved automatically.
 
 **Comfortable**
 • Important accounts (production, a client's live account) get a red label, a warning strip on their pages and a confirmation before switching.
+• Asks before a switch would reload tabs holding unsaved work.
 • A calm lacquer-and-paper design, light and dark, a full manager with workspaces, history and settings, English and Vietnamese.
 
 **Good to know**
@@ -137,6 +138,7 @@ Etsy…), mạng xã hội và dịch vụ Việt Nam (Shopee Kênh Người Bá
 
 **Dễ dùng**
 • Tài khoản quan trọng (production, tài khoản thật của khách) có nhãn đỏ, dải cảnh báo trên trang và hỏi lại trước khi chuyển.
+• Hỏi trước khi đổi tài khoản làm tải lại các tab còn nội dung chưa lưu.
 • Giao diện “sơn mài & giấy dó” sáng/tối, trang quản lý đầy đủ với các bên, lịch sử và cài đặt, tiếng Việt và tiếng Anh.
 
 **Cần biết**
@@ -152,20 +154,20 @@ device.
 
 ## Permission justifications
 
-| Permission                            | Justification                                                                                                                                                                                                         |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `storage`                             | Stores the user's apps, accounts, saved sign-in sessions, history and settings locally.                                                                                                                               |
-| `unlimitedStorage`                    | A saved session can include a site's local storage (and IndexedDB when the user enables it), which can exceed the default quota.                                                                                      |
-| `cookies`                             | Switching saves the sign-in cookies of a site the user added and restores those of the chosen account. Works only on sites the user granted access to.                                                                |
-| `scripting`                           | Reads and replaces the added site's local/session storage (and IndexedDB if enabled) during a save or switch, and shows a "switching" screen and a short confirmation on that site's page.                            |
-| `activeTab`                           | Lets the popup offer "Add this site" (and the matching preset) for the tab the user is on.                                                                                                                            |
-| `contextMenus`                        | Right-click menu on added sites (switch account, sign in with another account, save this session) and on the toolbar button (switch workspace, open the side panel).                                                  |
-| `alarms`                              | Locks the encrypted sessions again after the auto-lock delay the user chose.                                                                                                                                          |
-| `favicon`                             | Shows the icons of the user's added sites in the popup and manager.                                                                                                                                                   |
-| `declarativeNetRequestWithHostAccess` | While a switch runs, adds a script-blocking Content-Security-Policy to page loads in the single tab doing the swap, on the added site only, so the site's code can't write the old session back. Removed right after. |
-| `sidePanel`                           | Shows the same account switcher in Chrome's side panel, so users who switch often can keep it open next to the page. No data access.                                                                                  |
-| `tabGroups`                           | “Open workspace” opens the pages the user listed for a workspace and names and colours their tab group after it. No data access.                                                                                      |
-| Host permissions (optional)           | Requested per app when the user adds it (e.g. `*://*.supabase.com/*`) — required to read and restore that site's cookies and storage. Never requested at install; released when the app is removed.                   |
+| Permission                            | Justification                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `storage`                             | Stores the user's apps, accounts, saved sign-in sessions, history and settings locally.                                                                                                                                                                                                                                                                    |
+| `unlimitedStorage`                    | A saved session can include a site's local storage (and IndexedDB when the user enables it), which can exceed the default quota.                                                                                                                                                                                                                           |
+| `cookies`                             | Switching saves the sign-in cookies of a site the user added and restores those of the chosen account. Works only on sites the user granted access to.                                                                                                                                                                                                     |
+| `scripting`                           | Reads and replaces the added site's local/session storage (and IndexedDB if enabled) during a save or switch, shows a "switching" screen and a short confirmation on that site's page, checks the site's tabs for unsaved work before a switch reloads them (yes/no only), and asks for confirmation on the page when a keyboard shortcut starts a switch. |
+| `activeTab`                           | Lets the popup offer "Add this site" (and the matching preset) for the tab the user is on.                                                                                                                                                                                                                                                                 |
+| `contextMenus`                        | Right-click menu on added sites (switch account, sign in with another account, save this session) and on the toolbar button (switch workspace, open the side panel).                                                                                                                                                                                       |
+| `alarms`                              | Locks the encrypted sessions again after the auto-lock delay the user chose.                                                                                                                                                                                                                                                                               |
+| `favicon`                             | Shows the icons of the user's added sites in the popup and manager.                                                                                                                                                                                                                                                                                        |
+| `declarativeNetRequestWithHostAccess` | While a switch runs, adds a script-blocking Content-Security-Policy to page loads in the single tab doing the swap, on the added site only, so the site's code can't write the old session back. Removed right after.                                                                                                                                      |
+| `sidePanel`                           | Shows the same account switcher in Chrome's side panel, so users who switch often can keep it open next to the page. No data access.                                                                                                                                                                                                                       |
+| `tabGroups`                           | “Open workspace” opens the pages the user listed for a workspace and names and colours their tab group after it. No data access.                                                                                                                                                                                                                           |
+| Host permissions (optional)           | Requested per app when the user adds it (e.g. `*://*.supabase.com/*`) — required to read and restore that site's cookies and storage. Never requested at install; released when the app is removed.                                                                                                                                                        |
 
 **Remote code:** No. All code is packaged with the extension; nothing is downloaded or evaluated.
 

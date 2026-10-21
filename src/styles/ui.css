@@ -1173,6 +1173,18 @@ button.chip:hover {
   line-height: 1.55;
 }
 
+.dialog__list {
+  display: grid;
+  gap: 4px;
+  margin: -4px 0 0;
+  padding: 10px 12px 10px 30px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
 .dialog__actions {
   display: flex;
   justify-content: flex-end;

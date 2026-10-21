@@ -67,6 +67,34 @@ struct SettingsPane: View {
                         }
                     }
                 }
+                PaneCard(title: t("settings.links"), hint: t("settings.linksHint")) {
+                    let _ = model.defaultBrowserCheck
+                    HStack {
+                        Label(
+                            model.isDefaultBrowser ? t("settings.defaultBrowserOn") : t("settings.defaultBrowserOff"),
+                            systemImage: model.isDefaultBrowser ? "checkmark.circle.fill" : "circle.dashed"
+                        )
+                        .font(Theme.text(13))
+                        .foregroundStyle(model.isDefaultBrowser ? Theme.success : Theme.ink2)
+                        Spacer()
+                        if !model.isDefaultBrowser {
+                            Button(t("settings.makeDefault")) { Task { await model.makeDefaultBrowser() } }
+                                .buttonStyle(InkButtonStyle(small: true))
+                        }
+                    }
+                    HStack {
+                        Text(t("settings.unmatched")).font(Theme.text(13)).foregroundStyle(Theme.ink)
+                        Spacer()
+                        Picker(t("settings.unmatched"), selection: binding(\.unmatchedLinks)) {
+                            Text(t("settings.unmatched.ask")).tag(UnmatchedLinks.ask)
+                            Text(t("settings.unmatched.front")).tag(UnmatchedLinks.front)
+                            Text(t("settings.unmatched.browser")).tag(UnmatchedLinks.browser)
+                        }
+                        .labelsHidden()
+                        .frame(width: 200)
+                    }
+                    Text(t("settings.optionKeyHint")).font(Theme.text(12)).foregroundStyle(Theme.ink3)
+                }
                 PaneCard(title: t("settings.data"), hint: t("settings.dataHint")) {
                     HStack {
                         Text(model.store.fileURL.path(percentEncoded: false))

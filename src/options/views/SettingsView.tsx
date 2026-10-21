@@ -140,6 +140,12 @@ export function SettingsView() {
           onChange={(pageToasts) => set({ pageToasts })}
         />
         <ToggleRow
+          title={t('settings.guardUnsaved')}
+          hint={t('settings.guardUnsavedHint')}
+          checked={settings.guardUnsaved}
+          onChange={(guardUnsaved) => set({ guardUnsaved })}
+        />
+        <ToggleRow
           title={t('settings.confirmSwitch')}
           checked={settings.confirmSwitch}
           onChange={(confirmSwitch) => set({ confirmSwitch })}

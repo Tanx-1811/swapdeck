@@ -35,6 +35,8 @@ export const SESSION_KEYS = {
   privateKey: 'sd:key',
   live: 'sd:live',
   progress: 'sd:progress',
+  /** A switch waiting for the user's answer in the confirmation window. */
+  ask: 'sd:ask',
 } as const;
 
 /** A workspace switch in progress, shown in the popup. */

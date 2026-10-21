@@ -8,6 +8,8 @@ struct WorkspaceEditor: View {
     let id: String
     @Binding var selection: ManagerSelection?
     @State private var confirmDelete = false
+    @State private var newRule = ""
+    @State private var ruleInvalid = false
 
     private var t: Translator { model.t }
 
@@ -25,6 +27,7 @@ struct WorkspaceEditor: View {
                 identityCard
                 profileCard
                 pagesCard
+                linksCard
                 HStack {
                     Spacer()
                     Button(role: .destructive) {
@@ -287,4 +290,62 @@ struct WorkspaceEditor: View {
             }
         }
     }
+
+    // MARK: Links from other apps
+
+    private var linksCard: some View {
+        let current = workspace.wrappedValue
+        let implied = LinkRouter.implicitRules(for: current, among: model.workspaces)
+        return PaneCard(title: t("editor.linksSection"), hint: t("editor.linksHint")) {
+            if !current.linkRules.isEmpty {
+                WrapLayout(spacing: 6) {
+                    ForEach(current.linkRules, id: \.self) { rule in
+                        HStack(spacing: 4) {
+                            Text(rule).font(Theme.mono(11.5)).foregroundStyle(Theme.ink)
+                            Button {
+                                workspace.wrappedValue.linkRules.removeAll { $0 == rule }
+                            } label: {
+                                Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(Theme.ink3)
+                            .help(t("editor.removeRule", ["rule": rule]))
+                            .accessibilityLabel(t("editor.removeRule", ["rule": rule]))
+                        }
+                        .padding(.leading, 8)
+                        .padding(.trailing, 6)
+                        .frame(height: 24)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(Theme.paper))
+                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.line, lineWidth: 1))
+                    }
+                }
+            }
+            HStack(spacing: 8) {
+                PaperField(placeholder: t("editor.rulePlaceholder"), text: $newRule, invalid: ruleInvalid) { addRule() }
+                    .onChange(of: newRule) { ruleInvalid = false }
+                Button(t("editor.addRule")) { addRule() }
+                    .buttonStyle(PaperButtonStyle(small: true))
+                    .disabled(newRule.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            if ruleInvalid {
+                Text(t("editor.invalidRule")).font(Theme.text(11)).foregroundStyle(Theme.danger)
+            }
+            if !implied.isEmpty {
+                Text(t("editor.autoRules", ["list": implied.joined(separator: ", ")]))
+                    .font(Theme.text(11.5))
+                    .foregroundStyle(Theme.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func addRule() {
+        guard let rule = LinkRouter.normalize(newRule) else {
+            ruleInvalid = true
+            return
+        }
+        if !workspace.wrappedValue.linkRules.contains(rule) { workspace.wrappedValue.linkRules.append(rule) }
+        newRule = ""
+    }
 }
+

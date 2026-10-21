@@ -2,14 +2,14 @@ import { appForUrl } from '../core/domains';
 import { KEYS, readState } from '../shared/store';
 import { AUTO_LOCK_ALARM, scheduleAutoLock, vaultLock } from './admin';
 import { refreshAllBadges, refreshBadge } from './badge';
-import { cycle, saveLive, switchTo } from './engine';
+import { saveLive } from './engine';
+import { cycleGuarded, runGuarded } from './guarded';
 import { clearStaleRules } from './guard';
 import { parseMenuId, scheduleMenuRebuild } from './menus';
 import { setupOmnibox } from './omnibox';
 import { listen } from './router';
 import { activeTab, getTab, tabUrl } from './tabs';
 import { onTabUpdated } from './watcher';
-import { switchWorkspace } from './workspaces';
 import { workspaceStatus } from '../core/workspaces';
 
 listen();
@@ -45,8 +45,7 @@ async function nextWorkspace(tabId: number | undefined): Promise<void> {
     (workspace) => workspaceStatus(workspace, state.apps, state.accounts, state.active).state === 'active',
   );
   const next = usable[(current + 1) % usable.length]!;
-  await switchWorkspace(next.id, tabId);
-  await scheduleAutoLock();
+  await runGuarded({ kind: 'workspace', workspaceId: next.id, tabId });
 }
 
 chrome.runtime.onInstalled.addListener((details) => {
@@ -102,15 +101,13 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   const tabId = tab?.id;
   const report = (error: unknown) => console.warn('Swapdeck: menu action failed', error);
   if (action.kind === 'switch') {
-    void switchTo({ appId: action.appId, accountId: action.accountId, kind: 'switch', tabId })
-      .then(scheduleAutoLock)
-      .catch(report);
+    void runGuarded({ kind: 'account', appId: action.appId, accountId: action.accountId, tabId }).catch(report);
   } else if (action.kind === 'fresh') {
-    void switchTo({ appId: action.appId, accountId: null, kind: 'fresh', tabId }).catch(report);
+    void runGuarded({ kind: 'fresh', appId: action.appId, tabId }).catch(report);
   } else if (action.kind === 'save') {
     void saveLive(action.appId, tabId).catch(report);
   } else if (action.kind === 'workspace') {
-    void switchWorkspace(action.workspaceId, tabId).then(scheduleAutoLock).catch(report);
+    void runGuarded({ kind: 'workspace', workspaceId: action.workspaceId, tabId }).catch(report);
   } else {
     openManager(action.appId ? `#/apps/${action.appId}` : '');
   }
@@ -128,9 +125,7 @@ chrome.commands.onCommand.addListener(async (command, commandTab) => {
     return;
   }
   if (command === 'switch-next' || command === 'switch-previous') {
-    await cycle(tab?.id, command === 'switch-next' ? 1 : -1)
-      .then(scheduleAutoLock)
-      .catch(report);
+    await cycleGuarded(tab?.id, command === 'switch-next' ? 1 : -1).catch(report);
     return;
   }
   if (command === 'switch-workspace-next') {
@@ -140,6 +135,6 @@ chrome.commands.onCommand.addListener(async (command, commandTab) => {
   if (command === 'new-login') {
     const state = await readState();
     const app = appForUrl(state.apps, tabUrl(tab));
-    if (app) await switchTo({ appId: app.id, accountId: null, kind: 'fresh', tabId: tab?.id }).catch(report);
+    if (app) await runGuarded({ kind: 'fresh', appId: app.id, tabId: tab?.id }).catch(report);
   }
 });

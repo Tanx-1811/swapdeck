@@ -162,6 +162,23 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
     response.end(appPage(serverUser, `Project ${project[1]} | Acme`));
     return;
   }
+  if (url.pathname === '/editor') {
+    // A page with a text area: what is typed there is lost when the tab reloads.
+    response.writeHead(200, { 'content-type': 'text/html' });
+    response.end(appPage(serverUser, 'Editor | Acme').replace('</body>', '<textarea id="draft"></textarea></body>'));
+    return;
+  }
+  if (url.pathname === '/leave') {
+    // A page that warns before being left, as apps with unsaved changes do.
+    response.writeHead(200, { 'content-type': 'text/html' });
+    response.end(
+      appPage(serverUser, 'Unsaved changes | Acme').replace(
+        '</body>',
+        `<script>addEventListener('beforeunload', (event) => { event.preventDefault(); event.returnValue = ''; });</script></body>`,
+      ),
+    );
+    return;
+  }
   if (url.pathname === '/' || url.pathname === '/dashboard' || url.pathname === '/login') {
     response.writeHead(200, { 'content-type': 'text/html' });
     response.end(appPage(serverUser));

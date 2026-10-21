@@ -61,6 +61,10 @@ tests, demo data and screenshots (use `*.example`/`*.test` addresses). Contribut
   switching to it from every UI path (popup `switchAccount`/`switchWorkspace`, manager `AppDetail`/`useWorkspaceSwitch`,
   via `importantTargets`), warning toast, and the `showRibbon` page strip kept by `markImportant` in `watcher.ts`.
   Shortcut, omnibox and menu switches can't ask: they rely on the strip and the toast.
+- Every UI switch path asks through `useAskBeforeSwitch` (important accounts, unsaved work via the `unsaved` request,
+  "ask before every switch"); non-UI paths (commands, omnibox, context menus) must call `runGuarded`/`cycleGuarded`
+  (`guarded.ts`), never `switchTo`/`switchWorkspace` directly. `unsavedWork` runs in the MAIN world: keep it
+  self-contained and side-effect free beyond the synthetic `beforeunload`.
 - The lock reminder (`VaultNudge`, `vaultNudgeDue`) shows with ≥ 2 saved sessions and no vault; "Later" sets
   `settings.vaultNudgeUntil`. Demo data hides it unless `seedDemo(…, { vaultNudge: true })`.
 

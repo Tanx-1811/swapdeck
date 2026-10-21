@@ -11,13 +11,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     private var hotkey: Hotkey?
     private var managerWindow: NSWindow?
     private var managerSelection = ManagerSelectionBox()
+    private var chooser: NSPanel?
+    /// Links that arrived before the app finished launching (Swapdeck started to open them).
+    private var waitingLinks: [URL] = []
+    private var launched = false
 
     init(model: AppModel) {
         self.model = model
     }
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    func applicationWillFinishLaunching(_ notification: Notification) {
         model.load()
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image = MenuBarIcon.image()
         item.button?.target = self
@@ -36,12 +43,61 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         model.onClosePopover = { [weak self] in self?.popover.performClose(nil) }
         model.onShowManager = { [weak self] selection in self?.showManager(selection) }
         model.onHotkeyChange = { [weak self] in self?.applyHotkey() }
+        model.onChooseLink = { [weak self] url in self?.showChooser(for: url) }
         applyHotkey()
+        launched = true
 
-        // First run: show where Swapdeck lives.
-        if model.data.workspaces.isEmpty {
+        if !waitingLinks.isEmpty {
+            let links = waitingLinks
+            waitingLinks = []
+            links.forEach { model.routeLink($0) }
+        } else if model.data.workspaces.isEmpty {
+            // First run: show where Swapdeck lives.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in self?.showPopover() }
         }
+    }
+
+    /// Links from other apps, once Swapdeck is the default browser. ⌥ held: always ask.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        let choose = NSEvent.modifierFlags.contains(.option)
+        for url in urls {
+            if launched { model.routeLink(url, choose: choose) } else { waitingLinks.append(url) }
+        }
+    }
+
+    // MARK: Link chooser
+
+    private func showChooser(for url: URL) {
+        chooser?.close()
+        let panel = ChooserPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 380, height: 300),
+            styleMask: [.titled, .fullSizeContentView, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        panel.titleVisibility = .hidden
+        panel.titlebarAppearsTransparent = true
+        panel.standardWindowButton(.closeButton)?.isHidden = true
+        panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
+        panel.standardWindowButton(.zoomButton)?.isHidden = true
+        panel.isMovableByWindowBackground = true
+        panel.level = .floating
+        panel.isReleasedWhenClosed = false
+        let hosting = NSHostingView(rootView: ChooserView(model: model, url: url) { [weak panel] in panel?.close() })
+        panel.contentView = hosting
+        panel.setContentSize(hosting.fittingSize)
+        // Near the pointer, where the link was clicked.
+        let mouse = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main
+        if let visible = screen?.visibleFrame {
+            let size = panel.frame.size
+            let x = min(max(mouse.x - size.width / 2, visible.minX + 12), visible.maxX - size.width - 12)
+            let y = min(max(mouse.y - size.height - 12, visible.minY + 12), visible.maxY - size.height - 12)
+            panel.setFrameOrigin(NSPoint(x: x, y: y))
+        }
+        NSApp.activate()
+        panel.makeKeyAndOrderFront(nil)
+        chooser = panel
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -142,3 +198,14 @@ private struct ManagerRoot: View {
         ManagerView(model: model, selection: $box.value)
     }
 }
+
+/// A floating panel that takes the keyboard (for the link chooser).
+final class ChooserPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+
+    override func cancelOperation(_ sender: Any?) {
+        close()
+    }
+}
+

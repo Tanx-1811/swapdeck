@@ -204,7 +204,10 @@ export function Dialog({
 type ConfirmOptions = {
   title: string;
   body?: string;
+  /** Shown as a list under the text (e.g. tabs with unsaved work). */
+  items?: string[];
   confirmLabel: string;
+  /** A risky choice: red button, and Cancel has the focus. */
   danger?: boolean;
 };
 
@@ -227,15 +230,22 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
       {children}
       <Dialog open={Boolean(request)} onClose={() => finish(false)} title={request?.title ?? ''}>
         {request?.body && <p className="dialog__text">{request.body}</p>}
+        {request?.items && request.items.length > 0 && (
+          <ul className="dialog__list">
+            {request.items.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        )}
         <div className="dialog__actions">
-          <button type="button" className="btn" onClick={() => finish(false)}>
+          <button type="button" className="btn" onClick={() => finish(false)} autoFocus={Boolean(request?.danger)}>
             {t('common.cancel')}
           </button>
           <button
             type="button"
             className={`btn ${request?.danger ? 'btn--danger' : 'btn--primary'}`}
             onClick={() => finish(true)}
-            autoFocus
+            autoFocus={!request?.danger}
           >
             {request?.confirmLabel}
           </button>

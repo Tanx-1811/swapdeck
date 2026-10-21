@@ -2,10 +2,9 @@ import { appForUrl } from '../core/domains';
 import { rankAccounts, rankWorkspaces } from '../core/search';
 import { liveMembers } from '../core/workspaces';
 import { readState } from '../shared/store';
-import { scheduleAutoLock } from './admin';
-import { switchTo, translatorFor } from './engine';
+import { translatorFor } from './engine';
+import { runGuarded } from './guarded';
 import { activeTab, tabUrl } from './tabs';
-import { switchWorkspace } from './workspaces';
 
 /*
  * Address-bar switching: type "swd", a space, then part of a workspace, app or
@@ -62,9 +61,9 @@ export function setupOmnibox(): void {
         : undefined;
     if (workspaceId) {
       const current = await activeTab();
-      await switchWorkspace(workspaceId, current?.id)
-        .then(scheduleAutoLock)
-        .catch((error: unknown) => console.warn('Swapdeck: omnibox workspace switch failed', error));
+      await runGuarded({ kind: 'workspace', workspaceId, tabId: current?.id }).catch((error: unknown) =>
+        console.warn('Swapdeck: omnibox workspace switch failed', error),
+      );
       return;
     }
     const id = text.startsWith(PREFIX)
@@ -75,14 +74,12 @@ export function setupOmnibox(): void {
     // Switch in the current tab when it already shows this app; otherwise a tab is opened.
     const tab = await activeTab();
     const app = appForUrl(state.apps, tabUrl(tab));
-    await switchTo({
+    await runGuarded({
+      kind: 'account',
       appId: account.appId,
       accountId: account.id,
-      kind: 'switch',
       focus: true,
       ...(app?.id === account.appId && tab?.id !== undefined ? { tabId: tab.id } : {}),
-    })
-      .then(scheduleAutoLock)
-      .catch((error: unknown) => console.warn('Swapdeck: omnibox switch failed', error));
+    }).catch((error: unknown) => console.warn('Swapdeck: omnibox switch failed', error));
   });
 }

@@ -575,4 +575,17 @@ export const vi: Record<MessageKey, string> = {
   'vault.nudgeBody': 'Ai dùng hồ sơ Chrome này cũng mở được {n} tài khoản bạn đã lưu. Hãy khoá bằng mật khẩu.',
   'vault.nudgeAction': 'Bật khoá',
   'vault.nudgeLater': 'Để sau',
+  'ask.unsavedTitle': 'Có nội dung chưa lưu',
+  'ask.unsavedBody': 'Đổi tài khoản sẽ tải lại các tab {app} này; nội dung chưa lưu ở đó có thể mất:',
+  'ask.unsavedFresh': 'Đăng nhập tài khoản khác sẽ tải lại các tab {app} này; nội dung chưa lưu ở đó có thể mất:',
+  'ask.unsavedWorkspace': 'Đổi bên sẽ tải lại các tab này; nội dung chưa lưu ở đó có thể mất:',
+  'ask.switchAnyway': 'Vẫn chuyển',
+  'ask.reason.warning': 'trang đang cảnh báo khi rời',
+  'ask.reason.form': 'biểu mẫu đã sửa',
+  'ask.reason.typing': 'đang gõ dở',
+  'ask.windowTitle': 'Swapdeck cần bạn xác nhận',
+  'ask.expired': 'Yêu cầu này đã hết hạn. Hãy chuyển lại.',
+  'settings.guardUnsaved': 'Hỏi trước khi đổi nếu tab còn nội dung chưa lưu',
+  'settings.guardUnsavedHint':
+    'Trước khi đổi tài khoản làm tải lại các tab của ứng dụng, Swapdeck xem có biểu mẫu đã sửa, chữ đang gõ dở hay trang đang cảnh báo khi rời không.',
 };

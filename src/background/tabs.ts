@@ -94,6 +94,8 @@ export async function runInTab<Args extends unknown[], Result>(
   tabId: number,
   func: (...args: Args) => Result | Promise<Result>,
   args: Args,
+  /** MAIN: in the page's own world (to see its handlers); ISOLATED by default. */
+  world: 'ISOLATED' | 'MAIN' = 'ISOLATED',
 ): Promise<Awaited<Result>> {
   let results: chrome.scripting.InjectionResult<Awaited<Result>>[];
   try {
@@ -101,6 +103,7 @@ export async function runInTab<Args extends unknown[], Result>(
       target: { tabId, frameIds: [0] },
       func,
       args,
+      world,
     })) as chrome.scripting.InjectionResult<Awaited<Result>>[];
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

@@ -34,6 +34,30 @@ for (const theme of ['light', 'dark'] as const) {
       await audit(popup, `popup search ${query}`);
     }
 
+    // The confirmation window for a switch started by a shortcut, the address bar or a menu.
+    await seeder.evaluate(async () => {
+      await chrome.storage.session.set({
+        'sd:ask': {
+          id: 'a11y',
+          at: Date.now(),
+          plan: { kind: 'account', appId: 'app_supabase', accountId: 'acc_client' },
+          text: {
+            title: 'Switch to an important account?',
+            body: 'Check twice before you change anything. Switching reloads these tabs:',
+            items: ['SQL editor — text being typed'],
+            confirm: 'Switch anyway',
+            danger: true,
+          },
+        },
+      });
+    });
+    const ask = await context.newPage();
+    await ask.setViewportSize({ width: 460, height: 340 });
+    await ask.goto(`chrome-extension://${extensionId}/popup/popup.html?ask=a11y`);
+    await ask.locator('html[data-ready]').waitFor({ state: 'attached' });
+    await audit(ask, 'confirmation window');
+    await ask.close();
+
     const panel = await context.newPage();
     await panel.setViewportSize({ width: 380, height: 760 });
     await panel.goto(`chrome-extension://${extensionId}/sidepanel/sidepanel.html?tab=-1&app=app_supabase`);

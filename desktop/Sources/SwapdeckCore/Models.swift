@@ -17,6 +17,9 @@ public struct Workspace: Encodable, Identifiable, Hashable, Sendable {
     public var links: [WorkspaceLink]
     /// Open the pinned pages whenever the workspace gets a new window.
     public var openLinksInNewWindow: Bool
+    /// Links from other apps that belong here ("acme.example", "supabase.com/dashboard/project/acme"),
+    /// besides the ones its pages imply (see `LinkRouter`).
+    public var linkRules: [String]
     public var order: Int
     public var createdAt: Date
     public var lastOpenedAt: Date?
@@ -32,6 +35,7 @@ public struct Workspace: Encodable, Identifiable, Hashable, Sendable {
         profileDirectory: String = "",
         links: [WorkspaceLink] = [],
         openLinksInNewWindow: Bool = true,
+        linkRules: [String] = [],
         order: Int = 0,
         createdAt: Date = Date(),
         lastOpenedAt: Date? = nil,
@@ -46,6 +50,7 @@ public struct Workspace: Encodable, Identifiable, Hashable, Sendable {
         self.profileDirectory = profileDirectory
         self.links = links
         self.openLinksInNewWindow = openLinksInNewWindow
+        self.linkRules = linkRules
         self.order = order
         self.createdAt = createdAt
         self.lastOpenedAt = lastOpenedAt
@@ -99,19 +104,23 @@ public struct DesktopSettings: Encodable, Hashable, Sendable {
     /// Give each workspace's browser window the workspace's name (Mission Control, Window menu)
     /// and bring that window back instead of opening a new one.
     public var nameWindows: Bool
-    /// The browser new workspaces use.
+    /// The browser new workspaces use (and that opens links outside any workspace).
     public var defaultBrowser: BrowserKind
+    /// Where links that match no workspace go, when Swapdeck opens links.
+    public var unmatchedLinks: UnmatchedLinks
 
     public init(
         language: LanguagePreference = .auto,
         hotkey: HotkeyChoice = .controlOptionB,
         nameWindows: Bool = true,
-        defaultBrowser: BrowserKind = .chrome
+        defaultBrowser: BrowserKind = .chrome,
+        unmatchedLinks: UnmatchedLinks = .ask
     ) {
         self.language = language
         self.hotkey = hotkey
         self.nameWindows = nameWindows
         self.defaultBrowser = defaultBrowser
+        self.unmatchedLinks = unmatchedLinks
     }
 }
 

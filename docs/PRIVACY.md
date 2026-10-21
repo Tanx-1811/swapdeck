@@ -1,6 +1,6 @@
 # Swapdeck Privacy Policy
 
-_Last updated: 20 October 2026 · Applies to Swapdeck 1.0.0 and later (workspaces, side panel: 1.1.0; important accounts: 1.3.0)_ · [Tiếng Việt](#chính-sách-quyền-riêng-tư-swapdeck)
+_Last updated: 20 October 2026 · Applies to Swapdeck 1.0.0 and later (workspaces, side panel: 1.1.0; important accounts: 1.3.0; unsaved-work check: 1.4.0)_ · [Tiếng Việt](#chính-sách-quyền-riêng-tư-swapdeck)
 
 Swapdeck is a Chrome extension for switching between several accounts on the same website. It works entirely inside
 your browser.
@@ -41,7 +41,9 @@ Everything is removed when you uninstall the extension, or with **Security → D
 
 - Only on **sites you added**, and only to save or restore their sign-in: it reads and replaces their cookies and the
   stored data of their main address, shows a "switching" screen and a small confirmation on the page (and, for an
-  account you marked important, a red warning strip along the top of the page). Besides that it
+  account you marked important, a red warning strip along the top of the page). Before a switch reloads the site's
+  tabs, it checks them for unsaved work (an edited form, text being typed, the page's own "leave site?" warning) and
+  only learns yes or no; and a switch started by a shortcut can ask on the page. Besides that it
   only notes the page address and title (for each account's last page and recent items); it doesn't read page content,
   forms or anything you type.
 - To find out which account is signed in, it looks at the saved sign-in data (for example the email inside the site's
@@ -81,7 +83,7 @@ Changes to this policy are listed here with a new date. Swapdeck is open source 
 
 # Chính sách quyền riêng tư Swapdeck
 
-_Cập nhật: 20/10/2026 · Áp dụng cho Swapdeck 1.0.0 trở lên (các bên, bảng bên: 1.1.0; tài khoản quan trọng: 1.3.0)_
+_Cập nhật: 20/10/2026 · Áp dụng cho Swapdeck 1.0.0 trở lên (các bên, bảng bên: 1.1.0; tài khoản quan trọng: 1.3.0; kiểm tra nội dung chưa lưu: 1.4.0)_
 
 Swapdeck là tiện ích Chrome giúp chuyển giữa nhiều tài khoản trên cùng một trang web. Tiện ích hoạt động hoàn toàn
 trong trình duyệt của bạn.
@@ -121,7 +123,9 @@ Mọi dữ liệu bị xóa khi gỡ tiện ích, hoặc bằng **Bảo mật �
 
 - Chỉ trên **các trang bạn đã thêm**, và chỉ để lưu hoặc khôi phục đăng nhập: đọc và thay cookie cùng dữ liệu lưu trữ
   của địa chỉ chính, hiện màn hình "đang chuyển" và một thông báo nhỏ trên trang (với tài khoản bạn đánh dấu quan trọng:
-  thêm một dải cảnh báo đỏ ở mép trên trang). Ngoài ra chỉ ghi nhận địa chỉ và tiêu
+  thêm một dải cảnh báo đỏ ở mép trên trang). Trước khi đổi tài khoản làm tải lại các tab của trang, tiện ích kiểm tra
+  xem có nội dung chưa lưu không (biểu mẫu đã sửa, chữ đang gõ, cảnh báo "rời trang?" của chính trang) và chỉ biết có
+  hay không; khi đổi bằng phím tắt, tiện ích có thể hỏi ngay trên trang. Ngoài ra chỉ ghi nhận địa chỉ và tiêu
   đề trang (cho trang cuối và mục gần đây của mỗi tài khoản); không đọc nội dung trang, biểu mẫu hay những gì bạn gõ.
 - Để biết tài khoản nào đang đăng nhập, tiện ích xem dữ liệu đăng nhập đã lưu (vd. email trong bản ghi phiên của chính
   trang). Thông tin này không rời khỏi máy bạn.

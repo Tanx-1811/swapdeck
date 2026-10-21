@@ -574,6 +574,19 @@ export const en = {
   'vault.nudgeBody': 'Anyone using this Chrome profile can open your {n} saved accounts. Lock them with a passphrase.',
   'vault.nudgeAction': 'Turn on the lock',
   'vault.nudgeLater': 'Later',
+  'ask.unsavedTitle': 'Unsaved work',
+  'ask.unsavedBody': "Switching reloads these {app} tabs; what isn't saved there may be lost:",
+  'ask.unsavedFresh': "Signing in with another account reloads these {app} tabs; what isn't saved there may be lost:",
+  'ask.unsavedWorkspace': "Switching reloads these tabs; what isn't saved there may be lost:",
+  'ask.switchAnyway': 'Switch anyway',
+  'ask.reason.warning': 'asks before you leave',
+  'ask.reason.form': 'edited form',
+  'ask.reason.typing': 'text being typed',
+  'ask.windowTitle': 'Swapdeck needs your confirmation',
+  'ask.expired': 'This request has expired. Start the switch again.',
+  'settings.guardUnsaved': 'Ask before switching away from unsaved work',
+  'settings.guardUnsavedHint':
+    "Before a switch reloads an app's tabs, Swapdeck looks for edited forms, text being typed and pages that warn before you leave.",
 } as const;
 
 export type MessageKey = keyof typeof en;

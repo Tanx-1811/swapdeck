@@ -1,7 +1,7 @@
 {
   "name": "swapdeck",
   "private": true,
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Switch between multiple accounts on Supabase and any other web app in one click.",
   "license": "MIT",
   "author": "Tanx-1811 (https://github.com/Tanx-1811)",

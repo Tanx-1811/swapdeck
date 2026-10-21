@@ -19,6 +19,7 @@ import { formatBytes, relativeTime } from '../../i18n/translate';
 import { appToInput } from '../../shared/apps';
 import { hasAccess, onAccessChange, requestAccess } from '../../ui/access';
 import { AccountEditor } from '../../ui/AccountEditor';
+import { useAskBeforeSwitch } from '../../ui/askBeforeSwitch';
 import { AppIcon, Avatar } from '../../ui/Avatar';
 import { Callout, MenuButton, Spinner, useConfirm, useToast } from '../../ui/controls';
 import { useI18n } from '../../ui/i18n';
@@ -41,6 +42,7 @@ export function useAccess(app: AppDef | undefined): [boolean | null, () => Promi
 
 export function AppDetail({ id, tab }: { id: string; tab: 'accounts' | 'settings' }) {
   const { t } = useI18n();
+  const askBeforeSwitch = useAskBeforeSwitch();
   const { data, run, pending } = useManager();
   const notify = useToast();
   const confirm = useConfirm();
@@ -99,6 +101,15 @@ export function AppDetail({ id, tab }: { id: string; tab: 'accounts' | 'settings
             className="btn btn--dashed"
             disabled={!granted || pending === 'fresh'}
             onClick={async () => {
+              const go = await askBeforeSwitch({
+                kind: 'fresh',
+                label: app.name,
+                app: app.name,
+                important: [],
+                confirmAll: false,
+                appIds: [app.id],
+              });
+              if (!go) return;
               const outcome = await run('fresh', { appId: app.id, focus: true }, 'fresh');
               if (outcome) notify(t('toast.freshTitle', { app: app.name }), 'info');
             }}
@@ -187,6 +198,7 @@ function AccountsPanel({
   canSwitch: boolean;
 }) {
   const { t, language } = useI18n();
+  const askBeforeSwitch = useAskBeforeSwitch();
   const { data, run, pending } = useManager();
   const notify = useToast();
   const confirm = useConfirm();
@@ -286,18 +298,15 @@ function AccountsPanel({
                     className={`btn btn--sm ${isActive ? '' : 'btn--primary'}`}
                     disabled={!canSwitch || !account.capturedAt || pending === `switch:${account.id}`}
                     onClick={async () => {
-                      if (
-                        account.important &&
-                        !isActive &&
-                        !(await confirm({
-                          title: t('account.confirmImportantTitle'),
-                          body: t('account.confirmImportantBody', { label: account.label, app: app.name }),
-                          confirmLabel: t('apps.switchHere'),
-                          danger: true,
-                        }))
-                      ) {
-                        return;
-                      }
+                      const go = await askBeforeSwitch({
+                        kind: 'account',
+                        label: account.label,
+                        app: app.name,
+                        important: account.important && !isActive ? [`${app.name}: ${account.label}`] : [],
+                        confirmAll: false,
+                        appIds: [app.id],
+                      });
+                      if (!go) return;
                       const outcome = await run(
                         'switch',
                         { appId: app.id, accountId: account.id, focus: true },

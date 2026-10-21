@@ -28,7 +28,8 @@ import {
   vaultUnlock,
   wipeData,
 } from './admin';
-import { cycle, probe, restorePrevious, saveLive, switchTo } from './engine';
+import { probe, restorePrevious, saveLive, switchTo } from './engine';
+import { answerAsk, cycleGuarded, findUnsaved, runGuarded } from './guarded';
 import { openWorkspace, switchWorkspace } from './workspaces';
 import { update } from './state';
 
@@ -49,11 +50,14 @@ async function handle(request: AnyRequest): Promise<unknown> {
         tabId: request.tabId,
         focus: request.focus,
       });
-    case 'cycle': {
-      const outcome = await cycle(request.tabId, request.step);
-      await scheduleAutoLock();
-      return outcome;
-    }
+    case 'cycle':
+      return cycleGuarded(request.tabId, request.step);
+    case 'unsaved':
+      return findUnsaved(request.appIds);
+    case 'ask.answer':
+      return answerAsk(request.id, request.ok);
+    case 'switch.guarded':
+      return runGuarded(request.plan);
     case 'save':
       return saveLive(request.appId, request.tabId, request.target);
     case 'restorePrevious':

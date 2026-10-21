@@ -2,6 +2,23 @@
 
 All notable changes to Swapdeck are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 1.4.0 — 2026-10-21
+
+Fewer surprises when switching, and Swapdeck Desktop 1.1.0.
+
+- **Unsaved work:** before a switch reloads an app's tabs, Swapdeck looks at them for edited forms, text being typed
+  and pages that warn before you leave, and asks first, listing the tabs ("Switch anyway" / Cancel). Works for account
+  switches, "Sign in with another account" and workspaces, from the popup, the side panel and the manager. It can be
+  turned off in Settings.
+- **Shortcuts, the address bar and menus ask too:** switching to an important account, or away from unsaved work,
+  with <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>, `swd` in the address bar or the toolbar button's menu now asks on
+  the page itself (Escape or a timeout answers no; the page can't answer for you), or in a small Swapdeck window when
+  the page can't show it.
+- **Swapdeck Desktop 1.1.0:** make it the default web browser and links from Slack, Mail and other apps open in the
+  workspace they belong to — by its pages and by rules you add ("acme.example", "supabase.com/dashboard/project/…");
+  links that match nothing show a chooser (or go to the workspace in use, or open normally), and ⌥ Option while
+  clicking always asks. Profiles it creates for a workspace now get the workspace's name and color right away.
+
 ## 1.3.0 — 2026-10-21
 
 **First public, open-source release (MIT).** Safer day-to-day use, and a desktop companion.

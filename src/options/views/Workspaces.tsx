@@ -15,6 +15,7 @@ import type { Workspace } from '../../core/types';
 import { relativeTime } from '../../i18n/translate';
 import { importantTargets, liveMembers, suggestWorkspaces, workspaceStatus } from '../../core/workspaces';
 import { AppIcon } from '../../ui/Avatar';
+import { useAskBeforeSwitch } from '../../ui/askBeforeSwitch';
 import { MenuButton, Spinner, useConfirm, useToast } from '../../ui/controls';
 import { useI18n } from '../../ui/i18n';
 import { WorkspaceBadge } from '../../popup/WorkspaceBar';
@@ -27,21 +28,19 @@ export function useWorkspaceSwitch() {
   const { t } = useI18n();
   const { data, run } = useManager();
   const notify = useToast();
-  const confirm = useConfirm();
+  const askBeforeSwitch = useAskBeforeSwitch();
   return async (workspace: Workspace, open = false) => {
     const { state } = data;
-    const important = importantTargets(workspace, state.apps, state.accounts, state.active);
-    if (
-      important.length > 0 &&
-      !(await confirm({
-        title: t('workspaces.confirmTitle', { name: workspace.name }),
-        body: t('workspaces.confirmImportantBody', { list: important.join(', ') }),
-        confirmLabel: t('apps.switchHere'),
-        danger: true,
-      }))
-    ) {
-      return;
-    }
+    const go = await askBeforeSwitch({
+      kind: 'workspace',
+      label: workspace.name,
+      important: importantTargets(workspace, state.apps, state.accounts, state.active),
+      confirmAll: false,
+      appIds: liveMembers(workspace, state.apps, state.accounts)
+        .filter(([appId, accountId]) => state.active[appId] !== accountId)
+        .map(([appId]) => appId),
+    });
+    if (!go) return;
     const outcome = await run(open ? 'workspace.open' : 'workspace.switch', { id: workspace.id }, `ws:${workspace.id}`);
     if (!outcome) return;
     notify(

@@ -1,12 +1,13 @@
 import { Search } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { findPreset, isBlockedDomain } from '../core/presets';
-import { importantTargets } from '../core/workspaces';
+import { importantTargets, liveMembers } from '../core/workspaces';
 import type { Account, AppDef, Workspace } from '../core/types';
 import { customAppFromUrl, presetToInput } from '../shared/apps';
 import { send, type MemberResult, type Probe } from '../shared/protocol';
 import { requestAccess } from '../ui/access';
-import { useConfirm, useToast } from '../ui/controls';
+import { useAskBeforeSwitch } from '../ui/askBeforeSwitch';
+import { useToast } from '../ui/controls';
 import { VaultNudge } from '../ui/VaultNudge';
 import { errorText, useAction, type Snapshot } from '../ui/hooks';
 import { useI18n } from '../ui/i18n';
@@ -61,7 +62,7 @@ type Retry =
 export function Switcher({ data, mode }: { data: Snapshot | null; mode: Mode }) {
   const { t } = useI18n();
   const notify = useToast();
-  const confirm = useConfirm();
+  const askBeforeSwitch = useAskBeforeSwitch();
   const [probe, setProbe] = useState<Probe | null>(null);
   const [view, setView] = useState<View>(START_APP ? { kind: 'app', appId: START_APP } : { kind: 'current' });
   const [busy, setBusy] = useState<string | null>(null);
@@ -169,22 +170,15 @@ export function Switcher({ data, mode }: { data: Snapshot | null; mode: Mode }) 
         return;
       }
       const alreadyActive = state.active[app.id] === account.id;
-      const ask =
-        account.important && !alreadyActive
-          ? {
-              title: t('account.confirmImportantTitle'),
-              body: t('account.confirmImportantBody', { label: account.label, app: app.name }),
-              confirmLabel: t('apps.switchHere'),
-              danger: true,
-            }
-          : state.settings.confirmSwitch
-            ? {
-                title: t('account.switch', { label: account.label }),
-                body: t('popup.confirmSwitch', { app: app.name, label: account.label }),
-                confirmLabel: t('apps.switchHere'),
-              }
-            : null;
-      if (ask && !(await confirm(ask))) return;
+      const go = await askBeforeSwitch({
+        kind: 'account',
+        label: account.label,
+        app: app.name,
+        important: account.important && !alreadyActive ? [`${app.name}: ${account.label}`] : [],
+        confirmAll: state.settings.confirmSwitch,
+        appIds: [app.id],
+      });
+      if (!go) return;
       const here = onCurrentTab(app);
       setBusy(`acc:${account.id}`);
       const result = await send('switch', {
@@ -212,11 +206,20 @@ export function Switcher({ data, mode }: { data: Snapshot | null; mode: Mode }) 
       }
       if (here || options.open) close();
     },
-    [state, busy, locked, confirm, t, onCurrentTab, probe, notify, close],
+    [state, busy, locked, askBeforeSwitch, t, onCurrentTab, probe, notify, close],
   );
 
   const freshLogin = useCallback(
     async (app: AppDef) => {
+      const go = await askBeforeSwitch({
+        kind: 'fresh',
+        label: app.name,
+        app: app.name,
+        important: [],
+        confirmAll: false,
+        appIds: [app.id],
+      });
+      if (!go) return;
       setBusy(`fresh:${app.id}`);
       const result = await send('fresh', {
         appId: app.id,
@@ -226,7 +229,7 @@ export function Switcher({ data, mode }: { data: Snapshot | null; mode: Mode }) 
       if (!result.ok) notify(errorText(t, result), 'error');
       else close();
     },
-    [onCurrentTab, probe, notify, t, close],
+    [askBeforeSwitch, onCurrentTab, probe, notify, t, close],
   );
 
   const saveSession = useCallback(
@@ -277,20 +280,16 @@ export function Switcher({ data, mode }: { data: Snapshot | null; mode: Mode }) 
         setNeedsUnlock(true);
         return;
       }
-      const important = importantTargets(workspace, state.apps, state.accounts, state.active);
-      if (
-        (important.length > 0 || state.settings.confirmSwitch) &&
-        !(await confirm({
-          title: t('workspaces.confirmTitle', { name: workspace.name }),
-          body: important.length
-            ? t('workspaces.confirmImportantBody', { list: important.join(', ') })
-            : t('workspaces.confirmBody'),
-          confirmLabel: t('apps.switchHere'),
-          danger: important.length > 0,
-        }))
-      ) {
-        return;
-      }
+      const go = await askBeforeSwitch({
+        kind: 'workspace',
+        label: workspace.name,
+        important: importantTargets(workspace, state.apps, state.accounts, state.active),
+        confirmAll: state.settings.confirmSwitch,
+        appIds: liveMembers(workspace, state.apps, state.accounts)
+          .filter(([appId, accountId]) => state.active[appId] !== accountId)
+          .map(([appId]) => appId),
+      });
+      if (!go) return;
       setBusy(`ws:${workspace.id}`);
       const result = await send(open ? 'workspace.open' : 'workspace.switch', {
         id: workspace.id,
@@ -315,7 +314,7 @@ export function Switcher({ data, mode }: { data: Snapshot | null; mode: Mode }) 
       );
       refresh();
     },
-    [state, busy, locked, confirm, t, probe, notify, describe],
+    [state, busy, locked, askBeforeSwitch, t, probe, notify, describe],
   );
 
   const addPreset = useCallback(

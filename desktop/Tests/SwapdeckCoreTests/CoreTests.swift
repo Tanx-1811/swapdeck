@@ -285,3 +285,97 @@ struct MessageTests {
         #expect(Language.resolve(.en, preferred: ["vi-VN"]) == .en)
     }
 }
+
+@Suite("Opening links in the right workspace")
+struct LinkRouterTests {
+    let company = Workspace(
+        id: "ws_company", name: "Company",
+        links: [
+            WorkspaceLink(title: "Projects", url: "https://supabase.com/dashboard/projects"),
+            WorkspaceLink(title: "Docs", url: "https://docs.company.example/"),
+        ]
+    )
+    let acme = Workspace(
+        id: "ws_acme", name: "Acme",
+        links: [WorkspaceLink(title: "Acme DB", url: "https://supabase.com/dashboard/project/acme")],
+        linkRules: ["acme.example"]
+    )
+
+    private func route(_ link: String, _ workspaces: [Workspace]? = nil) -> String? {
+        LinkRouter.route(URL(string: link)!, workspaces: workspaces ?? [company, acme])?.workspaceId
+    }
+
+    @Test func picksTheMostSpecificRule() {
+        #expect(route("https://app.acme.example/invoices") == "ws_acme")
+        #expect(route("https://www.acme.example") == "ws_acme")
+        #expect(route("https://supabase.com/dashboard/project/acme/sql/new") == "ws_acme")
+        #expect(route("https://supabase.com/dashboard/projects") == "ws_company")
+        #expect(route("https://docs.company.example/guide") == "ws_company")
+        // A host both workspaces have pages on belongs to neither by itself.
+        #expect(route("https://supabase.com/dashboard/project/other") == nil)
+        #expect(route("https://supabase.com/dashboard/project/acmeX") == nil)
+        #expect(route("https://example.org/") == nil)
+        #expect(route("mailto:someone@acme.example") == nil)
+    }
+
+    @Test func rulesAddedByHandWinTies() {
+        var company = company
+        company.linkRules = ["supabase.com/dashboard/project/acme"]
+        let found = LinkRouter.route(URL(string: "https://supabase.com/dashboard/project/acme")!, workspaces: [company, acme])
+        #expect(found == LinkRoute(workspaceId: "ws_company", rule: "supabase.com/dashboard/project/acme", explicit: true))
+        // A host rule without a path never beats a matching path.
+        var broad = acme
+        broad.linkRules = ["supabase.com"]
+        #expect(route("https://supabase.com/dashboard/projects", [company, broad]) == "ws_company")
+        #expect(route("https://supabase.com/billing", [company, broad]) == "ws_acme")
+    }
+
+    @Test func derivesRulesFromPages() {
+        #expect(LinkRouter.implicitRules(for: company, among: [company, acme]) == [
+            "supabase.com/dashboard/projects", "docs.company.example",
+        ])
+        #expect(LinkRouter.implicitRules(for: acme, among: [acme]) == ["supabase.com/dashboard/project/acme", "supabase.com"])
+    }
+
+    @Test func normalizesWhatPeopleType() {
+        #expect(LinkRouter.normalize("https://www.Acme.example/Path/?q=1#x") == "acme.example/Path")
+        #expect(LinkRouter.normalize("*.acme.example") == "acme.example")
+        #expect(LinkRouter.normalize("user@acme.example:8080/a") == "acme.example/a")
+        #expect(LinkRouter.normalize("localhost") == nil)
+        #expect(LinkRouter.normalize("not a host") == nil)
+        #expect(LinkRouter.normalize("") == nil)
+    }
+
+    @Test func keepsRulesAndTheChoiceInTheDataFile() throws {
+        var workspace = Workspace(id: "ws", name: "Acme")
+        workspace.linkRules = ["acme.example", "supabase.com/dashboard/project/acme"]
+        let data = DesktopData(settings: DesktopSettings(unmatchedLinks: .front), workspaces: [workspace])
+        let decoded = try DataFile.decode(DataFile.encode(data))
+        #expect(decoded.settings.unmatchedLinks == .front)
+        #expect(decoded.workspaces[0].linkRules == workspace.linkRules)
+        let hostile = Data("""
+        { "format": "swapdeck-desktop", "settings": { "unmatchedLinks": "everywhere" },
+          "workspaces": [{ "id": "a", "name": "A", "linkRules": ["https://www.Acme.example/", "acme.example", "bad host", 4] }] }
+        """.utf8)
+        let cleaned = try DataFile.decode(hostile)
+        #expect(cleaned.settings.unmatchedLinks == .ask)
+        #expect(cleaned.workspaces[0].linkRules == ["acme.example"])
+    }
+}
+
+@Suite("New profiles")
+struct ProfileSeedTests {
+    @Test func namesAndColorsANewProfile() throws {
+        let data = ProfileSeed.preferences(name: "  Khách hàng Acme  ", color: "#94661a")
+        let root = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let profile = try #require(root["profile"] as? [String: Any])
+        #expect(profile["name"] as? String == "Khách hàng Acme")
+        #expect(profile["using_default_name"] as? Bool == false)
+        let theme = try #require((root["browser"] as? [String: Any])?["theme"] as? [String: Any])
+        // The signed ARGB Chrome itself wrote for #94661a in our check against Chrome for Testing.
+        #expect((theme["user_color"] as? NSNumber)?.intValue == -7_051_750)
+        #expect((theme["color_variant"] as? NSNumber)?.intValue == 1)
+        let plain = try #require(try JSONSerialization.jsonObject(with: ProfileSeed.preferences(name: "A", color: "red")) as? [String: Any])
+        #expect((plain["browser"] as? [String: Any])?["theme"] == nil)
+    }
+}

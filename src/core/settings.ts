@@ -14,6 +14,7 @@ export const DEFAULT_SETTINGS: Settings = {
   actionOpens: 'popup',
   accent: 'son',
   vaultNudgeUntil: 0,
+  guardUnsaved: true,
 };
 
 export const AUTO_LOCK_CHOICES = [0, 5, 15, 30, 60, 240] as const;
@@ -44,6 +45,7 @@ export function parseSettings(value: unknown): Settings {
       typeof input.vaultNudgeUntil === 'number' && Number.isFinite(input.vaultNudgeUntil) && input.vaultNudgeUntil > 0
         ? input.vaultNudgeUntil
         : 0,
+    guardUnsaved: bool('guardUnsaved'),
   };
 }
 

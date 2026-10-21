@@ -227,6 +227,8 @@ export type Settings = {
   accent: Accent;
   /** Until when the reminder to lock saved sessions with a passphrase stays hidden (0: not snoozed). */
   vaultNudgeUntil: number;
+  /** Ask before a switch reloads tabs that may hold unsaved work. */
+  guardUnsaved: boolean;
 };
 
 export type VaultMeta = {

@@ -512,3 +512,197 @@ export function showRibbon(content: RibbonContent | null): void {
   root.append(bar, tag);
   document.documentElement.append(host);
 }
+
+export type UnsavedWork = { dirty: boolean; reason: 'warning' | 'form' | 'typing' | null };
+
+/**
+ * Runs in the page's own world: does the page hold work a reload would lose?
+ * 1. The page warns before being left (its own beforeunload handler).
+ * 2. A form field differs from how the page was loaded (forms the page doesn't redraw itself).
+ * 3. Text is being typed right now in a text area or an editor.
+ * A heuristic: it may miss work an app keeps elsewhere, and a page handler that throws is ignored.
+ */
+export function unsavedWork(): UnsavedWork {
+  try {
+    let warned = false;
+    const event = new Event('beforeunload', { cancelable: true });
+    Object.defineProperty(event, 'returnValue', {
+      configurable: true,
+      get: () => !warned,
+      set: (value: unknown) => {
+        if (value !== true && value !== undefined && value !== null) warned = true;
+      },
+    });
+    if (!window.dispatchEvent(event) || event.defaultPrevented) warned = true;
+    const handler = window.onbeforeunload as ((this: Window, event: Event) => unknown) | null;
+    // An old-style handler's returned message only counts on a real unload: call it once more.
+    if (!warned && typeof handler === 'function') {
+      const result = handler.call(window, event);
+      if (typeof result === 'string' || result === false) warned = true;
+    }
+    if (warned) return { dirty: true, reason: 'warning' };
+  } catch {
+    // A page handler threw: not a sign of unsaved work.
+  }
+  const visible = (element: HTMLElement) => element.getClientRects().length > 0;
+  const searchy = /search|tìm|filter|lọc/i;
+  for (const field of Array.from(document.querySelectorAll<HTMLElement>('input, textarea, select'))) {
+    if (!visible(field) || field.closest('[role="search"]')) continue;
+    if (field instanceof HTMLInputElement) {
+      if (field.disabled || field.readOnly) continue;
+      if (field.type === 'checkbox' || field.type === 'radio') {
+        if (field.checked !== field.defaultChecked) return { dirty: true, reason: 'form' };
+        continue;
+      }
+      if (
+        ['hidden', 'search', 'password', 'submit', 'button', 'reset', 'file', 'image', 'range', 'color'].includes(
+          field.type,
+        )
+      ) {
+        continue;
+      }
+      const hint = `${field.name} ${field.id} ${field.placeholder} ${field.getAttribute('aria-label') ?? ''}`;
+      if (searchy.test(hint)) continue;
+      if (field.value.trim() && field.value !== field.defaultValue) return { dirty: true, reason: 'form' };
+    } else if (field instanceof HTMLTextAreaElement) {
+      if (field.disabled || field.readOnly) continue;
+      if (field.value.trim() && field.value !== field.defaultValue) return { dirty: true, reason: 'form' };
+    } else if (field instanceof HTMLSelectElement) {
+      if (field.disabled) continue;
+      if (Array.from(field.options).some((option) => option.selected !== option.defaultSelected)) {
+        return { dirty: true, reason: 'form' };
+      }
+    }
+  }
+  const active = document.activeElement;
+  if (active instanceof HTMLElement && active.isContentEditable && (active.textContent ?? '').trim()) {
+    return { dirty: true, reason: 'typing' };
+  }
+  return { dirty: false, reason: null };
+}
+
+export type AskContent = {
+  title: string;
+  body: string;
+  items: string[];
+  confirm: string;
+  cancel: string;
+  danger: boolean;
+  theme: 'system' | 'light' | 'dark';
+  /** Answer "no" by itself after this long (the service worker shouldn't wait forever). */
+  timeoutMs: number;
+};
+
+/** Asks on the page (shortcut, address bar and menu switches have no popup to ask in). */
+export function askOnPage(content: AskContent): Promise<boolean> {
+  return new Promise((resolve) => {
+    const id = 'swapdeck-ask';
+    document.getElementById(id)?.remove();
+    const host = document.createElement('div');
+    host.id = id;
+    host.style.cssText = 'position:fixed;inset:0;z-index:2147483647;';
+    const root = host.attachShadow({ mode: 'closed' });
+    const dark =
+      content.theme === 'dark' ||
+      (content.theme === 'system' &&
+        typeof matchMedia === 'function' &&
+        matchMedia('(prefers-color-scheme: dark)').matches);
+    const paper = dark ? '#1c1816' : '#fbf9f5';
+    const ink = dark ? '#f1e9dc' : '#1a1714';
+    const muted = dark ? '#c2b6a5' : '#57504a';
+    const line = dark ? '#4a3f36' : '#cbbfab';
+    const danger = dark ? '#f07b6f' : '#b3261e';
+    const onDanger = dark ? '#141110' : '#ffffff';
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(`
+      .backdrop { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(20, 17, 16, .45);
+        font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+      .dialog { width: min(440px, 100%); padding: 20px; border: 1px solid ${line}; border-radius: 14px; background: ${paper}; color: ${ink};
+        box-shadow: 0 24px 60px -12px rgba(0, 0, 0, .55); }
+      .brand { margin: 0 0 6px; font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: ${muted}; }
+      h2 { margin: 0 0 8px; font: 600 19px/1.3 ui-serif, "Iowan Old Style", Georgia, serif; }
+      p { margin: 0; color: ${muted}; }
+      ul { margin: 10px 0 0; padding-left: 18px; color: ${ink}; }
+      li { margin: 2px 0; overflow-wrap: anywhere; }
+      .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+      button { min-height: 34px; padding: 0 14px; border-radius: 8px; font: 600 13px/1 system-ui, -apple-system, sans-serif; cursor: pointer; }
+      .cancel { border: 1px solid ${line}; background: transparent; color: ${ink}; }
+      .confirm { border: 1px solid ${content.danger ? danger : ink}; background: ${content.danger ? danger : ink};
+        color: ${content.danger ? onDanger : paper}; }
+      button:focus-visible { outline: 2px solid ${content.danger ? danger : ink}; outline-offset: 2px; }
+    `);
+    root.adoptedStyleSheets = [sheet];
+    const backdrop = document.createElement('div');
+    backdrop.className = 'backdrop';
+    const dialog = document.createElement('div');
+    dialog.className = 'dialog';
+    dialog.setAttribute('role', 'alertdialog');
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.setAttribute('aria-labelledby', 'swapdeck-ask-title');
+    const brand = document.createElement('p');
+    brand.className = 'brand';
+    brand.textContent = 'Swapdeck';
+    const title = document.createElement('h2');
+    title.id = 'swapdeck-ask-title';
+    title.textContent = content.title;
+    const body = document.createElement('p');
+    body.textContent = content.body;
+    dialog.append(brand, title, body);
+    if (content.items.length) {
+      const list = document.createElement('ul');
+      for (const item of content.items) {
+        const entry = document.createElement('li');
+        entry.textContent = item;
+        list.append(entry);
+      }
+      dialog.append(list);
+    }
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'cancel';
+    cancel.textContent = content.cancel;
+    const confirm = document.createElement('button');
+    confirm.type = 'button';
+    confirm.className = 'confirm';
+    confirm.textContent = content.confirm;
+    actions.append(cancel, confirm);
+    dialog.append(actions);
+    backdrop.append(dialog);
+    root.append(backdrop);
+
+    let done = false;
+    const finish = (answer: boolean) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      document.removeEventListener('keydown', onKey, true);
+      host.remove();
+      resolve(answer);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        finish(false);
+      } else if (event.key === 'Tab') {
+        // Keep the focus on the two buttons.
+        event.preventDefault();
+        (root.activeElement === cancel ? confirm : cancel).focus();
+      }
+    };
+    const timer = setTimeout(() => finish(false), content.timeoutMs);
+    cancel.addEventListener('click', () => finish(false));
+    // Only a real click or key press confirms: the page itself can't answer for the user.
+    confirm.addEventListener('click', (event) => {
+      if (event.isTrusted) finish(true);
+    });
+    backdrop.addEventListener('click', (event) => {
+      if (event.target === backdrop) finish(false);
+    });
+    document.addEventListener('keydown', onKey, true);
+    (document.body ?? document.documentElement).append(host);
+    cancel.focus();
+  });
+}

@@ -33,6 +33,17 @@ enum PreviewRenderer {
         denied.frontId = nil
         denied.openIds = []
         snapshot(SwitcherView(model: denied), width: 360, height: nil, dark: false, to: folder.appendingPathComponent("switcher-denied-vi.png"))
+        for (language, dark) in [(LanguagePreference.vi, false), (.en, true)] {
+            let chooserModel = sampleModel(language: language)
+            snapshot(
+                ChooserView(model: chooserModel, url: URL(string: "https://app.globex.example/invoices/42?tab=paid")!) {},
+                width: 380, height: nil, dark: dark,
+                to: folder.appendingPathComponent("chooser-\(language.rawValue)-\(dark ? "dark" : "light").png")
+            )
+        }
+        let acmeEditor = sampleModel(language: .vi)
+        snapshot(ManagerView(model: acmeEditor, selection: .constant(.workspace("ws_acme"))), width: 900, height: 1180, dark: false,
+                 to: folder.appendingPathComponent("editor-acme-vi-light.png"))
         let icon = MenuBarIcon.image()
         if let tiff = icon.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff) {
             try? rep.representation(using: .png, properties: [:])?.write(to: folder.appendingPathComponent("menubar-icon.png"))
@@ -113,6 +124,7 @@ enum PreviewRenderer {
                         WorkspaceLink(title: "Acme admin", url: "https://app.acme.example/admin"),
                         WorkspaceLink(title: "Supabase", url: "https://supabase.com/dashboard/project/acme"),
                     ],
+                    linkRules: ["acme.example"],
                     order: 1, lastOpenedAt: now.addingTimeInterval(-7200), openCount: 17
                 ),
                 Workspace(id: "ws_me", name: vi ? "Cá nhân" : "Personal", color: "#2f4e86", symbol: "house",

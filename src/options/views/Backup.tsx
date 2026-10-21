@@ -1,21 +1,14 @@
 import { Download, FileJson, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { parseBackupFile } from '../../core/backup';
-import { formatDateTime } from '../../i18n/translate';
+import { formatDateTime, relativeTime } from '../../i18n/translate';
 import type { BackupSummary } from '../../shared/protocol';
 import { Callout, Field, Spinner, useConfirm, useToast } from '../../ui/controls';
 import { useI18n } from '../../ui/i18n';
+import { backupFileName, downloadText } from '../../ui/download';
 import { useManager } from '../context';
 import { Card, PageHeader } from '../Options';
-
-function download(text: string, name: string) {
-  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
-  const link = Object.assign(document.createElement('a'), { href: url, download: name });
-  document.body.append(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
+import { ReloginCard } from './Relogin';
 
 export function Backup() {
   const { t } = useI18n();
@@ -26,13 +19,25 @@ export function Backup() {
         <ExportCard />
         <ImportCard />
       </div>
+      <ReloginCard />
+      <Card title={t('move.title')} id="move">
+        <ol className="move-steps">
+          <li>{t('move.step1')}</li>
+          <li>{t('move.step2')}</li>
+          <li>{t('move.step3')}</li>
+        </ol>
+        <Callout tone="warning">{t('move.sessionsNote')}</Callout>
+        <p className="muted small">
+          {t('move.macNote')} {t('move.syncNote')}
+        </p>
+      </Card>
       <Callout tone="info">{t('backup.reminder')}</Callout>
     </div>
   );
 }
 
 function ExportCard() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { data, run, pending } = useManager();
   const notify = useToast();
   const [includeSessions, setIncludeSessions] = useState(true);
@@ -45,6 +50,11 @@ function ExportCard() {
 
   return (
     <Card title={t('backup.export')} lead={t('backup.exportLead')} id="export">
+      <p className="muted small">
+        {data.state.settings.lastBackupAt
+          ? t('backup.lastBackup', { time: relativeTime(data.state.settings.lastBackupAt, language) })
+          : t('backup.neverBackedUp')}
+      </p>
       <form
         className="form"
         onSubmit={async (event) => {
@@ -55,8 +65,7 @@ function ExportCard() {
             includeSessions,
           });
           if (!text) return;
-          const stamp = new Date().toISOString().slice(0, 10);
-          download(text, `swapdeck-backup-${stamp}.json`);
+          downloadText(text, backupFileName());
           notify(t('backup.downloaded'));
           setPassword('');
           setRepeat('');
@@ -259,7 +268,20 @@ function ImportCard() {
                     ...(file.encrypted ? { password } : {}),
                   });
                   if (result) {
-                    notify(t('backup.imported', result));
+                    notify(
+                      [
+                        t('backup.imported', {
+                          apps: result.apps,
+                          accounts: result.accounts,
+                          sessions: result.sessions,
+                          workspaces: result.workspaces,
+                        }),
+                        result.sessions < result.accounts ? t('backup.importedNext') : '',
+                        result.syncOff ? t('sync.offAfterReplace') : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' '),
+                    );
                     setFile(null);
                     setSummary(null);
                     setPassword('');

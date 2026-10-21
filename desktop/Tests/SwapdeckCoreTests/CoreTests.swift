@@ -379,3 +379,48 @@ struct ProfileSeedTests {
         #expect((plain["browser"] as? [String: Any])?["theme"] == nil)
     }
 }
+
+@Suite("Moving to another Mac")
+struct MoveTests {
+    let here: [BrowserKind: [BrowserProfile]] = [
+        .chrome: [
+            BrowserProfile(directory: "Default", name: "Personal", email: "minh.home@example.com"),
+            BrowserProfile(directory: "Profile 2", name: "Acme", email: "dev@acme.example"),
+            BrowserProfile(directory: "Profile 5", name: "Công ty"),
+        ],
+    ]
+
+    @Test func findsEachProfileAgainByAccountOrName() {
+        let byEmail = Workspace(id: "a", name: "Acme", profileDirectory: "Profile 3", profileName: "Acme old", profileEmail: "DEV@acme.example")
+        let byName = Workspace(id: "c", name: "Company", profileDirectory: "Profile 1", profileName: "cong ty")
+        let someoneElse = Workspace(id: "p", name: "Me", profileDirectory: "Profile 2", profileEmail: "minh.home@example.com")
+        let fine = Workspace(id: "d", name: "Personal", profileDirectory: "Default", profileName: "Personal")
+        let lost = Workspace(id: "x", name: "Gone", profileDirectory: "Profile 9", profileName: "Globex")
+        let none = Workspace(id: "n", name: "New")
+        let result = WorkspaceLogic.rematch([byEmail, byName, someoneElse, fine, lost, none], profiles: here)
+        let byId = Dictionary(uniqueKeysWithValues: result.workspaces.map { ($0.id, $0) })
+        #expect(byId["a"]?.profileDirectory == "Profile 2")
+        #expect(byId["a"]?.profileName == "Acme")
+        #expect(byId["c"]?.profileDirectory == "Profile 5")
+        // "Profile 2" holds someone else's account here: the workspace moves to its own profile.
+        #expect(byId["p"]?.profileDirectory == "Default")
+        #expect(byId["d"]?.profileDirectory == "Default")
+        #expect(result.changed == ["a", "c", "p"])
+        #expect(result.missing == ["x", "n"])
+    }
+
+    @Test func importsOnlyWorkspacesThatAreNotHereYet() {
+        let existing = [Workspace(id: "a", name: "A", order: 0), Workspace(id: "b", name: "B", order: 3)]
+        let incoming = [Workspace(id: "b", name: "B again", order: 0), Workspace(id: "c", name: "C", order: 1)]
+        let merged = WorkspaceLogic.merge(incoming, into: existing)
+        #expect(merged.map(\.id) == ["c"])
+        #expect(merged[0].order == 4)
+    }
+
+    @Test func keepsTheRememberedProfileInTheFile() throws {
+        let workspace = Workspace(id: "w", name: "Acme", profileDirectory: "Profile 2", profileName: "Acme", profileEmail: "dev@acme.example")
+        let decoded = try DataFile.decode(DataFile.encode(DesktopData(workspaces: [workspace])))
+        #expect(decoded.workspaces[0].profileName == "Acme")
+        #expect(decoded.workspaces[0].profileEmail == "dev@acme.example")
+    }
+}

@@ -359,6 +359,8 @@ export const vi: Record<MessageKey, string> = {
   'security.wipeHint': 'Xóa ứng dụng, tài khoản, phiên đã lưu, lịch sử và cài đặt khỏi máy này.',
   'security.wipeConfirm': 'Xóa mọi thứ Swapdeck đã lưu trên máy này? Bạn vẫn đăng nhập trên các trang.',
   'security.wiped': 'Đã xóa toàn bộ dữ liệu Swapdeck.',
+  'security.wipeSyncNote':
+    'Các máy khác và Chrome Sync vẫn giữ danh sách; muốn xoá cả ở đó, trước tiên vào Cài đặt → Đồng bộ danh sách → Xoá khỏi Chrome Sync.',
   'security.privacy': 'Quyền riêng tư',
   'security.privacyBody':
     'Mọi thứ nằm trên máy này: không tài khoản, không máy chủ, không thống kê. Swapdeck chỉ đọc các trang bạn đã thêm, và chỉ để lưu và khôi phục đăng nhập của chúng.',
@@ -575,6 +577,48 @@ export const vi: Record<MessageKey, string> = {
   'vault.nudgeBody': 'Ai dùng hồ sơ Chrome này cũng mở được {n} tài khoản bạn đã lưu. Hãy khoá bằng mật khẩu.',
   'vault.nudgeAction': 'Bật khoá',
   'vault.nudgeLater': 'Để sau',
+  'backup.nudgeTitle': 'Hãy sao lưu các tài khoản đã lưu',
+  'backup.nudgeNever':
+    'Bạn chưa sao lưu lần nào. Nếu máy hay hồ sơ Chrome này mất, bạn sẽ phải đăng nhập lại mọi tài khoản.',
+  'backup.nudgeOld': 'Lần sao lưu gần nhất: {time}.',
+  'backup.backupNow': 'Sao lưu ngay',
+  'backup.quickDone':
+    'Đã lưu tệp sao lưu (chỉ danh sách, không kèm phiên đăng nhập). Muốn kèm phiên, vào Sao lưu và đặt mật khẩu.',
+  'backup.lastBackup': 'Lần sao lưu gần nhất: {time}',
+  'backup.neverBackedUp': 'Máy này chưa sao lưu lần nào',
+  'move.title': 'Chuyển sang máy khác',
+  'move.step1': 'Ở máy cũ: tạo tệp sao lưu ở trang này — chỉ cần danh sách (không cần mật khẩu).',
+  'move.step2': 'Ở máy mới: cài Swapdeck rồi nhập tệp đó ở trang này.',
+  'move.step3': 'Đăng nhập lại từng tài khoản một lần ở mục "Đăng nhập lại"; Swapdeck tự lưu vào đúng tài khoản.',
+  'move.sessionsNote':
+    'Có chuyển kèm phiên đăng nhập (sao lưu kèm phiên)? Hãy ngừng dùng Swapdeck ở máy cũ: một phiên dùng trên hai máy có thể bị đăng xuất cả hai.',
+  'move.macNote': 'Chuyển Mac sang Mac bằng Trợ lý Di chuyển thì giữ được mọi thứ, kể cả phiên đăng nhập.',
+  'move.syncNote': 'Hoặc bật "Đồng bộ danh sách" trong Cài đặt ở cả hai máy.',
+  'move.reloginTitle': 'Đăng nhập lại trên máy này',
+  'move.reloginLead':
+    '{n} tài khoản chưa có phiên trên máy này — thường vì vừa chuyển từ máy khác. Đăng nhập mỗi tài khoản một lần; Swapdeck tự lưu vào đúng tài khoản.',
+  'move.signIn': 'Đăng nhập',
+  'move.signInStarted': 'Hãy đăng nhập {label} ở tab vừa mở; Swapdeck sẽ tự lưu.',
+  'move.autoCaptureOff': 'Bật "Tự lưu khi đăng nhập tài khoản mới" trong Cài đặt, hoặc lưu từng phiên từ popup.',
+  'backup.importedNext': 'Tiếp theo: đăng nhập lại các tài khoản ở mục "Đăng nhập lại".',
+  'sync.title': 'Đồng bộ danh sách giữa các máy',
+  'sync.toggle': 'Đồng bộ danh sách qua Chrome Sync',
+  'sync.hint':
+    'Ứng dụng, tài khoản (tên, email, màu, ghi chú, trang đã ghim) và các bên được đưa sang các máy khác đang đăng nhập cùng hồ sơ Chrome này; thứ bạn xoá ở một máy cũng bị xoá ở các máy kia. Phiên đăng nhập thì không bao giờ được gửi đi: ở máy kia, đăng nhập một lần là Swapdeck lưu vào đúng tài khoản.',
+  'sync.privacy':
+    'Danh sách đi qua Chrome Sync của tài khoản Google bạn; muốn chỉ mình bạn đọc được thì đặt cụm mật khẩu đồng bộ trong Chrome. Cần bật Chrome Sync cho hồ sơ này, có mục Tiện ích.',
+  'sync.status': 'Đã đồng bộ {time} · {n} mục',
+  'sync.statusTooBig': '{n} mục quá lớn để đồng bộ, chỉ nằm trên máy này.',
+  'sync.errorQuota': 'Chrome Sync đã đầy: danh sách quá lớn để đồng bộ.',
+  'sync.errorUnknown': 'Chưa đồng bộ được; Swapdeck sẽ thử lại sau lần thay đổi tới.',
+  'sync.pending': 'Đang chờ lần đồng bộ đầu…',
+  'sync.now': 'Đồng bộ ngay',
+  'sync.clear': 'Xoá khỏi Chrome Sync',
+  'sync.clearConfirm':
+    'Tắt đồng bộ ở máy này và xoá danh sách khỏi Chrome Sync. Không máy nào bị xoá dữ liệu; máy nào còn bật đồng bộ sẽ gửi lại danh sách của nó.',
+  'sync.cleared': 'Đã xoá khỏi Chrome Sync.',
+  'sync.offAfterReplace':
+    'Đồng bộ danh sách đã tắt trên máy này; bật lại thì những gì các máy khác có sẽ được thêm lại.',
   'ask.unsavedTitle': 'Có nội dung chưa lưu',
   'ask.unsavedBody': 'Đổi tài khoản sẽ tải lại các tab {app} này; nội dung chưa lưu ở đó có thể mất:',
   'ask.unsavedFresh': 'Đăng nhập tài khoản khác sẽ tải lại các tab {app} này; nội dung chưa lưu ở đó có thể mất:',

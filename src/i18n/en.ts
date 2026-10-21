@@ -359,6 +359,8 @@ export const en = {
   'security.wipeHint': 'Removes apps, accounts, saved sessions, history and settings from this computer.',
   'security.wipeConfirm': 'Delete everything Swapdeck saved on this computer? You stay signed in on the sites.',
   'security.wiped': 'All Swapdeck data was deleted.',
+  'security.wipeSyncNote':
+    'Your other computers and Chrome Sync keep the list; to remove it there too, first use Settings → Sync the list → Remove from Chrome Sync.',
   'security.privacy': 'Privacy',
   'security.privacyBody':
     'Everything stays on this computer: no account, no server, no analytics. Swapdeck only reads the sites you added, and only to save and restore their sign-in.',
@@ -574,6 +576,49 @@ export const en = {
   'vault.nudgeBody': 'Anyone using this Chrome profile can open your {n} saved accounts. Lock them with a passphrase.',
   'vault.nudgeAction': 'Turn on the lock',
   'vault.nudgeLater': 'Later',
+  'backup.nudgeTitle': 'Back up your saved accounts',
+  'backup.nudgeNever':
+    "No backup yet. If this computer or Chrome profile is lost, you'd have to sign in to every account again.",
+  'backup.nudgeOld': 'Your last backup was {time}.',
+  'backup.backupNow': 'Back up now',
+  'backup.quickDone':
+    'Backup saved (the list only, without sign-ins). To include sign-ins, use Backup with a password.',
+  'backup.lastBackup': 'Last backup: {time}',
+  'backup.neverBackedUp': 'No backup made on this computer yet',
+  'move.title': 'Moving to another computer',
+  'move.step1': 'On the old computer, make a backup here — the list alone is enough (no password needed).',
+  'move.step2': 'On the new one, install Swapdeck and import that file here.',
+  'move.step3':
+    'Sign in to each account once from "Sign in again"; Swapdeck files each sign-in under the right account.',
+  'move.sessionsNote':
+    'Moved the sign-ins too (a backup with sessions)? Stop using Swapdeck on the old computer: one sign-in used on two computers can get both signed out.',
+  'move.macNote': 'Mac to Mac with Migration Assistant keeps everything, sign-ins included.',
+  'move.syncNote': 'Or turn on "Sync the list" in Settings on both computers.',
+  'move.reloginTitle': 'Sign in again on this computer',
+  'move.reloginLead':
+    '{n} accounts have no saved sign-in here yet — usually because they came from another computer. Sign in to each once; Swapdeck saves it under the right account.',
+  'move.signIn': 'Sign in',
+  'move.signInStarted': 'Sign in as {label} in the tab that opened; Swapdeck saves it by itself.',
+  'move.autoCaptureOff': 'Turn on "Save new sign-ins automatically" in Settings, or save each sign-in from the popup.',
+  'backup.importedNext': 'Next: sign in again to the accounts listed under "Sign in again".',
+  'sync.title': 'Sync the list across computers',
+  'sync.toggle': 'Sync the list through Chrome Sync',
+  'sync.hint':
+    'Apps, accounts (names, emails, colors, notes, pinned pages) and workspaces travel to your other computers signed in to this Chrome profile, and what you remove on one is removed on the others. Sign-ins never travel: on another computer, sign in once and Swapdeck saves it under the right account.',
+  'sync.privacy':
+    "The list goes through your Google account's Chrome Sync; set a sync passphrase in Chrome if only you should be able to read it. Chrome Sync must be on for this profile, with Extensions included.",
+  'sync.status': 'Synced {time} · {n} items',
+  'sync.statusTooBig': '{n} items are too big to sync and stay on this computer.',
+  'sync.errorQuota': "Chrome Sync's space is full: the list is too big to sync.",
+  'sync.errorUnknown': "Couldn't sync just now; Swapdeck tries again after the next change.",
+  'sync.pending': 'Waiting for the first sync…',
+  'sync.now': 'Sync now',
+  'sync.clear': 'Remove from Chrome Sync',
+  'sync.clearConfirm':
+    'Turns sync off here and removes the list from Chrome Sync. Nothing is deleted on any computer; computers that still sync will send their list again.',
+  'sync.cleared': 'Removed from Chrome Sync.',
+  'sync.offAfterReplace':
+    'Sync of the list was turned off on this computer; turning it on again adds back what other computers have.',
   'ask.unsavedTitle': 'Unsaved work',
   'ask.unsavedBody': "Switching reloads these {app} tabs; what isn't saved there may be lost:",
   'ask.unsavedFresh': "Signing in with another account reloads these {app} tabs; what isn't saved there may be lost:",

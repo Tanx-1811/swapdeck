@@ -8,7 +8,7 @@ import { send, type MemberResult, type Probe } from '../shared/protocol';
 import { requestAccess } from '../ui/access';
 import { useAskBeforeSwitch } from '../ui/askBeforeSwitch';
 import { useToast } from '../ui/controls';
-import { VaultNudge } from '../ui/VaultNudge';
+import { Reminders } from '../ui/Reminders';
 import { errorText, useAction, type Snapshot } from '../ui/hooks';
 import { useI18n } from '../ui/i18n';
 import { AppList } from './AppList';
@@ -423,11 +423,11 @@ export function Switcher({ data, mode }: { data: Snapshot | null; mode: Mode }) 
     <UnlockForm />
   );
   const nudge = !locked && (
-    <VaultNudge
+    <Reminders
       settings={state.settings}
       vault={state.vault}
       accounts={state.accounts}
-      onOpen={() => openManager('#/security')}
+      onOpenSecurity={() => openManager('#/security')}
     />
   );
   const selectApp = (appId: string) => {

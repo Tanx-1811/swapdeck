@@ -30,6 +30,7 @@ import {
 } from './admin';
 import { probe, restorePrevious, saveLive, switchTo } from './engine';
 import { answerAsk, cycleGuarded, findUnsaved, runGuarded } from './guarded';
+import { clearSyncData, syncNow } from './sync';
 import { openWorkspace, switchWorkspace } from './workspaces';
 import { update } from './state';
 
@@ -58,6 +59,13 @@ async function handle(request: AnyRequest): Promise<unknown> {
       return answerAsk(request.id, request.ok);
     case 'switch.guarded':
       return runGuarded(request.plan);
+    case 'sync.now':
+      await syncNow();
+      return true;
+    case 'sync.clear':
+      await updateSettings({ syncList: false });
+      await clearSyncData();
+      return true;
     case 'save':
       return saveLive(request.appId, request.tabId, request.target);
     case 'restorePrevious':

@@ -59,7 +59,14 @@ Không cần đăng xuất, không gõ lại mật khẩu, không cần thêm h�
 - **Không mất nội dung đang gõ:** trước khi đổi tài khoản làm tải lại các tab, Swapdeck xem có biểu mẫu đã sửa, chữ đang
   gõ dở hay trang đang cảnh báo khi rời không, và hỏi trước. Đổi bằng phím tắt, thanh địa chỉ hay menu cũng được hỏi
   ngay trên trang.
-- **Sao lưu & chuyển máy:** xuất/nhập tệp sao lưu, kèm phiên đăng nhập (được mã hóa bằng mật khẩu bạn chọn).
+- **Sao lưu & chuyển máy:** xuất/nhập tệp sao lưu, kèm phiên đăng nhập (được mã hóa bằng mật khẩu bạn chọn). Swapdeck
+  **nhắc sao lưu** (lần đầu sau vài ngày, rồi mỗi tháng) và **Sao lưu ngay** chỉ một nút; trang Sao lưu hướng dẫn
+  chuyển sang máy mới, và mục **Đăng nhập lại trên máy này** liệt kê các tài khoản chưa có phiên ở máy này, mỗi tài khoản
+  một nút "Đăng nhập".
+- **Đồng bộ danh sách giữa các máy** (tùy chọn, mặc định tắt): ứng dụng, tài khoản và các bên giống nhau trên mọi máy
+  đăng nhập cùng hồ sơ Chrome, qua Chrome Sync của chính bạn — **không bao giờ kèm phiên đăng nhập**. Cùng một ứng dụng
+  hay tài khoản tạo riêng ở hai máy được nhận ra thay vì chép trùng; xoá ở một máy thì các máy kia cũng xoá, còn thứ chỉ
+  bị mất ở một máy thì được lấy lại chứ không biến mất khắp nơi.
 - Trang quản lý đầy đủ: tổng quan, các bên, ứng dụng & tài khoản, lịch sử, sao lưu, bảo mật, cài đặt, hướng dẫn.
   **Tiếng Việt và tiếng Anh**. Giao diện riêng **“sơn mài & giấy dó”** (mực trên giấy ấm, sơn mài đen, dấu son
   “đang dùng”), sáng/tối, bốn màu nhấn.
@@ -134,7 +141,9 @@ trang. Đổi cả một bên là làm việc đó lần lượt cho từng ứn
 ### Quyền riêng tư
 
 Mọi thứ nằm trên máy của bạn: không tài khoản, không máy chủ, không thống kê; Swapdeck không gửi dữ liệu của bạn đi
-đâu (ngoài việc mở chính các trang bạn chuyển, nó chỉ tải ảnh đại diện tài khoản từ địa chỉ do trang đó cung cấp). Khi
+đâu (ngoài việc mở chính các trang bạn chuyển, nó chỉ tải ảnh đại diện tài khoản từ địa chỉ do trang đó cung cấp). Chỉ
+khi bạn bật **Đồng bộ danh sách**, danh sách (không kèm phiên đăng nhập) mới đi qua Chrome Sync của tài khoản Google
+bạn. Khi
 cài, Swapdeck không có quyền trên trang web nào; mỗi ứng dụng bạn thêm chỉ xin quyền đúng tên miền của nó. Xem
 [docs/PRIVACY.md](docs/PRIVACY.md).
 
@@ -189,7 +198,14 @@ click. No signing out, no retyping passwords, no extra Chrome profiles.
   app while that account is in use, and a confirmation before switching to it.
 - **Unsaved work is safe:** before a switch reloads an app's tabs, Swapdeck looks for edited forms, text being typed and
   pages that warn before you leave, and asks first. Shortcut, address-bar and menu switches ask right on the page.
-- **Backup & move:** export/import a backup file, with sessions encrypted by a password you choose.
+- **Backup & move:** export/import a backup file, with sessions encrypted by a password you choose. Swapdeck **reminds
+  you to back up** (after a few days, then monthly) and **Back up now** takes one click; the Backup page walks you
+  through moving to a new computer, and **Sign in again on this computer** lists the accounts with no sign-in saved
+  here, with one "Sign in" button each.
+- **Sync the list across computers** (optional, off by default): apps, accounts and workspaces stay the same on every
+  computer signed in to your Chrome profile, through your own Chrome Sync — **sign-ins never travel**. The same app or
+  account set up on two computers is recognised instead of copied; what you remove on one computer is removed on the
+  others, while something that only went missing on one computer comes back instead of disappearing everywhere.
 - A full manager: overview, workspaces, apps & accounts, history, backup, security, settings, help. **English and
   Vietnamese**. Its own **lacquer & paper** look (ink on warm paper, black lacquer, a vermilion "in use" seal), light
   and dark, four accent colors.
@@ -265,7 +281,8 @@ switch in a hidden tab that closes when done. Details: [docs/ARCHITECTURE.md](do
 ### Privacy
 
 Everything stays on your computer: no account, no server, no analytics, and Swapdeck sends your data nowhere (besides
-opening the sites you switch, it only loads account pictures from the address the site itself provides). At install
+opening the sites you switch, it only loads account pictures from the address the site itself provides). Only if you
+turn on **Sync the list** does the list (never the sign-ins) go through your Google account's Chrome Sync. At install
 Swapdeck has access to no website; each app you add asks for its own domains only. See
 [docs/PRIVACY.md](docs/PRIVACY.md).
 

@@ -26,7 +26,7 @@ rồi `npm run package`. Nên chạy thêm `npm run test:live` (kiểm tra mọi
 
 ## 2. Tải gói lên
 
-1. Bấm **Thêm mục mới** (New item) → chọn `release/swapdeck-1.4.0.zip`.
+1. Bấm **Thêm mục mới** (New item) → chọn `release/swapdeck-1.5.0.zip`.
 2. Cửa hàng tự đọc tên, mô tả ngắn (từ `public/_locales/*/messages.json`) và biểu tượng.
 
 ## 3. Thẻ "Trang thông tin cửa hàng" (Store listing)

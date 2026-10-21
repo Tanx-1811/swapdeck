@@ -110,6 +110,11 @@ final class AppModel {
         }
         profiles = found
         unreadableBrowsers = unreadable
+        let refreshed = data.workspaces.map(withProfileDetails)
+        if refreshed != data.workspaces {
+            data.workspaces = refreshed
+            save()
+        }
     }
 
     /// Saves at once (structural changes).
@@ -162,10 +167,25 @@ final class AppModel {
 
     func update(_ workspace: Workspace) {
         guard let index = data.workspaces.firstIndex(where: { $0.id == workspace.id }) else { return }
-        let previous = data.workspaces[index].name
-        if previous != workspace.name, pendingRenames[workspace.id] == nil { pendingRenames[workspace.id] = previous }
+        let previous = data.workspaces[index]
+        if previous.name != workspace.name, pendingRenames[workspace.id] == nil { pendingRenames[workspace.id] = previous.name }
+        var workspace = workspace
+        if previous.profileDirectory != workspace.profileDirectory || previous.browser != workspace.browser {
+            workspace = withProfileDetails(workspace)
+        }
         data.workspaces[index] = workspace
         scheduleSave()
+    }
+
+    /// Remembers the profile's name and Google account (to find it again on another Mac).
+    private func withProfileDetails(_ workspace: Workspace) -> Workspace {
+        guard let profile = profiles[workspace.browser]?.first(where: { $0.directory == workspace.profileDirectory }) else {
+            return workspace
+        }
+        var copy = workspace
+        copy.profileName = profile.name
+        copy.profileEmail = profile.email ?? ""
+        return copy
     }
 
     @discardableResult
@@ -501,6 +521,33 @@ final class AppModel {
         data.workspaces += added
         save()
         return added.count
+    }
+
+    /// The workspaces as a file for another Mac (no sign-ins: names, looks, pages, link rules, profiles).
+    func exportFile() throws -> Data {
+        try DataFile.encode(DesktopData(settings: data.settings, workspaces: data.workspaces))
+    }
+
+    /// Adds the workspaces of a Swapdeck Desktop export and finds their profiles on this Mac.
+    func importDesktopFile(_ file: Data) throws -> (added: Int, matched: Int, missing: Int) {
+        let incoming = try DataFile.decode(file)
+        let added = WorkspaceLogic.merge(incoming.workspaces, into: data.workspaces)
+        data.workspaces += added
+        let result = WorkspaceLogic.rematch(data.workspaces, profiles: profiles)
+        data.workspaces = result.workspaces
+        save()
+        let addedIds = Set(added.map(\.id))
+        return (added.count, addedIds.subtracting(result.missing).count, addedIds.intersection(result.missing).count)
+    }
+
+    /// Finds each workspace's profile again by its Google account or name (after moving Macs).
+    @discardableResult
+    func rematchProfiles() -> Int {
+        refreshProfiles()
+        let result = WorkspaceLogic.rematch(data.workspaces, profiles: profiles)
+        data.workspaces = result.workspaces
+        save()
+        return result.changed.count
     }
 
     // MARK: - System

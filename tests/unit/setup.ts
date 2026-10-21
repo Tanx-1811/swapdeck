@@ -42,11 +42,13 @@ function storageArea() {
 
 const local = storageArea();
 const session = storageArea();
+const sync = storageArea();
 
 const chromeMock = {
   storage: {
     local,
     session,
+    sync,
     onChanged: { addListener: vi.fn(), removeListener: vi.fn() },
   },
   i18n: { getUILanguage: () => 'en-US' },
@@ -71,4 +73,5 @@ Object.assign(globalThis, { chrome: chromeMock });
 afterEach(() => {
   local.store.clear();
   session.store.clear();
+  sync.store.clear();
 });

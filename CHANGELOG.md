@@ -2,6 +2,29 @@
 
 All notable changes to Swapdeck are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 1.5.0 — 2026-10-21
+
+Nothing lost when Chrome or the computer changes, and Swapdeck Desktop 1.2.0.
+
+- **Backup reminder:** a few days after the first saved sign-in, and a month after the last backup, the popup and the
+  overview suggest a backup; **Back up now** downloads the list in one click (no sign-ins, so no password). The Backup
+  page shows when the last one was made.
+- **Moving to another computer:** the Backup page walks through it (back up the list, import it, sign in once per
+  account), and **Sign in again on this computer** lists every account that has no saved sign-in here, with one
+  "Sign in" button each; Swapdeck files the new sign-in under the right account by itself.
+- **Sync the list across computers** (Settings, off by default): apps, accounts and workspaces stay the same on every
+  computer signed in to your Chrome profile, through your own Chrome Sync. Sign-ins never travel. The same app or
+  account set up on two computers is recognised (same site, same signed-in user, same workspace name) instead of
+  copied; what you remove on one computer is removed on the others, while something that only went missing on one
+  computer comes back instead of disappearing everywhere. **Remove from Chrome Sync** clears it there without deleting
+  anything on any computer.
+- Replacing everything from a backup now keeps the backup reminder's state and turns sync of the list off on that
+  computer (the notice says so); deleting all data warns that Chrome Sync and other computers keep the list.
+- **Swapdeck Desktop 1.2.0:** **Import & export → Move to another Mac**: export the workspaces to a file, import it on
+  the new Mac, and Swapdeck finds each workspace's browser profile again by its Google account or its name, even when
+  the folder differs ("Match profiles again" does it any time). Workspaces now remember their profile's name and
+  account for this.
+
 ## 1.4.0 — 2026-10-21
 
 Fewer surprises when switching, and Swapdeck Desktop 1.1.0.

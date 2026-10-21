@@ -70,6 +70,8 @@ public enum DataFile {
             note: text(input["note"], max: 500) ?? "",
             browser: browser,
             profileDirectory: profile,
+            profileName: text(input["profileName"], max: 120) ?? "",
+            profileEmail: text(input["profileEmail"], max: 320) ?? "",
             links: Array(links),
             openLinksInNewWindow: input["openLinksInNewWindow"] as? Bool ?? true,
             linkRules: Array(rules),

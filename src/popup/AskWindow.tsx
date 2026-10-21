@@ -1,5 +1,5 @@
 import { ShieldAlert } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { PendingAsk } from '../core/ask';
 import { send } from '../shared/protocol';
 import { SESSION_KEYS } from '../shared/store';
@@ -12,7 +12,8 @@ import { LogoMark } from '../ui/Logo';
  * The small window that asks before a switch started by a shortcut, the address
  * bar or a menu, when the current page can't show the question itself.
  */
-export function AskWindow({ id }: { id: string }) {
+/** `loaded`: the settings are in, so the page already has its theme (nothing re-colors after it shows). */
+export function AskWindow({ id, loaded }: { id: string; loaded: boolean }) {
   const { t } = useI18n();
   const [pending, setPending] = useState<PendingAsk | null | undefined>(undefined);
   const [working, setWorking] = useState(false);
@@ -22,9 +23,16 @@ export function AskWindow({ id }: { id: string }) {
     void chrome.storage.session.get(SESSION_KEYS.ask).then((raw) => {
       const ask = raw[SESSION_KEYS.ask] as PendingAsk | undefined;
       setPending(ask?.id === id ? ask : null);
-      document.documentElement.dataset.ready = '';
     });
   }, [id]);
+
+  const cancel = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!loaded || pending === undefined) return;
+    document.documentElement.dataset.ready = 'true';
+    // Focus once the theme is in place (autoFocus would style the buttons in the other theme first).
+    cancel.current?.focus();
+  }, [loaded, pending]);
 
   const answer = async (ok: boolean) => {
     setWorking(true);
@@ -46,7 +54,7 @@ export function AskWindow({ id }: { id: string }) {
         </span>
       </header>
       <main className="popup__body">
-        {pending === undefined ? (
+        {pending === undefined || !loaded ? (
           <div className="skeleton" style={{ height: 120 }} />
         ) : pending === null ? (
           <p className="muted">{t('ask.expired')}</p>
@@ -72,7 +80,7 @@ export function AskWindow({ id }: { id: string }) {
               </p>
             )}
             <div className="dialog__actions">
-              <button type="button" className="btn" disabled={working} onClick={() => void answer(false)} autoFocus>
+              <button ref={cancel} type="button" className="btn" disabled={working} onClick={() => void answer(false)}>
                 {t('common.cancel')}
               </button>
               <button

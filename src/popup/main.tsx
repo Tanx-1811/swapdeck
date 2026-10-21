@@ -19,7 +19,9 @@ function Root() {
   return (
     <I18nProvider language={resolveLanguage(data?.state.settings.language ?? 'auto')}>
       <ToastProvider>
-        <ConfirmProvider>{ASK ? <AskWindow id={ASK} /> : <Switcher data={data} mode="popup" />}</ConfirmProvider>
+        <ConfirmProvider>
+          {ASK ? <AskWindow id={ASK} loaded={Boolean(data)} /> : <Switcher data={data} mode="popup" />}
+        </ConfirmProvider>
       </ToastProvider>
     </I18nProvider>
   );

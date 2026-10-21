@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import type { Accent, ThemePreference } from '../core/types';
 import { isMessageKey, type Translate } from '../i18n/translate';
 import { send, type ErrorCode, type RequestType, type ResponseOf, type Result } from '../shared/protocol';
@@ -48,9 +48,13 @@ export function useSwapdeck(): Snapshot | null {
   return data;
 }
 
-/** Applies the theme and accent preferences to <html data-theme data-accent>. */
+/**
+ * Applies the theme and accent preferences to <html data-theme data-accent>,
+ * before the browser paints: content that appears with the settings is drawn in
+ * its final colors at once (no flash, no color transition from the other theme).
+ */
 export function useTheme(theme: ThemePreference | undefined, accent?: Accent): void {
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = document.documentElement;
     if (!theme || theme === 'system') delete root.dataset.theme;
     else root.dataset.theme = theme;

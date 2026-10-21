@@ -1401,6 +1401,13 @@ button.chip:hover {
     0 0 0 4px var(--text);
 }
 
+/* Until a page has its data (and so its theme), nothing animates: colors appear in their final theme. */
+html:not([data-ready]) *,
+html:not([data-ready]) *::before,
+html:not([data-ready]) *::after {
+  transition: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

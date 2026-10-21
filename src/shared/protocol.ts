@@ -103,6 +103,10 @@ type Api = {
   unsaved: { req: { appIds: string[] }; res: UnsavedTab[] };
   /** The confirmation window's answer for a switch asked for by a shortcut, the address bar or a menu. */
   'ask.answer': { req: { id: string; ok: boolean }; res: boolean };
+  /** Chrome Sync of the list: take and send changes now. */
+  'sync.now': { req: Record<string, never>; res: true };
+  /** Turns sync off here and removes the list from Chrome Sync. */
+  'sync.clear': { req: Record<string, never>; res: true };
   /** A switch as the shortcut, address bar and menus run it (asks on the page or in a window when needed). */
   'switch.guarded': { req: { plan: GuardedPlan }; res: 'done' | 'cancelled' | 'asked' };
   /** `target`: 'new' forces a new account, an account id updates that account; default: by identity. */
@@ -138,7 +142,8 @@ type Api = {
   'backup.inspect': { req: { text: string; password?: string }; res: BackupSummary };
   'backup.import': {
     req: { text: string; password?: string; mode: 'merge' | 'replace' };
-    res: { apps: number; accounts: number; sessions: number; workspaces: number };
+    /** syncOff: a replace turned off sync of the list on this computer. */
+    res: { apps: number; accounts: number; sessions: number; workspaces: number; syncOff: boolean };
   };
   'history.clear': { req: Record<string, never>; res: true };
   'data.wipe': { req: Record<string, never>; res: true };

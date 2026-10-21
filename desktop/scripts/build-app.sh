@@ -6,7 +6,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-VERSION="1.1.0"
+VERSION="1.2.0"
 BUILD="$(date +%Y%m%d%H%M)"
 APP="build/Swapdeck Desktop.app"
 ARCHS=(--arch arm64 --arch x86_64)

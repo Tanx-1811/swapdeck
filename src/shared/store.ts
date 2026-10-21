@@ -1,3 +1,4 @@
+import { isSyncStatus, type SyncStatus } from '../core/sync';
 import { parseSettings } from '../core/settings';
 import type { Account, ActiveMap, AppDef, HistoryEntry, Identity, Settings, VaultMeta, Workspace } from '../core/types';
 import {
@@ -14,10 +15,13 @@ import { byOrder } from '../core/util';
 /**
  * Storage layout. chrome.storage.local (persistent, this device only):
  *   sd:apps, sd:accounts, sd:active, sd:settings, sd:history, sd:vault, sd:workspaces,
- *   sd:snap:<accountId> (saved session), sd:prev:<accountId> (the one before it).
+ *   sd:snap:<accountId> (saved session), sd:prev:<accountId> (the one before it),
+ *   sd:syncMemo, sd:install, sd:syncRemoved (sync of the list, background/sync.ts).
  * chrome.storage.session (memory only, cleared when Chrome closes):
  *   sd:key (unlocked vault private key), sd:live (who is signed in, per app),
- *   sd:progress (a workspace switch under way).
+ *   sd:progress (a workspace switch under way), sd:ask (a switch waiting for an answer),
+ *   sd:sync (how the last sync went).
+ * chrome.storage.sync (only with Settings → Sync the list): sd1:a|c|w:<id>, the list without sign-ins.
  * Only the service worker writes; pages read and subscribe to changes.
  */
 export const KEYS = {
@@ -37,6 +41,8 @@ export const SESSION_KEYS = {
   progress: 'sd:progress',
   /** A switch waiting for the user's answer in the confirmation window. */
   ask: 'sd:ask',
+  /** How the last Chrome Sync of the list went. */
+  sync: 'sd:sync',
 } as const;
 
 /** A workspace switch in progress, shown in the popup. */
@@ -121,14 +127,26 @@ function progressFromRaw(value: unknown): Progress | null {
   };
 }
 
-export type SessionInfo = { unlocked: boolean; live: LiveMap; progress: Progress | null };
+export type SessionInfo = {
+  unlocked: boolean;
+  live: LiveMap;
+  progress: Progress | null;
+  syncStatus: SyncStatus | null;
+};
 
 export async function readSessionInfo(): Promise<SessionInfo> {
-  const raw = await chrome.storage.session.get([SESSION_KEYS.privateKey, SESSION_KEYS.live, SESSION_KEYS.progress]);
+  const raw = await chrome.storage.session.get([
+    SESSION_KEYS.privateKey,
+    SESSION_KEYS.live,
+    SESSION_KEYS.progress,
+    SESSION_KEYS.sync,
+  ]);
+  const sync: unknown = raw[SESSION_KEYS.sync];
   return {
     unlocked: typeof raw[SESSION_KEYS.privateKey] === 'string',
     live: liveFromRaw(raw[SESSION_KEYS.live]),
     progress: progressFromRaw(raw[SESSION_KEYS.progress]),
+    syncStatus: isSyncStatus(sync) ? sync : null,
   };
 }
 

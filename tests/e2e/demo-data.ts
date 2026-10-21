@@ -13,6 +13,10 @@ type DemoOptions = {
   accent?: 'son' | 'ngoc' | 'cham' | 'vang';
   /** Show the reminder to lock saved sessions (hidden by default, e.g. in store screenshots). */
   vaultNudge?: boolean;
+  /** Show the reminder to back up (hidden by default). */
+  backupNudge?: boolean;
+  /** Turn on Chrome Sync of the list. */
+  syncList?: boolean;
   localSupabase?: string;
 };
 
@@ -21,6 +25,8 @@ export function demoStorage({
   theme = 'light',
   accent = 'son',
   vaultNudge = false,
+  backupNudge = false,
+  syncList = false,
   localSupabase,
 }: DemoOptions = {}) {
   const now = Date.now();
@@ -191,6 +197,8 @@ export function demoStorage({
       theme,
       accent,
       vaultNudgeUntil: vaultNudge ? 0 : now + 365 * 24 * HOUR,
+      backupNudgeUntil: backupNudge ? 0 : now + 365 * 24 * HOUR,
+      syncList,
       afterSwitch: 'last',
       autoCapture: true,
       autoSync: true,

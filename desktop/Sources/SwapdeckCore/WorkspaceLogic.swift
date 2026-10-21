@@ -53,6 +53,58 @@ public enum WorkspaceLogic {
         return profiles.filter { !used.contains($0.directory) }
     }
 
+    /// On another Mac the same profile may sit in another folder: find each
+    /// workspace's profile again by its Google account, else by its name. A folder
+    /// that holds someone else's profile counts as missing. Returns the workspaces
+    /// and the ids of those changed and of those still without a profile.
+    public static func rematch(
+        _ workspaces: [Workspace],
+        profiles: [BrowserKind: [BrowserProfile]]
+    ) -> (workspaces: [Workspace], changed: Set<String>, missing: Set<String>) {
+        var changed = Set<String>()
+        var missing = Set<String>()
+        let result = workspaces.map { workspace -> Workspace in
+            let list = profiles[workspace.browser] ?? []
+            let email = workspace.profileEmail.lowercased()
+            let name = fold(workspace.profileName)
+            let current = list.first { $0.directory == workspace.profileDirectory }
+            let currentFits = current.map { profile in
+                if !email.isEmpty, let other = profile.email?.lowercased(), !other.isEmpty { return other == email }
+                if !name.isEmpty { return fold(profile.name) == name }
+                return true
+            } ?? false
+            if currentFits || (workspace.profileDirectory.isEmpty && email.isEmpty && name.isEmpty) {
+                if workspace.profileDirectory.isEmpty { missing.insert(workspace.id) }
+                return workspace
+            }
+            let found = (!email.isEmpty ? list.first { $0.email?.lowercased() == email } : nil)
+                ?? (!name.isEmpty ? list.first { fold($0.name) == name } : nil)
+            guard let found else {
+                missing.insert(workspace.id)
+                return workspace
+            }
+            var copy = workspace
+            copy.profileDirectory = found.directory
+            copy.profileName = found.name
+            copy.profileEmail = found.email ?? ""
+            if copy.profileDirectory != workspace.profileDirectory { changed.insert(workspace.id) }
+            return copy
+        }
+        return (result, changed, missing)
+    }
+
+    /// Workspaces from an exported file that aren't here yet (by id).
+    public static func merge(_ incoming: [Workspace], into existing: [Workspace]) -> [Workspace] {
+        let ids = Set(existing.map(\.id))
+        var order = (existing.map(\.order).max() ?? -1) + 1
+        return incoming.filter { !ids.contains($0.id) }.sorted { $0.order < $1.order }.map { workspace in
+            var copy = workspace
+            copy.order = order
+            order += 1
+            return copy
+        }
+    }
+
     /// A workspace for a profile: its name, and its color when it is close to a pigment.
     public static func workspace(for profile: BrowserProfile, browser: BrowserKind, existing: [Workspace]) -> Workspace {
         Workspace(
@@ -60,6 +112,8 @@ public enum WorkspaceLogic {
             color: Palette.next(after: existing.map(\.color)),
             browser: browser,
             profileDirectory: profile.directory,
+            profileName: profile.name,
+            profileEmail: profile.email ?? "",
             order: (existing.map(\.order).max() ?? -1) + 1
         )
     }

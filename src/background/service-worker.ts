@@ -9,6 +9,7 @@ import { parseMenuId, scheduleMenuRebuild } from './menus';
 import { setupOmnibox } from './omnibox';
 import { listen } from './router';
 import { activeTab, getTab, tabUrl } from './tabs';
+import { syncNow } from './sync';
 import { onTabUpdated } from './watcher';
 import { workspaceStatus } from '../core/workspaces';
 
@@ -71,7 +72,31 @@ chrome.tabs.onActivated.addListener(({ tabId }) => {
   void getTab(tabId).then((tab) => tab && refreshBadge(tab));
 });
 
+// Chrome Sync of the list (off unless turned on in Settings).
+let syncTimer: ReturnType<typeof setTimeout> | undefined;
+let syncDue = 0;
+/** Syncs after `delayMs`, or sooner when a sync is already due sooner. */
+function syncSoon(delayMs: number): void {
+  const due = Date.now() + delayMs;
+  if (syncTimer !== undefined && syncDue <= due) return;
+  clearTimeout(syncTimer);
+  syncDue = due;
+  syncTimer = setTimeout(() => {
+    syncTimer = undefined;
+    void syncNow().catch((error: unknown) => console.warn('Swapdeck: sync failed', error));
+  }, delayMs);
+}
+syncSoon(3000);
+
 chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'sync' && Object.keys(changes).some((key) => key.startsWith('sd1:'))) syncSoon(1000);
+  if (area === 'local' && [KEYS.apps, KEYS.accounts, KEYS.workspaces].some((key) => key in changes)) syncSoon(4000);
+  if (area === 'local' && KEYS.settings in changes) {
+    const before = (changes[KEYS.settings]?.oldValue as { syncList?: boolean } | undefined)?.syncList;
+    const after = (changes[KEYS.settings]?.newValue as { syncList?: boolean } | undefined)?.syncList;
+    if (after && !before) syncSoon(0);
+  }
+
   if (
     area === 'local' &&
     [KEYS.apps, KEYS.accounts, KEYS.active, KEYS.settings, KEYS.workspaces].some((key) => key in changes)

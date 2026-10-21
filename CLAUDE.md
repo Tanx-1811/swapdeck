@@ -60,13 +60,27 @@ tests, demo data and screenshots (use `*.example`/`*.test` addresses). Contribut
 - `Account.important` (production / a client's live account): red `.flag-important` label, confirmation before
   switching to it from every UI path (popup `switchAccount`/`switchWorkspace`, manager `AppDetail`/`useWorkspaceSwitch`,
   via `importantTargets`), warning toast, and the `showRibbon` page strip kept by `markImportant` in `watcher.ts`.
-  Shortcut, omnibox and menu switches can't ask: they rely on the strip and the toast.
+  Shortcut, omnibox and menu switches ask on the page or in a small window (`runGuarded`, below).
 - Every UI switch path asks through `useAskBeforeSwitch` (important accounts, unsaved work via the `unsaved` request,
   "ask before every switch"); non-UI paths (commands, omnibox, context menus) must call `runGuarded`/`cycleGuarded`
   (`guarded.ts`), never `switchTo`/`switchWorkspace` directly. `unsavedWork` runs in the MAIN world: keep it
   self-contained and side-effect free beyond the synthetic `beforeunload`.
 - The lock reminder (`VaultNudge`, `vaultNudgeDue`) shows with ≥ 2 saved sessions and no vault; "Later" sets
-  `settings.vaultNudgeUntil`. Demo data hides it unless `seedDemo(…, { vaultNudge: true })`.
+  `settings.vaultNudgeUntil`. The backup reminder (`BackupNudge`, `backupNudgeDue`) comes after it in `Reminders`;
+  "Later" sets `settings.backupNudgeUntil`, and `exportBackup` records `lastBackupAt`. Demo data hides both unless
+  `seedDemo(…, { vaultNudge: true, backupNudge: true })`.
+
+## Sync of the list (`core/sync.ts`, `background/sync.ts`; read ARCHITECTURE §10 first)
+
+- Never put a snapshot, cookie, token, the vault or anything else that signs in into `chrome.storage.sync`; only the
+  fields in `ACCOUNT_SYNC_FIELDS`/`WORKSPACE_SYNC_FIELDS` and app definitions travel. Keep each item under
+  `SYNC_ITEM_MAX_BYTES` (Chrome: 8 KB per item, 100 KB and 512 items in all).
+- Only a tombstone removes anything on another computer, and only removals noted with `noteRemoved` (inside the
+  removal's `update()`) write tombstones. A new way to remove apps, accounts or workspaces must call it; never treat
+  "missing here" or "missing from Chrome Sync" as a removal.
+- Incoming data is applied inside one `update()` with `applyPull` (sanitized, ids translated, app rules enforced);
+  removals go through `removeApp`/`removeAccount`/`removeWorkspace`. New synced fields need a matching local-only rule
+  in `mergeAccount`/`mergeWorkspace` and a test in `tests/unit/sync.test.ts` (it simulates two computers).
 
 ## Swapdeck Desktop (`desktop/`)
 

@@ -196,6 +196,18 @@ struct ImportPane: View {
                     Button(t("import.chooseFile")) { chooseFile() }
                         .buttonStyle(PaperButtonStyle())
                 }
+                PaneCard(title: t("import.moveTitle"), hint: t("import.moveHint")) {
+                    HStack(spacing: 8) {
+                        Button(t("import.export")) { exportFile() }
+                            .buttonStyle(InkButtonStyle())
+                        Button(t("import.rematch")) {
+                            let count = model.rematchProfiles()
+                            model.show(.info, t("import.rematched", ["n": String(count)]))
+                        }
+                        .buttonStyle(PaperButtonStyle())
+                    }
+                    Text(t("import.macNote")).font(Theme.text(12)).foregroundStyle(Theme.ink3)
+                }
                 if let banner = model.banner {
                     Callout(tone: banner.tone == .error ? .danger : .success, title: banner.text)
                 }
@@ -222,6 +234,14 @@ struct ImportPane: View {
         panel.allowedContentTypes = [.json]
         panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url, let data = try? Data(contentsOf: url) else { return }
+        // A Swapdeck Desktop export from another Mac?
+        if let result = try? model.importDesktopFile(data) {
+            model.show(.info, result.added == 0 ? t("import.nothing") : t("import.desktopImported", [
+                "n": String(result.added), "matched": String(result.matched), "missing": String(result.missing),
+            ]))
+            if result.added > 0, let last = model.workspaces.last { selection = .workspace(last.id) }
+            return
+        }
         do {
             if try BackupImport.isEncrypted(data) {
                 pendingFile = data
@@ -232,6 +252,20 @@ struct ImportPane: View {
             }
         } catch {
             model.show(.error, t("import.notBackup"))
+        }
+    }
+
+    private func exportFile() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        let stamp = ISO8601DateFormatter().string(from: Date()).prefix(10)
+        panel.nameFieldStringValue = "swapdeck-desktop-\(stamp).json"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try model.exportFile().write(to: url, options: .atomic)
+            model.show(.info, t("import.exported", ["file": url.lastPathComponent]))
+        } catch {
+            model.show(.error, t("error.save", ["detail": error.localizedDescription]))
         }
     }
 

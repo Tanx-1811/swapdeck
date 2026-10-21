@@ -10,7 +10,16 @@ import {
   normalizeDomain,
   registrableDomain,
 } from '../../src/core/domains';
-import { ACCENTS, DEFAULT_SETTINGS, parseSettings, vaultNudgeDue } from '../../src/core/settings';
+import {
+  ACCENTS,
+  BACKUP_NUDGE_AFTER_MS,
+  BACKUP_NUDGE_SNOOZE_MS,
+  backupNudgeDue,
+  DEFAULT_SETTINGS,
+  FIRST_BACKUP_NUDGE_AFTER_MS,
+  parseSettings,
+  vaultNudgeDue,
+} from '../../src/core/settings';
 import type { Account, CookieRecord, DetectorSpec, Identity } from '../../src/core/types';
 import {
   ACCOUNT_COLORS,
@@ -264,6 +273,29 @@ describe('settings', () => {
     expect(vaultNudgeDue({ vaultNudgeUntil: 0 }, false, 1, 10)).toBe(false);
     expect(vaultNudgeDue({ vaultNudgeUntil: 0 }, true, 5, 10)).toBe(false);
     expect(vaultNudgeDue({ vaultNudgeUntil: 20 }, false, 5, 10)).toBe(false);
+  });
+
+  it('reminds to back up once sessions are saved, then every month, unless snoozed', () => {
+    expect(parseSettings({ lastBackupAt: 5, backupNudgeUntil: 'later', syncList: true })).toMatchObject({
+      lastBackupAt: 5,
+      backupNudgeUntil: 0,
+      syncList: true,
+    });
+    expect(parseSettings({ syncList: 'yes' }).syncList).toBe(false);
+    const never = { lastBackupAt: 0, backupNudgeUntil: 0 };
+    const saved = [{ createdAt: 1000, capturedAt: 2000 }];
+    // Nothing worth backing up yet.
+    expect(backupNudgeDue(never, [{ createdAt: 0 }], FIRST_BACKUP_NUDGE_AFTER_MS * 2)).toBe(false);
+    // The first reminder waits a few days after the first saved session's account.
+    expect(backupNudgeDue(never, saved, 1000 + FIRST_BACKUP_NUDGE_AFTER_MS - 1)).toBe(false);
+    expect(backupNudgeDue(never, saved, 1000 + FIRST_BACKUP_NUDGE_AFTER_MS)).toBe(true);
+    // After a backup, a month.
+    const backedUp = { lastBackupAt: 10_000, backupNudgeUntil: 0 };
+    expect(backupNudgeDue(backedUp, saved, 10_000 + BACKUP_NUDGE_AFTER_MS - 1)).toBe(false);
+    expect(backupNudgeDue(backedUp, saved, 10_000 + BACKUP_NUDGE_AFTER_MS)).toBe(true);
+    // "Later" snoozes it.
+    const now = 10_000 + BACKUP_NUDGE_AFTER_MS;
+    expect(backupNudgeDue({ ...backedUp, backupNudgeUntil: now + BACKUP_NUDGE_SNOOZE_MS }, saved, now)).toBe(false);
   });
 
   it('keeps known accents only', () => {

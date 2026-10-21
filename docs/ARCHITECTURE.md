@@ -21,20 +21,23 @@ does. Product scope and decisions are in [PLAN.md](PLAN.md); privacy in [PRIVACY
 
 ### Service worker modules (`src/background/`)
 
-| Module          | Responsibility                                                                                                                                                 |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `router.ts`     | Answers `chrome.runtime` messages from the extension's own pages only (refuses senders in http(s) tabs and other extensions).                                  |
-| `engine.ts`     | `switchTo`, `saveLive`, `cycle`, `probe`, `capture`, `persist`, `restorePrevious`, per-app locks, staging tab helper.                                          |
-| `workspaces.ts` | `switchWorkspace` (every app of a workspace, background where possible, progress), `openWorkspace` (then its pages in a tab group).                            |
-| `watcher.ts`    | Reacts to app page loads: detects who is signed in, auto-sync, auto-capture, mismatch flag, confirmation toasts, important-account strip, last page & recents. |
-| `state.ts`      | Single write queue (`exclusive`, `update`), history, snapshot packing/sealing, vault key in session storage.                                                   |
-| `admin.ts`      | Apps (incl. `addApps` in one step)/accounts/workspaces CRUD and cascades, settings, vault, backups (export/inspect/import), wipe.                              |
-| `guard.ts`      | The declarativeNetRequest session rule that blocks page scripts in the tab doing a swap.                                                                       |
-| `cookie-jar.ts` | Read/clear/write cookies of an app's domains through `chrome.cookies`.                                                                                         |
-| `tabs.ts`       | Tab queries for an app, `navigateAndWait`, `waitForComplete`, `runInTab`.                                                                                      |
-| `badge.ts`      | Per-tab toolbar badge (active account's initials and colour) and tooltip.                                                                                      |
-| `menus.ts`      | Right-click menu per app (`documentUrlPatterns`) and on the toolbar button (workspaces, side panel); rebuilt only when it changes.                             |
-| `omnibox.ts`    | `swd` keyword: ranked workspace and account suggestions, switch on Enter.                                                                                      |
+| Module            | Responsibility                                                                                                                                                 |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `router.ts`       | Answers `chrome.runtime` messages from the extension's own pages only (refuses senders in http(s) tabs and other extensions).                                  |
+| `engine.ts`       | `switchTo`, `saveLive`, `cycle`, `probe`, `capture`, `persist`, `restorePrevious`, per-app locks, staging tab helper.                                          |
+| `workspaces.ts`   | `switchWorkspace` (every app of a workspace, background where possible, progress), `openWorkspace` (then its pages in a tab group).                            |
+| `watcher.ts`      | Reacts to app page loads: detects who is signed in, auto-sync, auto-capture, mismatch flag, confirmation toasts, important-account strip, last page & recents. |
+| `state.ts`        | Single write queue (`exclusive`, `update`), history, snapshot packing/sealing, vault key in session storage.                                                   |
+| `admin.ts`        | Apps (incl. `addApps` in one step)/accounts/workspaces CRUD and cascades, settings, vault, backups (export/inspect/import), wipe.                              |
+| `guard.ts`        | The declarativeNetRequest session rule that blocks page scripts in the tab doing a swap.                                                                       |
+| `cookie-jar.ts`   | Read/clear/write cookies of an app's domains through `chrome.cookies`.                                                                                         |
+| `tabs.ts`         | Tab queries for an app, `navigateAndWait`, `waitForComplete`, `runInTab`.                                                                                      |
+| `badge.ts`        | Per-tab toolbar badge (active account's initials and colour) and tooltip.                                                                                      |
+| `menus.ts`        | Right-click menu per app (`documentUrlPatterns`) and on the toolbar button (workspaces, side panel); rebuilt only when it changes.                             |
+| `omnibox.ts`      | `swd` keyword: ranked workspace and account suggestions, switch on Enter.                                                                                      |
+| `guarded.ts`      | Switches started without a page of ours (shortcuts, omnibox, menus): unsaved-work and important-account checks, the question on the page or in a small window. |
+| `sync.ts`         | Optional Chrome Sync of the list (`syncNow`, `clearSyncData`): pull, apply, push through `chrome.storage.sync` (§10).                                          |
+| `sync-journal.ts` | What the user removed on purpose (`noteRemoved`, `readRemoved`), so only that is removed on other computers.                                                   |
 
 ## 2. Data model and storage
 
@@ -62,6 +65,9 @@ are left alone), `links` (pages for "Open workspace", ≤ 30) and usage counters
 | `sd:meta`           | `{ schema: 1 }`                                                                                                   |
 | `sd:snap:<account>` | `StoredSnapshot`: `{ v: 1, plain: Snapshot }` or, with the vault on, `{ v: 1, sealed: … }`                        |
 | `sd:prev:<account>` | The snapshot the current one replaced (safety net, "Restore the session saved before")                            |
+| `sd:syncMemo`       | Per sync key: the last write made or applied here (`t`, `by`), the value's hash, the local thing it maps to       |
+| `sd:install`        | This installation's random id, written into each sync item it sends                                               |
+| `sd:syncRemoved`    | Sync keys of things the user removed → when (180 days, ≤ 3,000), noted even while sync is off                     |
 
 `chrome.storage.session` (memory only, cleared when Chrome closes; extension pages and the worker only):
 
@@ -70,6 +76,8 @@ are left alone), `links` (pages for "Open workspace", ≤ 30) and usage counters
 | `sd:key`      | The unlocked vault private key (PKCS#8, base64) while the vault is unlocked                 |
 | `sd:live`     | Per app: last detected identity, whether it mismatches the active account, URL              |
 | `sd:progress` | While a workspace switch runs: `{ workspaceId, total, done, current }` (shown in the popup) |
+| `sd:ask`      | A switch waiting for the user's answer in the confirmation window                           |
+| `sd:sync`     | How the last sync of the list went (`SyncStatus`, shown in Settings)                        |
 
 Everything read from storage, backups or pages is untrusted and goes through `src/core/validate.ts`
 (`sanitizeApp`, `sanitizeAccount`, `sanitizeSnapshot`, …) or `parseSettings`.
@@ -271,7 +279,7 @@ The side panel opens from the popup's header, the toolbar button's right-click m
   them; changing the passphrase re-encrypts only the private key; "forgot passphrase" deletes the vault and every
   sealed snapshot (accounts stay, without sessions).
 
-## 10. Backups (`core/backup.ts`, `admin.ts`)
+## 10. Backups, moving and sync of the list (`core/backup.ts`, `core/sync.ts`, `admin.ts`, `sync.ts`)
 
 A backup file is JSON: `{ format: "swapdeck-backup", version: 1, createdAt, encrypted, payload }`. The payload is
 `{ apps, accounts, active, settings, sessions, workspaces }` (sessions keyed by account id, unsealed), or — when encrypted — a
@@ -280,7 +288,45 @@ password (≥ 8 characters) and, when the passphrase lock is on, an unlocked vau
 origin and accounts by identity (or label), and replaces a saved session only with a newer one; **replace** wipes the
 current data first (keeping the vault). Imported workspaces are mapped to the imported apps and accounts; in merge mode
 a workspace whose name already exists (case-insensitive) is skipped. Imported sessions are re-sealed with this
-computer's vault. Host access is never granted by an import: the user allows each app afterwards.
+computer's vault. Host access is never granted by an import: the user allows each app afterwards. A replace keeps what
+belongs to this computer (`lastBackupAt`, reminder snoozes) and turns sync of the list off (turned on again, it would
+bring back what the replace removed); the response says so (`syncOff`).
+
+**Reminders and moving.** `backupNudgeDue` (`core/settings.ts`) shows the backup reminder (`BackupNudge`, through
+`Reminders` after the lock reminder) a few days after the first saved session and a month after the last backup;
+"Back up now" exports the list without sessions (no password) and `exportBackup` records `lastBackupAt`; "Later"
+sets `backupNudgeUntil`. The Backup page explains moving to another computer, and `ReloginCard` (Backup and Overview)
+lists accounts without a saved session here with a "Sign in" (a fresh sign-in; the identity check files the new
+session under the matching account).
+
+### Sync of the list
+
+Off unless `settings.syncList`. Never synced: snapshots, cookies, tokens, the vault, history, recents, last pages,
+stats, settings. One `chrome.storage.sync` item per thing — `sd1:a:<appId>`, `sd1:c:<accountId>`, `sd1:w:<workspaceId>`
+— holding `{ v, t, by }` (value, time, installation id); a preset app nobody changed travels as
+`{ presetId, name, color, order, createdAt, preset: true }` and is rebuilt from the local preset (keeps items small:
+`chrome.storage.sync` allows 100 KB and 512 items, 8 KB each — larger things stay local and are counted in the status).
+
+- `syncNow` (debounced: 1 s after a sync change, 4 s after a local change, at startup, on turning it on, "Sync now")
+  pulls, then pushes; one sync at a time.
+- **Pull** (`planPull`, `applyPull` inside one `update()`): applies every write it hasn't seen (by `t` + `by`, so
+  clocks don't matter), apps first. Something arriving for a thing that is already here under another id — the same
+  preset, origin or domain; the same signed-in user (`sameIdentity`); the same name or label once — is applied to it
+  (an alias stored in the memo) instead of copied. Ids are translated (an account's app, a workspace's members); an
+  account whose app hasn't arrived waits, a workspace with missing members is applied again later (`again`). An
+  account keeps its local fields (session stats, recents, last page) and, when it has a session here, its identity;
+  it is never moved to another app; app rules (blocked domains, overlap) are enforced.
+- **Removals:** removing an app/account/workspace notes it in `sd:syncRemoved` (`noteRemoved`, inside the removal's
+  `update()`); the push writes a tombstone `{ gone, t, by }` for every key that maps to it, even over a concurrent
+  edit. A tombstone removes the thing on the other computers (through `removeApp`/`removeAccount`/`removeWorkspace`,
+  sessions included). Anything that disappears **without** a tombstone is forgotten, never removed: a key gone from
+  Chrome Sync (cleared, an old tombstone dropped after 45 days) is just dropped from the memo, and a thing missing here
+  that wasn't removed on purpose (lost data) is taken back from Chrome Sync by a second pull.
+- **Push** (`planPush`): writes what changed since the memo (hash), skips keys another computer changed that the pull
+  hasn't taken yet, writes tombstones, drops old ones. Status goes to `sd:sync`; a quota error is reported, not retried
+  in a loop.
+- "Remove from Chrome Sync" (`sync.clear`) turns sync off here, removes every `sd1:` item and the memo. Wiping data or
+  a replace import clears the memo, the journal and the installation id.
 
 ## 11. Messaging (`shared/protocol.ts`)
 
@@ -289,7 +335,7 @@ Pages call `send(type, payload)` → `chrome.runtime.sendMessage({ type, ...payl
 `fresh`, `cycle`, `save`, `restorePrevious`, `app.*` (incl. `app.addMany`), `account.*`, `workspace.save`,
 `workspace.fromActive`, `workspace.remove`, `workspace.reorder`, `workspace.switch`, `workspace.open` (both return a
 `WorkspaceOutcome`: per-app results, `switched`, `failed`, `opened`), `settings.update`, `vault.*`, `backup.*`,
-`history.clear`, `data.wipe`.
+`history.clear`, `data.wipe`, `unsaved`, `ask.answer`, `switch.guarded`, `sync.now`, `sync.clear`.
 Error codes: `NO_ACCESS`, `LOCKED`, `BAD_PASSPHRASE`, `NOT_FOUND`, `NO_SESSION`, `NO_TAB`, `STAGING_FAILED`, `TIMEOUT`,
 `BUSY`, `INVALID` (with a detail such as `identity`, `passphrase`, `password`, `origin`, `url`, `overlap:<app>`),
 `BLOCKED_DOMAIN`, `CORRUPT`, `VAULT_EXISTS`, `NO_VAULT`, `UNKNOWN`. `ui/hooks.ts` (`errorText`) turns them into

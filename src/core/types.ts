@@ -229,6 +229,12 @@ export type Settings = {
   vaultNudgeUntil: number;
   /** Ask before a switch reloads tabs that may hold unsaved work. */
   guardUnsaved: boolean;
+  /** When the last backup file was made on this computer (0: never). */
+  lastBackupAt: number;
+  /** Until when the backup reminder stays hidden (0: not snoozed). */
+  backupNudgeUntil: number;
+  /** Keep the list (apps, accounts, workspaces — never sign-ins) in step through Chrome Sync. */
+  syncList: boolean;
 };
 
 export type VaultMeta = {

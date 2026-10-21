@@ -2,17 +2,9 @@ import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import type { Accent, ThemePreference } from '../core/types';
 import { isMessageKey, type Translate } from '../i18n/translate';
 import { send, type ErrorCode, type RequestType, type ResponseOf, type Result } from '../shared/protocol';
-import {
-  readSessionInfo,
-  readState,
-  subscribe,
-  type LiveMap,
-  type Progress,
-  type SessionInfo,
-  type State,
-} from '../shared/store';
+import { readSessionInfo, readState, subscribe, type SessionInfo, type State } from '../shared/store';
 
-export type Snapshot = { state: State; unlocked: boolean; live: LiveMap; progress: Progress | null };
+export type Snapshot = { state: State } & SessionInfo;
 
 /** The extension state, kept current through chrome.storage change events. */
 export function useSwapdeck(): Snapshot | null {

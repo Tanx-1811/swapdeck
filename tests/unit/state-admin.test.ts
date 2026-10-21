@@ -222,6 +222,7 @@ describe('backups', () => {
       accounts: 1,
       sessions: 1,
       workspaces: 0,
+      syncOff: false,
     });
     const state = await readState();
     expect(state.apps[0]?.name).toBe('Acme');
@@ -234,6 +235,7 @@ describe('backups', () => {
       accounts: 0,
       sessions: 0,
       workspaces: 0,
+      syncOff: false,
     });
   });
 
@@ -249,6 +251,7 @@ describe('backups', () => {
       accounts: 1,
       sessions: 0,
       workspaces: 0,
+      syncOff: false,
     });
     const state = await readState();
     expect(state.apps.map((item) => item.id)).toEqual([app.id]);

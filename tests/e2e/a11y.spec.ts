@@ -84,6 +84,22 @@ for (const theme of ['light', 'dark'] as const) {
       await seeder.locator('html[data-ready]').waitFor({ state: 'attached' });
       await audit(seeder, `manager ${hash}`);
     }
+
+    // The backup reminder, and Settings with sync of the list on.
+    await seedDemo(seeder, { theme, language: theme === 'dark' ? 'vi' : 'en', backupNudge: true, syncList: true });
+    await popup.goto(`chrome-extension://${extensionId}/popup/popup.html?tab=-1`);
+    await popup.locator('html[data-ready]').waitFor({ state: 'attached' });
+    await expect(popup.locator('.callout').first()).toBeVisible();
+    await audit(popup, 'popup backup reminder');
+    for (const hash of ['#/', '#/settings']) {
+      await seeder.goto(`chrome-extension://${extensionId}/options/options.html${hash}`);
+      await seeder.locator('html[data-ready]').waitFor({ state: 'attached' });
+      if (hash === '#/settings') {
+        const sync = seeder.locator('section', { has: seeder.locator('#sync') });
+        await expect(sync.getByRole('status')).toContainText('·');
+      }
+      await audit(seeder, `manager ${hash} with reminders and sync`);
+    }
   });
 }
 

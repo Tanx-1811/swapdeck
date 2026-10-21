@@ -7,12 +7,13 @@ import { requestAccess } from '../../ui/access';
 import { AppIcon, Avatar } from '../../ui/Avatar';
 import { Spinner, useToast } from '../../ui/controls';
 import { useI18n } from '../../ui/i18n';
-import { VaultNudge } from '../../ui/VaultNudge';
+import { Reminders } from '../../ui/Reminders';
 import { useManager } from '../context';
 import { DeckArt } from '../DeckArt';
 import { Card } from '../Options';
 import { navigate } from '../router';
 import { HistoryLine } from './History';
+import { ReloginCard } from './Relogin';
 import { useWorkspaceSwitch } from './Workspaces';
 import { WorkspaceBadge } from '../../popup/WorkspaceBar';
 import { suggestWorkspaces, workspaceStatus } from '../../core/workspaces';
@@ -69,12 +70,13 @@ export function Overview() {
         <DeckArt seal={t('account.inUse')} />
       </section>
 
-      <VaultNudge
+      <Reminders
         settings={state.settings}
         vault={state.vault}
         accounts={state.accounts}
-        onOpen={() => navigate('#/security')}
+        onOpenSecurity={() => navigate('#/security')}
       />
+      <ReloginCard />
 
       {(state.accounts.length < 2 || welcome) && (
         <Card title={t('overview.getStarted')} id="get-started">

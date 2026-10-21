@@ -73,7 +73,8 @@ Swapdeck recognises the account, the new one is saved automatically.
 • Everything stays on your computer. No account, no server, no analytics.
 • No access to any site at install: each app you add asks for its own domains only.
 • Optional passphrase lock encrypts saved sessions (RSA-OAEP + AES-256-GCM); auto-lock after a while.
-• Encrypted backups to move your accounts to another computer.
+• Backups with a monthly reminder, encrypted whenever they include sign-ins, and a guide for moving to a new computer.
+• Optional: keep the list (never the sign-ins) the same on your other computers through your own Chrome Sync.
 
 **Comfortable**
 • Important accounts (production, a client's live account) get a red label, a warning strip on their pages and a confirmation before switching.
@@ -134,7 +135,8 @@ Etsy…), mạng xã hội và dịch vụ Việt Nam (Shopee Kênh Người Bá
 • Mọi thứ nằm trên máy của bạn. Không tài khoản, không máy chủ, không thống kê.
 • Khi cài không có quyền trên trang nào: mỗi ứng dụng bạn thêm chỉ xin quyền đúng tên miền của nó.
 • Khóa bằng mật khẩu (tùy chọn) mã hóa các phiên đã lưu (RSA-OAEP + AES-256-GCM); tự khóa sau một thời gian.
-• Sao lưu có mã hóa để chuyển tài khoản sang máy khác.
+• Sao lưu có nhắc hằng tháng, luôn mã hóa khi kèm phiên đăng nhập, và hướng dẫn chuyển sang máy mới.
+• Tùy chọn: giữ danh sách (không bao giờ kèm phiên đăng nhập) giống nhau trên các máy khác qua Chrome Sync của chính bạn.
 
 **Dễ dùng**
 • Tài khoản quan trọng (production, tài khoản thật của khách) có nhãn đỏ, dải cảnh báo trên trang và hỏi lại trước khi chuyển.
@@ -156,7 +158,7 @@ device.
 
 | Permission                            | Justification                                                                                                                                                                                                                                                                                                                                              |
 | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `storage`                             | Stores the user's apps, accounts, saved sign-in sessions, history and settings locally.                                                                                                                                                                                                                                                                    |
+| `storage`                             | Stores the user's apps, accounts, saved sign-in sessions, history and settings locally. Only if the user turns on "Sync the list", the list of apps, accounts and workspaces (never sessions) is also kept in `chrome.storage.sync` so Chrome Sync carries it to the user's other computers.                                                               |
 | `unlimitedStorage`                    | A saved session can include a site's local storage (and IndexedDB when the user enables it), which can exceed the default quota.                                                                                                                                                                                                                           |
 | `cookies`                             | Switching saves the sign-in cookies of a site the user added and restores those of the chosen account. Works only on sites the user granted access to.                                                                                                                                                                                                     |
 | `scripting`                           | Reads and replaces the added site's local/session storage (and IndexedDB if enabled) during a save or switch, shows a "switching" screen and a short confirmation on that site's page, checks the site's tabs for unsaved work before a switch reloads them (yes/no only), and asks for confirmation on the page when a keyboard shortcut starts a switch. |
@@ -177,7 +179,10 @@ Recommended answers — re-check against the form's current wording:
 
 - **Data handled:** Authentication information (the sign-in cookies and tokens of sites the user adds) and website
   content limited to the page address and title of those sites (for each account's last page and recent items).
-  Workspaces only reference saved accounts. All of it is stored **only on the user's device** and never transmitted.
+  Workspaces only reference saved accounts. All of it is stored **only on the user's device** and never transmitted to
+  the developer or anyone else. If the user turns on "Sync the list" (off by default), the list — not the sign-ins — is
+  also kept in `chrome.storage.sync`, which Chrome syncs through the user's own Google account; the developer receives
+  nothing.
 - Not collected or transmitted: personally identifiable information, health, financial, personal communications,
   location, web history, user activity.
 - Certify: not sold to third parties; not used or transferred for purposes unrelated to the single purpose; not used or

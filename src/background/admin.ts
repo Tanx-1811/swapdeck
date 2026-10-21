@@ -51,6 +51,7 @@ import {
   unpackSnapshot,
   update,
 } from './state';
+import { noteRemoved } from './sync-journal';
 
 export const AUTO_LOCK_ALARM = 'swapdeck-autolock';
 const MIN_PASSPHRASE = 8;
@@ -140,10 +141,11 @@ async function releaseUnusedAccess(removed: AppDef, remaining: readonly AppDef[]
 }
 
 export async function removeApp(id: string): Promise<void> {
-  const { removed, accountIds, remaining } = await update((draft) => {
+  const { removed, accountIds, remaining } = await update(async (draft) => {
     const app = draft.apps.find((item) => item.id === id);
     if (!app) throw new SwapdeckError('NOT_FOUND', id);
     const ids = draft.accounts.filter((account) => account.appId === id).map((account) => account.id);
+    await noteRemoved([{ kind: 'app', id }, ...ids.map((accountId) => ({ kind: 'account' as const, id: accountId }))]);
     draft.apps = draft.apps.filter((item) => item.id !== id);
     draft.accounts = draft.accounts.filter((account) => account.appId !== id);
     delete draft.active[id];
@@ -181,8 +183,9 @@ export function updateAccount(id: string, patch: AccountPatch): Promise<Account>
 }
 
 export async function removeAccount(id: string): Promise<void> {
-  await update((draft) => {
+  await update(async (draft) => {
     const account = findAccount(draft, id);
+    await noteRemoved([{ kind: 'account', id }]);
     draft.accounts = draft.accounts.filter((item) => item.id !== id);
     if (draft.active[account.appId] === id) draft.active[account.appId] = null;
     for (const workspace of draft.workspaces) workspace.members = pruneMembers(workspace.members, draft.accounts);
@@ -270,7 +273,9 @@ export async function workspaceFromActive(name: string): Promise<Workspace> {
 }
 
 export function removeWorkspace(id: string): Promise<void> {
-  return update((draft) => {
+  return update(async (draft) => {
+    if (!draft.workspaces.some((workspace) => workspace.id === id)) return;
+    await noteRemoved([{ kind: 'workspace', id }]);
     draft.workspaces = draft.workspaces.filter((workspace) => workspace.id !== id);
   });
 }
@@ -432,6 +437,9 @@ export async function exportBackup(password: string | null, includeSessions: boo
     workspaces: state.workspaces,
   };
   const encrypted = Boolean(password);
+  await update((draft) => {
+    draft.settings = { ...draft.settings, lastBackupAt: Date.now() };
+  });
   return serializeBackup({
     format: BACKUP_FORMAT,
     version: 1,
@@ -474,8 +482,10 @@ export async function importBackup(
   text: string,
   password: string | undefined,
   mode: 'merge' | 'replace',
-): Promise<{ apps: number; accounts: number; sessions: number }> {
+): Promise<{ apps: number; accounts: number; sessions: number; workspaces: number; syncOff: boolean }> {
   const { payload } = await readBackup(text, password);
+  // What belongs to this computer survives a replace (read before the wipe clears it).
+  const before = (await readState()).settings;
   if (mode === 'replace') await wipeData({ keepVault: true });
 
   const appIdMap = new Map<string, string>();
@@ -540,7 +550,12 @@ export async function importBackup(
       if (!mappedApp || draft.active[mappedApp] !== undefined) continue;
       draft.active[mappedApp] = accountId === null ? null : (accountIdMap.get(accountId) ?? null);
     }
-    if (mode === 'replace') draft.settings = payload.settings;
+    if (mode === 'replace') {
+      // Preferences come along; what belongs to this computer stays. Sync of the list is
+      // turned off: turned on again, it would bring back what this replace removed.
+      const { lastBackupAt, backupNudgeUntil, vaultNudgeUntil } = before;
+      draft.settings = { ...payload.settings, lastBackupAt, backupNudgeUntil, vaultNudgeUntil, syncList: false };
+    }
     let workspaces = 0;
     for (const workspace of payload.workspaces) {
       if (draft.workspaces.some((item) => item.name.toLowerCase() === workspace.name.toLowerCase())) continue;
@@ -561,7 +576,7 @@ export async function importBackup(
     return { apps, accounts, workspaces };
   });
   for (const [accountId, snapshot] of sessionTargets) await storeSnapshot(accountId, snapshot);
-  return { ...counts, sessions: sessionTargets.length };
+  return { ...counts, sessions: sessionTargets.length, syncOff: mode === 'replace' && before.syncList };
 }
 
 // --- Wipe --------------------------------------------------------------------

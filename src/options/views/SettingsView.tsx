@@ -1,8 +1,10 @@
-import { Keyboard, Monitor, Moon, Sun } from 'lucide-react';
+import { CloudOff, Keyboard, Monitor, Moon, RefreshCw, Sun } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { ACCENTS } from '../../core/settings';
+import { SYNC_PREFIX } from '../../core/sync';
 import type { Settings } from '../../core/types';
-import { Field, ToggleRow } from '../../ui/controls';
+import { relativeTime } from '../../i18n/translate';
+import { Callout, Field, Spinner, ToggleRow, useConfirm, useToast } from '../../ui/controls';
 import { useI18n } from '../../ui/i18n';
 import { useManager } from '../context';
 import { Card, PageHeader } from '../Options';
@@ -153,6 +155,8 @@ export function SettingsView() {
         <ToggleRow title={t('settings.badge')} checked={settings.badge} onChange={(badge) => set({ badge })} />
       </Card>
 
+      <SyncCard />
+
       <Card
         title={t('settings.shortcuts')}
         lead={t('settings.shortcutsHint')}
@@ -190,5 +194,94 @@ export function SettingsView() {
         <p className="field__hint">{t('settings.omniboxHint', { keyword: 'swd' })}</p>
       </Card>
     </div>
+  );
+}
+
+/** Whether Chrome Sync holds any of Swapdeck's list (pages may read storage; only the worker writes). */
+function useListInChromeSync(): boolean {
+  const [present, setPresent] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const check = () =>
+      void chrome.storage.sync
+        .get(null)
+        .then((all) => alive && setPresent(Object.keys(all).some((key) => key.startsWith(SYNC_PREFIX))))
+        .catch(() => undefined);
+    const listener = (_changes: unknown, area: string) => area === 'sync' && check();
+    check();
+    chrome.storage.onChanged.addListener(listener);
+    return () => {
+      alive = false;
+      chrome.storage.onChanged.removeListener(listener);
+    };
+  }, []);
+  return present;
+}
+
+function SyncCard() {
+  const { t, language } = useI18n();
+  const { data, run, pending } = useManager();
+  const confirm = useConfirm();
+  const notify = useToast();
+  const on = data.state.settings.syncList;
+  const status = data.syncStatus;
+  const inChromeSync = useListInChromeSync();
+
+  return (
+    <Card title={t('sync.title')} id="sync">
+      <ToggleRow
+        title={t('sync.toggle')}
+        hint={t('sync.hint')}
+        checked={on}
+        onChange={(syncList) => void run('settings.update', { patch: { syncList } })}
+      />
+      <p className="field__hint">{t('sync.privacy')}</p>
+      {on && (
+        <p className="muted small" role="status">
+          {status?.ok
+            ? t('sync.status', { time: relativeTime(status.at, language), n: status.items })
+            : !status && t('sync.pending')}
+          {status && status.tooBig > 0 && ` ${t('sync.statusTooBig', { n: status.tooBig })}`}
+        </p>
+      )}
+      {on && status && !status.ok && (
+        <Callout tone="warning">{t(status.error === 'quota' ? 'sync.errorQuota' : 'sync.errorUnknown')}</Callout>
+      )}
+      {(on || inChromeSync) && (
+        <div className="row">
+          {on && (
+            <button
+              type="button"
+              className="btn btn--sm"
+              disabled={pending === 'sync.now'}
+              onClick={() => void run('sync.now', {})}
+            >
+              {pending === 'sync.now' ? <Spinner /> : <RefreshCw />} {t('sync.now')}
+            </button>
+          )}
+          {inChromeSync && (
+            <button
+              type="button"
+              className="btn btn--sm btn--danger-soft"
+              disabled={pending === 'sync.clear'}
+              onClick={async () => {
+                if (
+                  await confirm({
+                    title: t('sync.clear'),
+                    body: t('sync.clearConfirm'),
+                    confirmLabel: t('sync.clear'),
+                    danger: true,
+                  })
+                ) {
+                  if (await run('sync.clear', {})) notify(t('sync.cleared'));
+                }
+              }}
+            >
+              <CloudOff /> {t('sync.clear')}
+            </button>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }

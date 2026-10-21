@@ -82,7 +82,9 @@ export function Security() {
               if (
                 await confirm({
                   title: t('security.wipe'),
-                  body: t('security.wipeConfirm'),
+                  body: data.state.settings.syncList
+                    ? `${t('security.wipeConfirm')} ${t('security.wipeSyncNote')}`
+                    : t('security.wipeConfirm'),
                   confirmLabel: t('common.delete'),
                   danger: true,
                 })

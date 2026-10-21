@@ -14,6 +14,10 @@ public struct Workspace: Encodable, Identifiable, Hashable, Sendable {
     public var browser: BrowserKind
     /// The profile folder in the browser's data folder ("Default", "Profile 2"); "" until chosen.
     public var profileDirectory: String
+    /// The profile's name and Google account when it was chosen, to find it again on another Mac
+    /// (where the same profile may live in another folder).
+    public var profileName: String
+    public var profileEmail: String
     public var links: [WorkspaceLink]
     /// Open the pinned pages whenever the workspace gets a new window.
     public var openLinksInNewWindow: Bool
@@ -33,6 +37,8 @@ public struct Workspace: Encodable, Identifiable, Hashable, Sendable {
         note: String = "",
         browser: BrowserKind = .chrome,
         profileDirectory: String = "",
+        profileName: String = "",
+        profileEmail: String = "",
         links: [WorkspaceLink] = [],
         openLinksInNewWindow: Bool = true,
         linkRules: [String] = [],
@@ -48,6 +54,8 @@ public struct Workspace: Encodable, Identifiable, Hashable, Sendable {
         self.note = note
         self.browser = browser
         self.profileDirectory = profileDirectory
+        self.profileName = profileName
+        self.profileEmail = profileEmail
         self.links = links
         self.openLinksInNewWindow = openLinksInNewWindow
         self.linkRules = linkRules

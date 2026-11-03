@@ -17,7 +17,9 @@ export type AppInput = {
   titleSuffix?: string;
 };
 
-export type AccountPatch = Partial<Pick<Account, 'label' | 'color' | 'icon' | 'note' | 'homeUrl' | 'important'>> & {
+export type AccountPatch = Partial<
+  Pick<Account, 'label' | 'color' | 'icon' | 'note' | 'homeUrl' | 'important' | 'linkRules'>
+> & {
   /** Optional fields to remove. */
   clear?: ('icon' | 'emoji' | 'note' | 'homeUrl' | 'important')[];
 };

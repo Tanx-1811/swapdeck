@@ -20,7 +20,7 @@ import { byOrder } from '../core/util';
  * chrome.storage.session (memory only, cleared when Chrome closes):
  *   sd:key (unlocked vault private key), sd:live (who is signed in, per app),
  *   sd:progress (a workspace switch under way), sd:ask (a switch waiting for an answer),
- *   sd:sync (how the last sync went).
+ *   sd:sync (how the last sync went), sd:linksDeclined (links the user said "not now" to).
  * chrome.storage.sync (only with Settings → Sync the list): sd1:a|c|w:<id>, the list without sign-ins.
  * Only the service worker writes; pages read and subscribe to changes.
  */

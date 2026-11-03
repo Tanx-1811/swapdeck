@@ -22,7 +22,7 @@ enum PreviewRenderer {
             }
         }
         let model = sampleModel(language: .vi)
-        snapshot(ManagerView(model: model, selection: .constant(.settings)), width: 900, height: 760, dark: false,
+        snapshot(ManagerView(model: model, selection: .constant(.settings)), width: 900, height: 1240, dark: false,
                  to: folder.appendingPathComponent("settings-vi-light.png"))
         snapshot(ManagerView(model: model, selection: .constant(.importing)), width: 900, height: 640, dark: false,
                  to: folder.appendingPathComponent("import-vi-light.png"))
@@ -39,6 +39,13 @@ enum PreviewRenderer {
                 ChooserView(model: chooserModel, url: URL(string: "https://app.globex.example/invoices/42?tab=paid")!) {},
                 width: 380, height: nil, dark: dark,
                 to: folder.appendingPathComponent("chooser-\(language.rawValue)-\(dark ? "dark" : "light").png")
+            )
+        }
+        for (language, dark) in [(LanguagePreference.vi, false), (.en, true)] {
+            snapshot(
+                ManagerView(model: sampleModel(language: language), selection: .constant(.workspace("ws_company"))),
+                width: 900, height: 1780, dark: dark,
+                to: folder.appendingPathComponent("editor-company-\(language.rawValue)-\(dark ? "dark" : "light").png")
             )
         }
         let acmeEditor = sampleModel(language: .vi)
@@ -90,7 +97,8 @@ enum PreviewRenderer {
             store: DataStore(fileURL: folder.appendingPathComponent("workspaces.json")),
             applicationSupport: folder,
             defaults: defaults,
-            offline: true
+            offline: true,
+            secrets: MemorySecretStore(["ws_company/SUPABASE_ACCESS_TOKEN": "sbp_preview", "ws_company/AWS_PROFILE": "company"])
         )
         model.automation = .allowed
         model.installedBrowsers = [.chrome, .brave]
@@ -115,6 +123,8 @@ enum PreviewRenderer {
                         WorkspaceLink(title: "Vercel", url: "https://vercel.com/dashboard"),
                         WorkspaceLink(title: "GitHub", url: "https://github.com/"),
                     ],
+                    cliVariables: [CLIVariable(name: "SUPABASE_ACCESS_TOKEN"), CLIVariable(name: "AWS_PROFILE", secret: false)],
+                    terminalFolder: "/Users/minh/Projects/company",
                     order: 0, lastOpenedAt: now.addingTimeInterval(-600), openCount: 42
                 ),
                 Workspace(

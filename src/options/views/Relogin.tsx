@@ -3,21 +3,25 @@ import type { Account, AppDef } from '../../core/types';
 import { useAskBeforeSwitch } from '../../ui/askBeforeSwitch';
 import { AppIcon, Avatar } from '../../ui/Avatar';
 import { Spinner, useToast } from '../../ui/controls';
+import { ExpiredFlag } from '../../ui/flags';
 import { useI18n } from '../../ui/i18n';
 import { useManager } from '../context';
 import { Card } from '../Options';
 import { useAccess } from './AppDetail';
 
 /**
- * Accounts that have no saved sign-in on this computer (typically just imported
- * from another one): one "Sign in" each. After signing in, Swapdeck recognises
- * the account and files the session under it, and the row goes away.
+ * Accounts with no working sign-in on this computer — none saved yet (typically
+ * just imported or synced from another computer) or one that expired: one
+ * "Sign in" each. After signing in, Swapdeck recognises the account and files
+ * the session under it, and the row goes away.
  */
 export function ReloginCard() {
   const { t } = useI18n();
   const { data } = useManager();
   const { apps, accounts, settings } = data.state;
-  const waiting = accounts.filter((account) => !account.capturedAt && apps.some((app) => app.id === account.appId));
+  const waiting = accounts.filter(
+    (account) => (!account.capturedAt || account.expiredAt) && apps.some((app) => app.id === account.appId),
+  );
   if (!waiting.length) return null;
   return (
     <Card title={t('move.reloginTitle')} lead={t('move.reloginLead', { n: waiting.length })} id="relogin">
@@ -43,7 +47,10 @@ function ReloginRow({ account, app }: { account: Account; app: AppDef }) {
       <AppIcon app={app} size="sm" />
       <Avatar account={account} size="sm" />
       <span className="relogin__text">
-        <strong className="truncate">{account.label}</strong>
+        <span className="relogin__name">
+          <strong className="truncate">{account.label}</strong>
+          <ExpiredFlag account={account} />
+        </span>
         <span className="muted truncate">
           {app.name}
           {account.email && account.email !== account.label ? ` · ${account.email}` : ''}

@@ -13,6 +13,7 @@ import { DeckArt } from '../DeckArt';
 import { Card } from '../Options';
 import { navigate } from '../router';
 import { HistoryLine } from './History';
+import { GettingStarted } from './GettingStarted';
 import { ReloginCard } from './Relogin';
 import { useWorkspaceSwitch } from './Workspaces';
 import { WorkspaceBadge } from '../../popup/WorkspaceBar';
@@ -78,40 +79,7 @@ export function Overview() {
       />
       <ReloginCard />
 
-      {(state.accounts.length < 2 || welcome) && (
-        <Card title={t('overview.getStarted')} id="get-started">
-          <ol className="steps">
-            <li className={`step${state.apps.length ? ' step--done' : ''}`}>
-              <span className="step__number">1</span>
-              <div className="step__body">
-                <p>{t('overview.step1')}</p>
-                {!hasSupabase && (
-                  <div className="row">
-                    <button type="button" className="btn btn--primary" onClick={() => void addSupabase()}>
-                      <Plus /> {t('overview.step1Action')}
-                    </button>
-                    <a className="btn btn--ghost" href="#/add">
-                      {t('overview.addApp')} <ArrowRight />
-                    </a>
-                  </div>
-                )}
-              </div>
-            </li>
-            <li className={`step${state.accounts.length ? ' step--done' : ''}`}>
-              <span className="step__number">2</span>
-              <div className="step__body">
-                <p>{t('overview.step2')}</p>
-              </div>
-            </li>
-            <li className={`step${state.accounts.length > 1 ? ' step--done' : ''}`}>
-              <span className="step__number">3</span>
-              <div className="step__body">
-                <p>{t('overview.step3')}</p>
-              </div>
-            </li>
-          </ol>
-        </Card>
-      )}
+      <GettingStarted force={welcome} hasSupabase={hasSupabase} onAddSupabase={() => void addSupabase()} />
 
       {state.apps.length > 0 && (
         <Card

@@ -4,6 +4,7 @@ import {
   ArrowUp,
   Ellipsis,
   ExternalLink,
+  LogIn,
   Pencil,
   Pin,
   RotateCcw,
@@ -22,6 +23,7 @@ import { AccountEditor } from '../../ui/AccountEditor';
 import { useAskBeforeSwitch } from '../../ui/askBeforeSwitch';
 import { AppIcon, Avatar } from '../../ui/Avatar';
 import { Callout, MenuButton, Spinner, useConfirm, useToast } from '../../ui/controls';
+import { ExpiredFlag } from '../../ui/flags';
 import { useI18n } from '../../ui/i18n';
 import { useManager } from '../context';
 import { Card } from '../Options';
@@ -272,6 +274,7 @@ function AccountsPanel({
                         {t('account.importantTag')}
                       </span>
                     )}
+                    <ExpiredFlag account={account} />
                     {isActive && <span className="seal">{t('account.inUse')}</span>}
                   </div>
                   <span className="muted truncate">
@@ -285,6 +288,11 @@ function AccountsPanel({
                       ? `${t('account.saved', { time: relativeTime(account.capturedAt, language) })}${session ? ` · ${session}` : ''}`
                       : t('account.noSession')}
                   </span>
+                  {account.expiredAt && (
+                    <span className="account-card__meta account-card__meta--warning">
+                      {t('account.expiredHint', { time: relativeTime(account.expiredAt, language) })}
+                    </span>
+                  )}
                   <span className="account-card__meta">
                     {account.lastUsedAt
                       ? t('account.lastUsed', { time: relativeTime(account.lastUsedAt, language) })
@@ -324,6 +332,28 @@ function AccountsPanel({
                     )}
                     {isActive ? t('common.open') : t('apps.switchHere')}
                   </button>
+                  {account.expiredAt && (
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      disabled={!canSwitch || pending === `fresh:${account.id}`}
+                      onClick={async () => {
+                        const go = await askBeforeSwitch({
+                          kind: 'fresh',
+                          label: app.name,
+                          app: app.name,
+                          important: [],
+                          confirmAll: false,
+                          appIds: [app.id],
+                        });
+                        if (!go) return;
+                        const outcome = await run('fresh', { appId: app.id, focus: true }, `fresh:${account.id}`);
+                        if (outcome) notify(t('move.signInStarted', { label: account.label }), 'info');
+                      }}
+                    >
+                      {pending === `fresh:${account.id}` ? <Spinner /> : <LogIn />} {t('account.signInAgain')}
+                    </button>
+                  )}
                   <button type="button" className="btn btn--sm" onClick={() => setEditing(account)}>
                     <Pencil /> {t('common.edit')}
                   </button>

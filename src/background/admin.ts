@@ -18,6 +18,7 @@ import {
 } from '../core/crypto';
 import { appForUrl, hostMatchesDomain, matchPatterns } from '../core/domains';
 import { sameIdentity } from '../core/identity';
+import { cleanLinkRules } from '../core/links';
 import { isBlockedDomain } from '../core/presets';
 import { parseSettings } from '../core/settings';
 import type { Account, AppDef, Settings, Snapshot, Workspace } from '../core/types';
@@ -173,6 +174,7 @@ export function updateAccount(id: string, patch: AccountPatch): Promise<Account>
       if (patch[key] !== undefined) merged[key] = typeof patch[key] === 'string' ? patch[key]!.trim() : patch[key];
     }
     if (patch.important !== undefined) merged.important = patch.important === true;
+    if (patch.linkRules !== undefined) merged.linkRules = cleanLinkRules(patch.linkRules);
     const clearable = ['icon', 'emoji', 'note', 'homeUrl', 'important'];
     for (const key of patch.clear ?? []) if (clearable.includes(key)) delete merged[key];
     const next = sanitizeAccount(merged);

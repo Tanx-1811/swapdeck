@@ -38,6 +38,7 @@ does. Product scope and decisions are in [PLAN.md](PLAN.md); privacy in [PRIVACY
 | `guarded.ts`      | Switches started without a page of ours (shortcuts, omnibox, menus): unsaved-work and important-account checks, the question on the page or in a small window. |
 | `sync.ts`         | Optional Chrome Sync of the list (`syncNow`, `clearSyncData`): pull, apply, push through `chrome.storage.sync` (§10).                                          |
 | `sync-journal.ts` | What the user removed on purpose (`noteRemoved`, `readRemoved`), so only that is removed on other computers.                                                   |
+| `links.ts`        | "Links of another account": `routeLink` (ask on the page, switch, or leave it), `openLinkAs` (right-click on a link), `ownerOfPage` (§6).                      |
 
 ## 2. Data model and storage
 
@@ -71,13 +72,14 @@ are left alone), `links` (pages for "Open workspace", ≤ 30) and usage counters
 
 `chrome.storage.session` (memory only, cleared when Chrome closes; extension pages and the worker only):
 
-| Key           | Contents                                                                                    |
-| ------------- | ------------------------------------------------------------------------------------------- |
-| `sd:key`      | The unlocked vault private key (PKCS#8, base64) while the vault is unlocked                 |
-| `sd:live`     | Per app: last detected identity, whether it mismatches the active account, URL              |
-| `sd:progress` | While a workspace switch runs: `{ workspaceId, total, done, current }` (shown in the popup) |
-| `sd:ask`      | A switch waiting for the user's answer in the confirmation window                           |
-| `sd:sync`     | How the last sync of the list went (`SyncStatus`, shown in Settings)                        |
+| Key                | Contents                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------- |
+| `sd:key`           | The unlocked vault private key (PKCS#8, base64) while the vault is unlocked                 |
+| `sd:live`          | Per app: last detected identity, whether it mismatches the active account, URL              |
+| `sd:progress`      | While a workspace switch runs: `{ workspaceId, total, done, current }` (shown in the popup) |
+| `sd:ask`           | A switch waiting for the user's answer in the confirmation window                           |
+| `sd:sync`          | How the last sync of the list went (`SyncStatus`, shown in Settings)                        |
+| `sd:linksDeclined` | Links the user said "not now" to (app, account and what matched; ≤ 200)                     |
 
 Everything read from storage, backups or pages is untrusted and goes through `src/core/validate.ts`
 (`sanitizeApp`, `sanitizeAccount`, `sanitizeSnapshot`, …) or `parseSettings`.
@@ -210,7 +212,37 @@ On `tabs.onUpdated` for tabs of an added app (with access, not incognito, not th
   after load, e.g. OAuth redirects). Choosing the account already in use records a `restore`.
 - **On load and SPA navigation/title changes** (`trackPage`): remember the active account's `lastUrl` and recent
   items (`recentPattern`, e.g. Supabase project refs `^/dashboard/project/([a-z0-9]{20})` with the project name from
-  the title), skipping sign-in/out paths, the staging page and mismatched tabs.
+  the title; `core/recents.ts`), skipping sign-in/out paths, the staging page and mismatched tabs. A page that belongs
+  to another saved account (below) is not remembered for the active one: it goes to `routeLink` instead.
+- **Expired sessions** (`Account.expiredAt`): when a reconcile on the main origin finds nobody at all signed in while
+  an account with a saved session is in use, and `signedOutIsReliable` (a specific detector, or the automatic one when
+  the account has an identity — it reads the same cookies and local storage each time), twice at least 2 s apart
+  (`signedOutSince`, a follow-up check is scheduled), the account is marked expired and a warning toast shows. A strong
+  identity of that account clears it and saves the new session at once (`persist` also clears it on any signed-in
+  save). It is informational only: save decisions (`decideSave`) are unchanged. Expired accounts get a label, "Sign in
+  again" (a fresh sign-in) and a row under **Sign in again** (`ReloginCard`).
+
+### Links of another account (`core/links.ts`, `background/links.ts`)
+
+`linkOwner` says which account a page belongs to, when it isn't the one in use: by the accounts' `linkRules` (host,
+optionally with a path, normalised like Swapdeck Desktop's `LinkRouter`; the most specific wins, ties mean "can't
+tell"), else by the only account whose recent items (`recentKey`) or pinned pages cover it (never a home or sign-in
+page). `routeLink` (called by `trackPage`, only for owners with a saved session, never while the app is busy, and not
+again in a tab for 20 s after a switch for a link) follows `settings.linkRouting`: `ask` shows `askLinkOnPage` (a
+closed shadow-root card in the corner that doesn't block the page; only trusted clicks switch; 30 s without an answer
+leaves it for that tab), `auto` switches at once, `off` does nothing. A switch goes through `runGuarded` with the page
+as `url` (`switchTo` follows a requested page only when it belongs to the app). "Not now" is remembered for the Chrome
+session (`sd:linksDeclined`) and, for a recent item, records it for the account in use too (shared, no more asking).
+The right-click menu on links to an added app (`targetUrlPatterns`) offers "Open link as" each account with a session
+(`openLinkAs`: a new tab next to the page, then the guarded switch).
+
+### Getting started and updates
+
+`core/onboarding.ts` ticks the overview's checklist off from the data (an app, two sessions of one app, a workspace,
+the vault, a backup; sync optional) until `settings.onboardingHidden`. Help → **Check for updates**
+(`core/version.ts`) fetches `api.github.com/repos/Tanx-1811/swapdeck/releases/latest` only when pressed (no
+credentials, no referrer), parses the zip names and links only to this repository's release pages; installs with an
+`update_url` (Chrome Web Store) say Chrome updates them.
 
 ## 7. Workspaces (`core/workspaces.ts`, `background/workspaces.ts`)
 

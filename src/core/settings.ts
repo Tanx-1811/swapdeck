@@ -1,4 +1,4 @@
-import type { Accent, Settings } from './types';
+import type { Accent, LinkRouting, Settings } from './types';
 
 export const DEFAULT_SETTINGS: Settings = {
   language: 'auto',
@@ -18,6 +18,8 @@ export const DEFAULT_SETTINGS: Settings = {
   lastBackupAt: 0,
   backupNudgeUntil: 0,
   syncList: false,
+  linkRouting: 'ask',
+  onboardingHidden: false,
 };
 
 export const AUTO_LOCK_CHOICES = [0, 5, 15, 30, 60, 240] as const;
@@ -51,6 +53,10 @@ export function parseSettings(value: unknown): Settings {
     lastBackupAt: time(input.lastBackupAt),
     backupNudgeUntil: time(input.backupNudgeUntil),
     syncList: bool('syncList'),
+    linkRouting: (['ask', 'auto', 'off'] as const).includes(input.linkRouting as LinkRouting)
+      ? (input.linkRouting as LinkRouting)
+      : 'ask',
+    onboardingHidden: bool('onboardingHidden'),
   };
 }
 

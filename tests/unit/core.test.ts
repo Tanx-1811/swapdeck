@@ -359,3 +359,69 @@ describe('util', () => {
     ]);
   });
 });
+
+describe('getting started and updates', () => {
+  it('ticks each step from the data, and hides when the required ones are done or put away', async () => {
+    const { onboardingSteps, onboardingVisible } = await import('../../src/core/onboarding');
+    const empty = {
+      apps: [],
+      accounts: [],
+      workspaces: [],
+      vault: null,
+      settings: { lastBackupAt: 0, syncList: false },
+    };
+    const fresh = onboardingSteps(empty);
+    expect(fresh.map((step) => [step.id, step.done])).toEqual([
+      ['app', false],
+      ['accounts', false],
+      ['workspace', false],
+      ['lock', false],
+      ['backup', false],
+      ['sync', false],
+    ]);
+    expect(onboardingVisible(fresh, false)).toBe(true);
+    expect(onboardingVisible(fresh, true)).toBe(false);
+    const done = onboardingSteps({
+      apps: [{ id: 'a' }, { id: 'b' }],
+      // Two saved sessions, but on different apps, don't count; two on one do.
+      accounts: [
+        { appId: 'a', capturedAt: 1 },
+        { appId: 'b', capturedAt: 1 },
+        { appId: 'b', capturedAt: 2 },
+        { appId: 'a' },
+      ],
+      workspaces: [{ id: 'w' }],
+      vault: { v: 1, salt: '', iterations: 1, publicKey: '', wrappedKey: '', iv: '' } as never,
+      settings: { lastBackupAt: 5, syncList: false },
+    });
+    expect(done.every((step) => step.done || step.optional)).toBe(true);
+    expect(onboardingVisible(done, false)).toBe(false);
+  });
+
+  it('compares versions and reads a GitHub release', async () => {
+    const { compareVersions, parseRelease, RELEASES_PAGE } = await import('../../src/core/version');
+    expect(compareVersions('1.10.0', '1.9.3')).toBeGreaterThan(0);
+    expect(compareVersions('v1.6.0', '1.6.0')).toBe(0);
+    expect(compareVersions('1.5.9', '1.6.0')).toBeLessThan(0);
+    expect(compareVersions('nonsense', '0.0.1')).toBeLessThan(0);
+    expect(
+      parseRelease({
+        tag_name: 'v1.6.0',
+        html_url: 'https://github.com/Tanx-1811/swapdeck/releases/tag/v1.6.0',
+        published_at: '2026-10-22T00:00:00Z',
+        assets: [{ name: 'swapdeck-1.6.0.zip' }, { name: 'swapdeck-desktop-1.3.0.zip' }, { name: 'notes.txt' }],
+      }),
+    ).toEqual({
+      extension: '1.6.0',
+      desktop: '1.3.0',
+      url: 'https://github.com/Tanx-1811/swapdeck/releases/tag/v1.6.0',
+      publishedAt: '2026-10-22T00:00:00Z',
+    });
+    // Only release pages of this repository are linked to.
+    expect(parseRelease({ tag_name: 'v2.0.0', html_url: 'https://evil.example/', assets: [] })?.url).toBe(
+      RELEASES_PAGE,
+    );
+    expect(parseRelease({ tag_name: 'latest' })).toBeNull();
+    expect(parseRelease('nope')).toBeNull();
+  });
+});

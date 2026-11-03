@@ -46,6 +46,7 @@ public enum DataFile {
         if let raw = input["unmatchedLinks"] as? String, let choice = UnmatchedLinks(rawValue: raw) {
             settings.unmatchedLinks = choice
         }
+        if let raw = input["terminalApp"] as? String, let app = TerminalApp(rawValue: raw) { settings.terminalApp = app }
         return settings
     }
 
@@ -62,6 +63,14 @@ public enum DataFile {
         var ruleSet = Set<String>()
         let rules = (input["linkRules"] as? [Any] ?? []).compactMap { ($0 as? String).flatMap(LinkRouter.normalize) }
             .filter { ruleSet.insert($0).inserted }.prefix(50)
+        var names = Set<String>()
+        let variables = (input["cliVariables"] as? [Any] ?? []).compactMap { item -> CLIVariable? in
+            guard let entry = item as? [String: Any], let name = entry["name"] as? String,
+                  TerminalEnv.isAllowedName(name), names.insert(name).inserted
+            else { return nil }
+            return CLIVariable(name: name, secret: entry["secret"] as? Bool ?? true)
+        }.prefix(TerminalEnv.maxVariables)
+        let folder = (input["terminalFolder"] as? String).flatMap { TerminalEnv.normalizedFolder($0) } ?? ""
         return Workspace(
             id: id,
             name: name,
@@ -75,6 +84,8 @@ public enum DataFile {
             links: Array(links),
             openLinksInNewWindow: input["openLinksInNewWindow"] as? Bool ?? true,
             linkRules: Array(rules),
+            cliVariables: Array(variables),
+            terminalFolder: folder,
             order: (input["order"] as? NSNumber)?.intValue ?? 0,
             createdAt: date(input["createdAt"]) ?? Date(timeIntervalSince1970: 0),
             lastOpenedAt: date(input["lastOpenedAt"]),

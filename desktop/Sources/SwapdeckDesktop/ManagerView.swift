@@ -192,13 +192,16 @@ struct PaperField: View {
     let placeholder: String
     @Binding var text: String
     var invalid = false
+    /// Dots instead of the text (tokens).
+    var secure = false
+    var monospaced = false
     var onSubmit: () -> Void = {}
     @FocusState private var focused: Bool
 
     var body: some View {
-        TextField(placeholder, text: $text)
+        field
             .textFieldStyle(.plain)
-            .font(Theme.text(13))
+            .font(monospaced ? Theme.mono(12) : Theme.text(13))
             .focused($focused)
             .onSubmit(onSubmit)
             .padding(.horizontal, 9)
@@ -208,5 +211,13 @@ struct PaperField: View {
                 RoundedRectangle(cornerRadius: 7)
                     .strokeBorder(invalid ? Theme.danger : focused ? Theme.ink : Theme.lineStrong, lineWidth: 1)
             )
+    }
+
+    @ViewBuilder private var field: some View {
+        if secure {
+            SecureField(placeholder, text: $text)
+        } else {
+            TextField(placeholder, text: $text)
+        }
     }
 }

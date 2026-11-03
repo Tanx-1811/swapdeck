@@ -3,6 +3,7 @@ import {
   Ellipsis,
   ExternalLink,
   House,
+  LogIn,
   Pencil,
   Pin,
   PinOff,
@@ -82,6 +83,9 @@ export function AppPanel({ app, onBack }: { app: AppDef; onBack?: () => void }) 
     const pageUrl = onCurrentTab && probe.url && appForUrl([app], probe.url) ? probe.url : null;
     const pinned = pageUrl ? account.pins.find((pin) => pin.url === pageUrl) : undefined;
     const items: MenuItem[] = [{ label: t('common.edit'), icon: <Pencil />, onSelect: () => setEditing(account) }];
+    if (account.expiredAt) {
+      items.unshift({ label: t('account.signInAgain'), icon: <LogIn />, onSelect: () => void freshLogin(app) });
+    }
     if (!onCurrentTab && account.capturedAt) {
       items.push({
         label: t('account.switchAndOpen'),

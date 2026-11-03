@@ -706,3 +706,144 @@ export function askOnPage(content: AskContent): Promise<boolean> {
     cancel.focus();
   });
 }
+
+export type LinkAskContent = {
+  title: string;
+  body: string;
+  /** The account's initials (or symbol letter) and color. */
+  badge: string;
+  color: string;
+  badgeText: string;
+  switchLabel: string;
+  alwaysLabel: string;
+  noLabel: string;
+  closeLabel: string;
+  theme: 'system' | 'light' | 'dark';
+  /** Give up (no answer) after this long. */
+  timeoutMs: number;
+};
+
+export type LinkAnswer = 'switch' | 'always' | 'no' | null;
+
+/**
+ * A card in the page's corner offering to switch to the account the page
+ * belongs to. It doesn't block the page; only a real click switches.
+ */
+export function askLinkOnPage(content: LinkAskContent): Promise<LinkAnswer> {
+  return new Promise((resolve) => {
+    const id = 'swapdeck-link';
+    document.getElementById(id)?.remove();
+    document.getElementById('swapdeck-toast')?.remove();
+    const host = document.createElement('div');
+    host.id = id;
+    host.style.cssText = 'position:fixed;top:16px;right:16px;z-index:2147483647;';
+    const root = host.attachShadow({ mode: 'closed' });
+    const dark =
+      content.theme === 'dark' ||
+      (content.theme === 'system' &&
+        typeof matchMedia === 'function' &&
+        matchMedia('(prefers-color-scheme: dark)').matches);
+    const paper = dark ? '#1c1816' : '#fbf9f5';
+    const ink = dark ? '#f1e9dc' : '#1a1714';
+    const muted = dark ? '#c2b6a5' : '#57504a';
+    const line = dark ? '#4a3f36' : '#cbbfab';
+    const hover = dark ? '#262019' : '#eee8de';
+    const accent = dark ? '#93b1e8' : '#2f4e86';
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(`
+      .card { width: min(360px, calc(100vw - 32px)); padding: 14px 14px 14px 15px; border: 1px solid ${line};
+        border-left: 3px solid ${accent}; border-radius: 12px; background: ${paper}; color: ${ink};
+        box-shadow: 0 1px 2px rgba(26, 23, 20, .08), 0 18px 40px -12px rgba(26, 23, 20, .45);
+        font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; animation: in .22s cubic-bezier(.2, .7, .2, 1); }
+      .head { display: flex; align-items: flex-start; gap: 11px; }
+      .badge { flex: none; width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center;
+        background: ${content.color}; color: ${content.badgeText}; font-weight: 700; font-size: 12.5px;
+        box-shadow: inset 0 0 0 1px rgba(26, 23, 20, .1); }
+      .text { flex: 1; min-width: 0; }
+      .brand { margin: 0 0 2px; font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: ${muted}; }
+      .title { margin: 0; font-weight: 600; font-size: 13.5px; overflow-wrap: anywhere; }
+      .body { margin: 3px 0 0; color: ${muted}; overflow-wrap: anywhere; }
+      .close { flex: none; width: 26px; height: 26px; border: 0; border-radius: 6px; background: transparent; color: ${muted};
+        font-size: 18px; line-height: 1; cursor: pointer; }
+      .close:hover { background: ${hover}; color: ${ink}; }
+      .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-top: 12px; }
+      .actions button { min-height: 30px; padding: 0 12px; border-radius: 8px; font: 600 12.5px/1 system-ui, -apple-system, sans-serif; cursor: pointer; }
+      .no { border: 1px solid transparent; background: transparent; color: ${muted}; }
+      .no:hover { background: ${hover}; color: ${ink}; }
+      .always { border: 1px solid ${line}; background: transparent; color: ${ink}; }
+      .switch { border: 1px solid ${ink}; background: ${ink}; color: ${paper}; }
+      button:focus-visible { outline: 2px solid ${accent}; outline-offset: 2px; }
+      @keyframes in { from { opacity: 0; transform: translateY(-6px); } }
+      @media (prefers-reduced-motion: reduce) { .card { animation: none; } }
+    `);
+    root.adoptedStyleSheets = [sheet];
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.setAttribute('role', 'dialog');
+    card.setAttribute('aria-modal', 'false');
+    card.setAttribute('aria-labelledby', 'swapdeck-link-title');
+    const head = document.createElement('div');
+    head.className = 'head';
+    const badge = document.createElement('div');
+    badge.className = 'badge';
+    badge.textContent = content.badge;
+    badge.setAttribute('aria-hidden', 'true');
+    const text = document.createElement('div');
+    text.className = 'text';
+    const brand = document.createElement('p');
+    brand.className = 'brand';
+    brand.textContent = 'Swapdeck';
+    const title = document.createElement('p');
+    title.className = 'title';
+    title.id = 'swapdeck-link-title';
+    title.textContent = content.title;
+    const body = document.createElement('p');
+    body.className = 'body';
+    body.textContent = content.body;
+    text.append(brand, title, body);
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'close';
+    close.textContent = '×';
+    close.setAttribute('aria-label', content.closeLabel);
+    head.append(badge, text, close);
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    const button = (className: string, label: string) => {
+      const element = document.createElement('button');
+      element.type = 'button';
+      element.className = className;
+      element.textContent = label;
+      return element;
+    };
+    const no = button('no', content.noLabel);
+    const always = button('always', content.alwaysLabel);
+    const yes = button('switch', content.switchLabel);
+    actions.append(no, always, yes);
+    card.append(head, actions);
+    root.append(card);
+
+    let done = false;
+    const finish = (answer: LinkAnswer) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      removeEventListener('pagehide', onHide);
+      host.remove();
+      resolve(answer);
+    };
+    const onHide = () => finish(null);
+    const timer = setTimeout(() => finish(null), content.timeoutMs);
+    close.addEventListener('click', () => finish('no'));
+    no.addEventListener('click', () => finish('no'));
+    // Only a real click switches: the page itself can't answer for the user.
+    yes.addEventListener('click', (event) => {
+      if (event.isTrusted) finish('switch');
+    });
+    always.addEventListener('click', (event) => {
+      if (event.isTrusted) finish('always');
+    });
+    addEventListener('pagehide', onHide);
+    (document.body ?? document.documentElement).append(host);
+  });
+}

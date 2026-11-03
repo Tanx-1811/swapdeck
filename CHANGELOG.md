@@ -2,6 +2,33 @@
 
 All notable changes to Swapdeck are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 1.6.0 — 2026-10-22
+
+Links open with the right account, expired sessions show up before they bite, and Swapdeck Desktop 1.3.0 gives each
+workspace its own terminal.
+
+- **Links of another account:** open a page that belongs to another saved account — a project link from Slack or an
+  email, say — and Swapdeck offers to switch right on the page ("Switch to Bob" / "Always switch" / "Not now"), then
+  reopens that same page with the right account. It knows from each account's recent projects and pinned pages, and
+  from links you give an account in its editor ("supabase.com/dashboard/project/…", "acme.example" — the same rules
+  as Swapdeck Desktop). Settings can make it switch right away, or do nothing. "Not now" on a project the account in use
+  opens too stops asking about it. Right-click a link to an added site → **Open link as** an account.
+- **Expired sessions:** when a site shows nobody signed in while one of your accounts is in use (its saved session no
+  longer works), the account gets an **Expired** label in the popup and the manager, a warning on the page, and a place
+  under **Sign in again** with a "Sign in again" button; signing in saves the new session at once and clears the label.
+- **Get started with Swapdeck:** a checklist on the overview (add an app, save two accounts, create a workspace, lock,
+  back up, optionally sync) that ticks itself off; hide it, and bring it back from Help.
+- **Check for updates** (Help): asks GitHub for the latest release only when you press it, and explains how to update an
+  unpacked copy without losing anything. Copies from the Chrome Web Store are updated by Chrome.
+- A page asked for by a switch (a recent project, a link) is only followed when it belongs to that app.
+- Updated dependencies (Vite 8.3.5, typescript-eslint 8.72, lucide-react 1.61, @types/chrome); TypeScript 7 waits
+  until typescript-eslint supports it (Dependabot holds it back meanwhile).
+- **Swapdeck Desktop 1.3.0 — a terminal per workspace:** give a workspace the tokens its command-line tools use
+  (Supabase, Vercel, GitHub, Netlify, Cloudflare, Fly.io, Railway, Heroku, DigitalOcean; AWS and Google Cloud profiles;
+  any other variable) and a folder; **Open in Terminal** (or iTerm) starts a shell with them, and **Copy command** gives a
+  line that loads them into any terminal (`eval "$(… --env acme)"`). Tokens live in the Keychain — never in the data
+  file, an exported file, a script on disk or the shell history. Also **Check for updates** in Settings.
+
 ## 1.5.0 — 2026-10-21
 
 Nothing lost when Chrome or the computer changes, and Swapdeck Desktop 1.2.0.

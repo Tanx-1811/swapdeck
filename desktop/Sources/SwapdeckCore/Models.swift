@@ -24,6 +24,10 @@ public struct Workspace: Encodable, Identifiable, Hashable, Sendable {
     /// Links from other apps that belong here ("acme.example", "supabase.com/dashboard/project/acme"),
     /// besides the ones its pages imply (see `LinkRouter`).
     public var linkRules: [String]
+    /// Variables the workspace's terminal gets (names only: the values are in the Keychain).
+    public var cliVariables: [CLIVariable]
+    /// The folder the workspace's terminal opens in ("" for the home folder).
+    public var terminalFolder: String
     public var order: Int
     public var createdAt: Date
     public var lastOpenedAt: Date?
@@ -42,6 +46,8 @@ public struct Workspace: Encodable, Identifiable, Hashable, Sendable {
         links: [WorkspaceLink] = [],
         openLinksInNewWindow: Bool = true,
         linkRules: [String] = [],
+        cliVariables: [CLIVariable] = [],
+        terminalFolder: String = "",
         order: Int = 0,
         createdAt: Date = Date(),
         lastOpenedAt: Date? = nil,
@@ -59,6 +65,8 @@ public struct Workspace: Encodable, Identifiable, Hashable, Sendable {
         self.links = links
         self.openLinksInNewWindow = openLinksInNewWindow
         self.linkRules = linkRules
+        self.cliVariables = cliVariables
+        self.terminalFolder = terminalFolder
         self.order = order
         self.createdAt = createdAt
         self.lastOpenedAt = lastOpenedAt
@@ -106,6 +114,25 @@ public enum HotkeyChoice: String, Codable, CaseIterable, Sendable {
     }
 }
 
+/// The terminal app "Open Terminal" uses.
+public enum TerminalApp: String, Codable, CaseIterable, Sendable {
+    case terminal, iterm
+
+    public var bundleIdentifier: String {
+        switch self {
+        case .terminal: "com.apple.Terminal"
+        case .iterm: "com.googlecode.iterm2"
+        }
+    }
+
+    public var displayName: String {
+        switch self {
+        case .terminal: "Terminal"
+        case .iterm: "iTerm"
+        }
+    }
+}
+
 public struct DesktopSettings: Encodable, Hashable, Sendable {
     public var language: LanguagePreference
     public var hotkey: HotkeyChoice
@@ -116,23 +143,28 @@ public struct DesktopSettings: Encodable, Hashable, Sendable {
     public var defaultBrowser: BrowserKind
     /// Where links that match no workspace go, when Swapdeck opens links.
     public var unmatchedLinks: UnmatchedLinks
+    /// The app "Open Terminal" opens a workspace's terminal in.
+    public var terminalApp: TerminalApp
 
     public init(
         language: LanguagePreference = .auto,
         hotkey: HotkeyChoice = .controlOptionB,
         nameWindows: Bool = true,
         defaultBrowser: BrowserKind = .chrome,
-        unmatchedLinks: UnmatchedLinks = .ask
+        unmatchedLinks: UnmatchedLinks = .ask,
+        terminalApp: TerminalApp = .terminal
     ) {
         self.language = language
         self.hotkey = hotkey
         self.nameWindows = nameWindows
         self.defaultBrowser = defaultBrowser
         self.unmatchedLinks = unmatchedLinks
+        self.terminalApp = terminalApp
     }
 }
 
-/// Everything Swapdeck Desktop stores (no secrets: names, colors, profile folders, page addresses).
+/// Everything Swapdeck Desktop stores (no secrets: names, colors, profile folders, page addresses,
+/// the names of terminal variables — their values are in the Keychain).
 public struct DesktopData: Hashable, Sendable {
     public var settings: DesktopSettings
     public var workspaces: [Workspace]

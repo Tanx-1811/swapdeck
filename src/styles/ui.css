@@ -550,7 +550,8 @@ kbd {
   box-shadow: var(--focus-ring);
 }
 
-.input[aria-invalid='true'] {
+.input[aria-invalid='true'],
+.textarea[aria-invalid='true'] {
   border-color: var(--danger);
 }
 
@@ -558,6 +559,12 @@ kbd {
   min-height: 72px;
   resize: vertical;
   line-height: 1.5;
+}
+
+/* Addresses and rules: one per line, easier to scan in the monospaced face. */
+.textarea--mono {
+  min-height: 58px;
+  font: 12.5px/1.6 var(--mono);
 }
 
 .select {
@@ -893,6 +900,31 @@ kbd {
 }
 
 .flag-important svg {
+  width: 11px;
+  height: 11px;
+  stroke-width: 2.25;
+}
+
+/* The saved session no longer signs in: sign in again. */
+.flag-expired {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  padding: 0 6px 0 4px;
+  border: 1px solid var(--warning);
+  border-radius: var(--r-xs);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.flag-expired svg {
   width: 11px;
   height: 11px;
   stroke-width: 2.25;

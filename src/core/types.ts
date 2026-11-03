@@ -89,6 +89,13 @@ export type Account = {
   lastUsedAt?: number;
   /** When the saved session was last refreshed from the live browser. */
   capturedAt?: number;
+  /**
+   * When the site was found signed out while this account was in use (its saved
+   * session no longer signs in); cleared by the next sign-in saved into it.
+   */
+  expiredAt?: number;
+  /** Pages that open with this account (host, optionally with a path: "acme.example/admin"). */
+  linkRules?: string[];
   /** Size of the saved session, for display (the session itself may be sealed). */
   stats?: SessionStats;
   switchCount: number;
@@ -235,7 +242,13 @@ export type Settings = {
   backupNudgeUntil: number;
   /** Keep the list (apps, accounts, workspaces — never sign-ins) in step through Chrome Sync. */
   syncList: boolean;
+  /** A page that belongs to another saved account: ask to switch, switch at once, or leave it. */
+  linkRouting: LinkRouting;
+  /** The "getting started" checklist was put away. */
+  onboardingHidden: boolean;
 };
+
+export type LinkRouting = 'ask' | 'auto' | 'off';
 
 export type VaultMeta = {
   v: 1;

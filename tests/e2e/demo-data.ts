@@ -17,6 +17,8 @@ type DemoOptions = {
   backupNudge?: boolean;
   /** Turn on Chrome Sync of the list. */
   syncList?: boolean;
+  /** Show the "Get started" list (hidden by default, e.g. in store screenshots). */
+  onboarding?: boolean;
   localSupabase?: string;
 };
 
@@ -27,6 +29,7 @@ export function demoStorage({
   vaultNudge = false,
   backupNudge = false,
   syncList = false,
+  onboarding = false,
   localSupabase,
 }: DemoOptions = {}) {
   const now = Date.now();
@@ -199,6 +202,7 @@ export function demoStorage({
       vaultNudgeUntil: vaultNudge ? 0 : now + 365 * 24 * HOUR,
       backupNudgeUntil: backupNudge ? 0 : now + 365 * 24 * HOUR,
       syncList,
+      onboardingHidden: !onboarding,
       afterSwitch: 'last',
       autoCapture: true,
       autoSync: true,

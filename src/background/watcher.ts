@@ -1,9 +1,11 @@
 import { appForUrl, originOf, parseHttpUrl } from '../core/domains';
-import { hasIdentity, identityLabel, isSpecificDetector, sameIdentity } from '../core/identity';
-import type { Account, AppDef, Identity, RecentItem } from '../core/types';
+import { hasIdentity, identityLabel, isSpecificDetector, sameIdentity, signedOutIsReliable } from '../core/identity';
+import { recentFor, upsertRecent } from '../core/recents';
+import type { Account, AppDef, Identity } from '../core/types';
 import { initials, readableTextColor, WARNING_COLOR } from '../core/util';
 import { readSessionInfo, readState, SESSION_KEYS, type LiveInfo, type State } from '../shared/store';
 import { refreshBadge } from './badge';
+import { ownerOfPage, routeLink } from './links';
 import {
   busyApps,
   capture,
@@ -24,10 +26,24 @@ import { getTab, runInTab, tabUrl } from './tabs';
 /** Auto-sync refreshes a saved session at most this often per app. */
 const SYNC_INTERVAL_MS = 60_000;
 const lastSync = new Map<string, number>();
+/**
+ * A page found signed out while an account with a saved session is in use, by
+ * app and account: seen twice, a moment apart, the account is marked expired.
+ */
+const signedOutSince = new Map<string, number>();
+const SIGNED_OUT_CONFIRM_MS = 2000;
+
+async function setExpired(accountId: string, expired: boolean): Promise<void> {
+  await update((draft) => {
+    const account = draft.accounts.find((item) => item.id === accountId);
+    if (!account) return;
+    if (expired) account.expiredAt = Date.now();
+    else delete account.expiredAt;
+  });
+}
 /** Pages that are part of signing in or out are never remembered as "last page". */
 const AUTH_PATH =
   /(^|\/)(log-?in|log-?out|sign-?in|sign-?out|sign-?up|auth|oauth|sso|callback|verify|2fa|mfa)(\/|$|\?)/i;
-const RECENT_LIMIT = 6;
 
 /** The switching page itself, or one of its fallbacks while a switch runs. */
 function isStagingUrl(app: AppDef, url: string | null): boolean {
@@ -50,40 +66,22 @@ export function isTrackableUrl(app: AppDef, url: string): boolean {
   return !AUTH_PATH.test(parsed.pathname);
 }
 
-/** A recent item (e.g. a Supabase project) for a page URL, using the app's pattern. */
-export function recentFor(app: AppDef, url: string, title: string | undefined): RecentItem | null {
-  if (!app.recentPattern) return null;
-  const parsed = parseHttpUrl(url);
-  if (!parsed) return null;
-  let match: RegExpExecArray | null;
-  try {
-    match = new RegExp(app.recentPattern).exec(parsed.pathname);
-  } catch {
-    return null;
-  }
-  if (!match?.[1]) return null;
-  let clean = (title ?? '').trim();
-  if (app.titleSuffix && clean.endsWith(app.titleSuffix)) clean = clean.slice(0, -app.titleSuffix.length).trim();
-  // Titles like "Table editor | my-project" put the item name last.
-  const parts = clean.split(/\s+[|·–—-]\s+/).filter(Boolean);
-  const name = parts.length > 1 ? parts[parts.length - 1]! : clean;
-  const generic = !name || name.toLowerCase() === app.name.toLowerCase();
-  return { key: match[1], title: generic ? match[1] : name, url: parsed.origin + match[0], at: Date.now() };
-}
-
-export function upsertRecent(recents: readonly RecentItem[], item: RecentItem): RecentItem[] {
-  const existing = recents.find((recent) => recent.key === item.key);
-  // Keep a real name rather than replacing it with the bare key from an early title.
-  const title = item.title === item.key && existing && existing.title !== existing.key ? existing.title : item.title;
-  return [{ ...item, title }, ...recents.filter((recent) => recent.key !== item.key)].slice(0, RECENT_LIMIT);
-}
-
-/** Remembers the page and recent item for the active account (unless someone else is signed in). */
+/**
+ * Remembers the page and recent item for the active account (unless someone
+ * else is signed in). A page that belongs to another saved account isn't
+ * remembered for this one: Swapdeck offers to switch instead (links.ts).
+ */
 async function trackPage(app: AppDef, tab: chrome.tabs.Tab): Promise<void> {
   const url = tabUrl(tab);
   if (!url || !isTrackableUrl(app, url)) return;
   const { live } = await readSessionInfo();
   if (live[app.id]?.mismatch) return;
+  if (await ownerOfPage(app, url)) {
+    if (tab.id !== undefined) {
+      void routeLink(app, tab.id, url).catch((error: unknown) => console.warn('Swapdeck: link check failed', error));
+    }
+    return;
+  }
   const recent = recentFor(app, url, tab.title);
   await update((draft) => {
     const activeId = draft.active[app.id];
@@ -126,7 +124,7 @@ function toastFor(
       tone: 'warning',
     };
   }
-  if (!strong && isSpecificDetector(app.detector)) {
+  if ((!strong && isSpecificDetector(app.detector)) || (!identity && signedOutIsReliable(app.detector, target))) {
     return {
       title: t('toast.expiredTitle', { label: target.label }),
       body: t('toast.expiredBody'),
@@ -210,13 +208,18 @@ async function reconcile(app: AppDef, tab: chrome.tabs.Tab): Promise<Identity | 
       const active = accounts.find((account) => account.id === activeId);
       const info: LiveInfo = { identity, mismatch: false, checkedAt: Date.now(), ...(url ? { url } : {}) };
       let adopted: { account: Account | undefined; created: boolean } | null = null;
+      let expired: Account | null = null;
+      const watchKey = `${app.id}|${activeId ?? ''}`;
 
       if (strong) {
+        signedOutSince.delete(watchKey);
         const owner: Account | undefined =
           accounts.find((account) => sameIdentity(account, strong)) ??
           (active && !hasIdentity(active) ? active : undefined);
         if (active && owner?.id === active.id) {
-          const due = Date.now() - (lastSync.get(app.id) ?? 0) > SYNC_INTERVAL_MS;
+          if (active.expiredAt) await setExpired(active.id, false);
+          // Signed in again after the session expired: save the new one now (the saved copy is dead).
+          const due = Boolean(active.expiredAt) || Date.now() - (lastSync.get(app.id) ?? 0) > SYNC_INTERVAL_MS;
           if (state.settings.autoSync && onOrigin && due) {
             lastSync.set(app.id, Date.now());
             await persist(app, await capture(app, tabId), { kind: 'active', accountId: active.id }, t, true).catch(
@@ -251,6 +254,16 @@ async function reconcile(app: AppDef, tab: chrome.tabs.Tab): Promise<Identity | 
         } else {
           info.mismatch = true;
         }
+      } else if (!identity && active?.capturedAt && signedOutIsReliable(app.detector, active) && onOrigin) {
+        // Nobody is signed in while this account is in use: its saved session no longer works.
+        const since = signedOutSince.get(watchKey);
+        if (since === undefined) {
+          signedOutSince.set(watchKey, Date.now());
+          checkLater(app.id, tabId, SIGNED_OUT_CONFIRM_MS + 500);
+        } else if (Date.now() - since >= SIGNED_OUT_CONFIRM_MS && !active.expiredAt) {
+          await setExpired(active.id, true);
+          expired = active;
+        }
       }
       await setLive(app.id, info);
 
@@ -269,6 +282,15 @@ async function reconcile(app: AppDef, tab: chrome.tabs.Tab): Promise<Identity | 
       } else if (intent && Date.now() - intent.at < 60_000) {
         const content = toastFor(latest, app, intent, identity);
         if (content) await toast(tabId, latest, content);
+      } else if (expired) {
+        const account = expired as Account;
+        await toast(tabId, latest, {
+          title: t('toast.expiredTitle', { label: account.label }),
+          body: t('toast.expiredBody'),
+          badge: '!',
+          color: WARNING_COLOR,
+          tone: 'warning',
+        });
       }
       return identity;
     },

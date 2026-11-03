@@ -92,6 +92,19 @@ export function SettingsView() {
             <option value="home">{t('settings.afterHome')}</option>
           </select>
         </Field>
+        <Field label={t('settings.linkRouting')} hint={t('settings.linkRoutingHint')} htmlFor="setting-links">
+          <select
+            id="setting-links"
+            className="select"
+            style={{ maxWidth: 420 }}
+            value={settings.linkRouting}
+            onChange={(event) => set({ linkRouting: event.target.value as Settings['linkRouting'] })}
+          >
+            <option value="ask">{t('settings.linkAsk')}</option>
+            <option value="auto">{t('settings.linkAuto')}</option>
+            <option value="off">{t('settings.linkOff')}</option>
+          </select>
+        </Field>
       </Card>
 
       <Card title={t('settings.layoutTitle')} id="layout">

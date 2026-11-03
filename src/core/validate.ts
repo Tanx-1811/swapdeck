@@ -1,5 +1,6 @@
 import { isSealedBox } from './crypto';
 import { normalizeDomain, parseHttpUrl } from './domains';
+import { cleanLinkRules } from './links';
 import { ACCOUNT_COLORS, isAccountIcon } from './util';
 import type {
   Account,
@@ -188,9 +189,13 @@ export function sanitizeAccount(value: unknown): Account | null {
     if (url) account[key] = url;
   }
   if (account.avatarUrl && !account.avatarUrl.startsWith('https://')) delete account.avatarUrl;
-  for (const key of ['lastUsedAt', 'capturedAt'] as const) {
+  for (const key of ['lastUsedAt', 'capturedAt', 'expiredAt'] as const) {
     const time = num(value[key]);
     if (time !== undefined) account[key] = time;
+  }
+  if (Array.isArray(value.linkRules)) {
+    const rules = cleanLinkRules(value.linkRules);
+    if (rules.length) account.linkRules = rules;
   }
   if (isObj(value.stats)) {
     const stats = value.stats;

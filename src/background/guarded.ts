@@ -98,6 +98,7 @@ async function execute(plan: GuardedPlan): Promise<void> {
       kind: 'switch',
       tabId: plan.tabId,
       ...(plan.focus ? { focus: true } : {}),
+      ...(plan.url ? { url: plan.url } : {}),
     });
   }
   await scheduleAutoLock();

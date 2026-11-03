@@ -4,7 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { parseMenuId } from '../../src/background/menus';
 import { rankAccounts } from '../../src/background/omnibox';
 import { stagingCandidates } from '../../src/background/engine';
-import { isTrackableUrl, recentFor, upsertRecent } from '../../src/background/watcher';
+import { isTrackableUrl } from '../../src/background/watcher';
+import { recentFor, upsertRecent } from '../../src/core/recents';
 import { findPreset } from '../../src/core/presets';
 import type { Account, AppDef } from '../../src/core/types';
 import { createTranslator } from '../../src/i18n/translate';
@@ -83,6 +84,9 @@ describe('menus, omnibox and routes', () => {
     expect(parseMenuId('fresh|app_s')).toEqual({ kind: 'fresh', appId: 'app_s' });
     expect(parseMenuId('manage|app_s')).toEqual({ kind: 'manage', appId: 'app_s' });
     expect(parseMenuId('app|app_s')).toBeNull();
+    expect(parseMenuId('linkas|app_s|acc_1')).toEqual({ kind: 'linkAs', appId: 'app_s', accountId: 'acc_1' });
+    expect(parseMenuId('link|app_s')).toBeNull();
+    expect(parseMenuId('linkas|app_s')).toBeNull();
   });
 
   it('ranks accounts by name match, then recent use', () => {
@@ -165,5 +169,24 @@ describe('AccountEditor', () => {
       color: '#6d4cff',
       clear: ['icon', 'emoji', 'note', 'homeUrl'],
     });
+  });
+
+  it('saves the links that open with the account, and refuses what is not an address', async () => {
+    const onSave = vi.fn();
+    render(
+      <I18nProvider language="en">
+        <AccountEditor account={account('acc', { label: 'Work' })} open onClose={() => undefined} onSave={onSave} />
+      </I18nProvider>,
+    );
+    const user = userEvent.setup();
+    const field = screen.getByLabelText('Links that open with this account');
+    await user.type(field, 'not a site');
+    expect(screen.getByText('"not a site" is not a site or page address.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await user.clear(field);
+    await user.click(field);
+    await user.paste('https://www.Acme.example/admin/\nsupabase.com/dashboard/project/abcd?tab=1\nacme.example/admin');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(onSave.mock.calls[0]![0].linkRules).toEqual(['acme.example/admin', 'supabase.com/dashboard/project/abcd']);
   });
 });

@@ -7,7 +7,9 @@ import { translatorFor } from './engine';
  * Right-click menu on the pages of each added app: its accounts (the active one
  * checked), "sign in with another account", "save this session" and "manage".
  * Chrome shows each app's menu only on that app's pages (documentUrlPatterns).
- * Right-clicking the toolbar button lists the workspaces and opens the side panel.
+ * On a link to an added app, "Open link as" lists its accounts with a saved
+ * sign-in (targetUrlPatterns). Right-clicking the toolbar button lists the
+ * workspaces and opens the side panel.
  */
 
 let rebuildTimer: ReturnType<typeof setTimeout> | undefined;
@@ -15,6 +17,7 @@ let rebuilding: Promise<void> = Promise.resolve();
 
 export type MenuAction =
   | { kind: 'switch'; appId: string; accountId: string }
+  | { kind: 'linkAs'; appId: string; accountId: string }
   | { kind: 'fresh'; appId: string }
   | { kind: 'save'; appId: string }
   | { kind: 'manage'; appId?: string }
@@ -24,6 +27,7 @@ export type MenuAction =
 export function parseMenuId(id: string | number): MenuAction | null {
   const [kind, appId, accountId] = String(id).split('|');
   if (kind === 'switch' && appId && accountId) return { kind, appId, accountId };
+  if (kind === 'linkas' && appId && accountId) return { kind: 'linkAs', appId, accountId };
   if ((kind === 'fresh' || kind === 'save') && appId) return { kind, appId };
   if (kind === 'manage') return appId ? { kind: 'manage', appId } : { kind: 'manage' };
   if (kind === 'ws' && appId) return { kind: 'workspace', workspaceId: appId };
@@ -40,7 +44,14 @@ async function build(): Promise<void> {
     state.settings.language,
     state.active,
     state.apps.map((app) => [app.id, app.name, app.domains]),
-    state.accounts.map((account) => [account.id, account.appId, account.label, account.email, account.order]),
+    state.accounts.map((account) => [
+      account.id,
+      account.appId,
+      account.label,
+      account.email,
+      account.order,
+      Boolean(account.capturedAt),
+    ]),
     state.workspaces.map((workspace) => [workspace.id, workspace.name, workspace.emoji, workspace.members]),
   ]);
   if (signature === builtSignature) return;
@@ -117,6 +128,28 @@ async function build(): Promise<void> {
       contexts: ['page', 'frame'],
       documentUrlPatterns,
     });
+
+    const signedIn = accounts.filter((account) => account.capturedAt);
+    if (signedIn.length) {
+      const linkParent = `link|${app.id}`;
+      const targetUrlPatterns = documentUrlPatterns;
+      chrome.contextMenus.create({
+        id: linkParent,
+        title: t('menu.openLinkAs', { app: app.name }),
+        contexts: ['link'],
+        targetUrlPatterns,
+      });
+      for (const account of signedIn) {
+        chrome.contextMenus.create({
+          id: `linkas|${app.id}|${account.id}`,
+          parentId: linkParent,
+          title:
+            account.email && account.email !== account.label ? `${account.label} — ${account.email}` : account.label,
+          contexts: ['link'],
+          targetUrlPatterns,
+        });
+      }
+    }
   }
 }
 

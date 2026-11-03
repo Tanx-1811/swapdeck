@@ -4,6 +4,7 @@ import { AUTO_LOCK_ALARM, scheduleAutoLock, vaultLock } from './admin';
 import { refreshAllBadges, refreshBadge } from './badge';
 import { saveLive } from './engine';
 import { cycleGuarded, runGuarded } from './guarded';
+import { openLinkAs } from './links';
 import { clearStaleRules } from './guard';
 import { parseMenuId, scheduleMenuRebuild } from './menus';
 import { setupOmnibox } from './omnibox';
@@ -127,6 +128,8 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   const report = (error: unknown) => console.warn('Swapdeck: menu action failed', error);
   if (action.kind === 'switch') {
     void runGuarded({ kind: 'account', appId: action.appId, accountId: action.accountId, tabId }).catch(report);
+  } else if (action.kind === 'linkAs') {
+    if (info.linkUrl) void openLinkAs(action.appId, action.accountId, info.linkUrl, tabId).catch(report);
   } else if (action.kind === 'fresh') {
     void runGuarded({ kind: 'fresh', appId: action.appId, tabId }).catch(report);
   } else if (action.kind === 'save') {

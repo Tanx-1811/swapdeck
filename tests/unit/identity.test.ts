@@ -207,3 +207,14 @@ describe('matching identities', () => {
     expect(Object.fromEntries(joined)).toEqual({ x: 'abcd' });
   });
 });
+
+describe('signed out or not', () => {
+  it('trusts "nobody is signed in" from a specific detector, or from the automatic one that knew the account', async () => {
+    const { signedOutIsReliable } = await import('../../src/core/identity');
+    expect(signedOutIsReliable({ kind: 'localStorage', keys: ['k'] }, {})).toBe(true);
+    expect(signedOutIsReliable({ kind: 'cookie', names: ['c'], format: 'plain' }, {})).toBe(true);
+    expect(signedOutIsReliable({ kind: 'auto' }, { email: 'a@x.co' })).toBe(true);
+    expect(signedOutIsReliable({ kind: 'auto' }, {})).toBe(false);
+    expect(signedOutIsReliable({ kind: 'none' }, { email: 'a@x.co' })).toBe(false);
+  });
+});

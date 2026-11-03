@@ -95,6 +95,30 @@ struct SettingsPane: View {
                     }
                     Text(t("settings.optionKeyHint")).font(Theme.text(12)).foregroundStyle(Theme.ink3)
                 }
+                PaneCard(title: t("settings.terminal"), hint: t("settings.terminalHint")) {
+                    HStack {
+                        Text(t("settings.terminalApp")).font(Theme.text(13)).foregroundStyle(Theme.ink)
+                        Spacer()
+                        Picker(t("settings.terminalApp"), selection: binding(\.terminalApp)) {
+                            ForEach(terminals, id: \.self) { Text($0.displayName).tag($0) }
+                        }
+                        .labelsHidden()
+                        .frame(width: 200)
+                    }
+                }
+                PaneCard(title: t("settings.updates"), hint: t("settings.updatesHint")) {
+                    HStack(spacing: 10) {
+                        Button {
+                            Task { await model.checkForUpdates() }
+                        } label: {
+                            Label(t("settings.checkUpdates"), systemImage: "arrow.triangle.2.circlepath")
+                        }
+                        .buttonStyle(PaperButtonStyle(small: true))
+                        .disabled(model.updateCheck == .checking)
+                        updateStatus
+                        Spacer()
+                    }
+                }
                 PaneCard(title: t("settings.data"), hint: t("settings.dataHint")) {
                     HStack {
                         Text(model.store.fileURL.path(percentEncoded: false))
@@ -128,6 +152,29 @@ struct SettingsPane: View {
             .padding(.top, 34)
             .padding(.bottom, 28)
             .frame(maxWidth: 720, alignment: .leading)
+        }
+    }
+
+    private var terminals: [TerminalApp] {
+        let installed = model.installedTerminals
+        let chosen = model.data.settings.terminalApp
+        return installed.contains(chosen) ? installed : installed + [chosen]
+    }
+
+    @ViewBuilder private var updateStatus: some View {
+        switch model.updateCheck {
+        case .idle:
+            EmptyView()
+        case .checking:
+            ProgressView().controlSize(.small)
+        case .latest:
+            Text(t("settings.upToDate", ["version": AppInfo.version])).font(Theme.text(12)).foregroundStyle(Theme.success)
+        case .failed:
+            Text(t("settings.updateFailed")).font(Theme.text(12)).foregroundStyle(Theme.warning)
+        case .available(let version, let url):
+            Text(t("settings.updateAvailable", ["version": version])).font(Theme.text(12, .semibold)).foregroundStyle(Theme.ink)
+            Button(t("settings.download")) { NSWorkspace.shared.open(url) }
+                .buttonStyle(InkButtonStyle(small: true))
         }
     }
 

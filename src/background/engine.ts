@@ -232,6 +232,8 @@ export async function persist(
     if (!account) return;
     account.capturedAt = captured.snapshot.capturedAt;
     account.stats = sessionStats(captured.snapshot);
+    // A signed-in session saved into it: the account works again.
+    if (captured.identity?.confidence === 'strong') delete account.expiredAt;
     if (!hasIdentity(account) || sameIdentity(account, captured.identity)) applyIdentity(account, captured.identity);
   });
   return { accountId, created };
@@ -456,7 +458,9 @@ export function switchTo(request: SwitchRequest): Promise<SwitchOutcome> {
       savedAsNew: saved?.created ? saved.accountId : null,
       at: Date.now(),
     });
-    const destination = request.url ?? destinationFor(app, target, state.settings, request.kind, returnUrl);
+    // A page asked for (a recent project, a link) must be one of the app's own.
+    const asked = request.url && appForUrl([app], request.url) ? request.url : null;
+    const destination = asked ?? destinationFor(app, target, state.settings, request.kind, returnUrl);
     const opened = await chrome.tabs.update(workId, { url: destination, ...(request.focus ? { active: true } : {}) });
     if (request.focus && opened?.windowId !== undefined) {
       await chrome.windows.update(opened.windowId, { focused: true }).catch(() => undefined);

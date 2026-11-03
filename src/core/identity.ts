@@ -329,6 +329,19 @@ export function isSpecificDetector(spec: DetectorSpec): boolean {
   return spec.kind === 'localStorage' || spec.kind === 'cookie';
 }
 
+/**
+ * Whether finding nobody at all signed in means this account's session is gone
+ * (to warn about it, never to decide what to save): a specific detector, or the
+ * automatic one when it recognised the account before — it reads the same
+ * cookies and local storage every time.
+ */
+export function signedOutIsReliable(
+  spec: DetectorSpec,
+  account: Pick<Account, 'identityId' | 'email' | 'name'>,
+): boolean {
+  return isSpecificDetector(spec) || (spec.kind === 'auto' && hasIdentity(account));
+}
+
 /** Whether the saved account and the detected identity are the same person. */
 export function sameIdentity(
   account: Pick<Account, 'identityId' | 'email' | 'name'>,

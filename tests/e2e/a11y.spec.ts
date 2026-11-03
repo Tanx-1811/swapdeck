@@ -20,7 +20,7 @@ for (const theme of ['light', 'dark'] as const) {
     openExtensionPage,
   }) => {
     const seeder = await openExtensionPage('options/options.html');
-    await seedDemo(seeder, { theme, language: theme === 'dark' ? 'vi' : 'en', vaultNudge: true });
+    await seedDemo(seeder, { theme, language: theme === 'dark' ? 'vi' : 'en', vaultNudge: true, onboarding: true });
 
     const popup = await context.newPage();
     await popup.setViewportSize({ width: 380, height: 600 });

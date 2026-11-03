@@ -70,6 +70,15 @@ tests, demo data and screenshots (use `*.example`/`*.test` addresses). Contribut
   "Later" sets `settings.backupNudgeUntil`, and `exportBackup` records `lastBackupAt`. Demo data hides both unless
   `seedDemo(…, { vaultNudge: true, backupNudge: true })`.
 
+## Links and expired sessions (ARCHITECTURE §6)
+
+- `linkOwner` (`core/links.ts`) decides whose a page is; `trackPage` must not record another account's page for the
+  active one, and `routeLink` is the only place that acts on it (through `runGuarded`, with `url`). Link rules use the
+  same syntax as Swapdeck Desktop's `LinkRouter` — keep the two in step. `askLinkOnPage` follows the page-script rules
+  (self-contained, closed shadow root, trusted clicks only).
+- `Account.expiredAt` is informational: never let it decide what to save (`decideSave` trusts the active account when
+  the automatic detector finds nobody). Mark only through `signedOutIsReliable` and two observations.
+
 ## Sync of the list (`core/sync.ts`, `background/sync.ts`; read ARCHITECTURE §10 first)
 
 - Never put a snapshot, cookie, token, the vault or anything else that signs in into `chrome.storage.sync`; only the
@@ -92,6 +101,9 @@ tests, demo data and screenshots (use `*.example`/`*.test` addresses). Contribut
   `--render-previews <dir>` on the built binary to check the UI without a browser.
 - Only validated http(s) URLs and profile folder names reach the command line (`Launcher`, `Links`,
   `ProfileReader.isProfileDirectory`); AppleScript strings go through `BrowserScript.literal`. Keep it that way.
+- Terminal per workspace (`Terminal.swift`, `Keychain.swift`, `TerminalActions.swift`): variable values only ever go
+  to the Keychain (`SecretStore`), never to the data file, exports, the `.command` script or arguments; names go
+  through `TerminalEnv.isAllowedName` and values through `shellQuote`. `--env <workspace>` prints `export` lines.
 - UI text lives in `SwapdeckCore/L10n.swift` (en and vi must have the same keys — tested). Colors mirror the
   extension's tokens (`Theme.swift`); keep the pigment palette and symbol keys in step with `src/core/util.ts`.
 - The extension's backup format (`swapdeck-backup` v1, PBKDF2-SHA-256 + AES-256-GCM) is read by `BackupImport`; if it

@@ -78,6 +78,7 @@ export const ACCOUNT_SYNC_FIELDS = [
   'homeUrl',
   'important',
   'pins',
+  'linkRules',
   'order',
   'createdAt',
 ] as const;

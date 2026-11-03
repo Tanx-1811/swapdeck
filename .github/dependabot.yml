@@ -10,6 +10,13 @@ updates:
         dependency-type: development
       production:
         dependency-type: production
+    ignore:
+      # typescript-eslint supports TypeScript < 6.1 only; move to 7 once it does.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
+      # Kept in step with the Node version CI and contributors run (24).
+      - dependency-name: '@types/node'
+        update-types: [version-update:semver-major]
   - package-ecosystem: github-actions
     directory: /
     schedule:

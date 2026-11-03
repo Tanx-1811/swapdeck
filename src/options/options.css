@@ -560,6 +560,32 @@ body {
   margin: 4px 0 0;
 }
 
+.step__body .row {
+  margin-top: 2px;
+}
+
+.start-progress {
+  height: 6px;
+  margin: 0 0 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--bg-sunken);
+}
+
+.start-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--success);
+  transition: width 0.3s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .start-progress span {
+    transition: none;
+  }
+}
+
 .app-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
@@ -934,6 +960,10 @@ body {
 .account-card__meta {
   color: var(--text-3);
   font-size: 12.5px;
+}
+
+.account-card__meta--warning {
+  color: var(--warning);
 }
 
 .account-card__actions {
@@ -1897,6 +1927,13 @@ body {
 
 .relogin__text strong {
   font-weight: 600;
+}
+
+.relogin__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 
 .move-steps {

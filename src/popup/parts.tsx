@@ -8,6 +8,7 @@ import { send } from '../shared/protocol';
 import { hasAccess, onAccessChange, requestAccess } from '../ui/access';
 import { Avatar } from '../ui/Avatar';
 import { Callout, MenuButton, Spinner, type MenuItem } from '../ui/controls';
+import { ExpiredFlag } from '../ui/flags';
 import { errorText } from '../ui/hooks';
 import { useI18n } from '../ui/i18n';
 import { LogoMark } from '../ui/Logo';
@@ -123,7 +124,7 @@ export function AccountRow({
     ? t('account.saved', { time: relativeTime(account.capturedAt, language) })
     : t('account.noSession');
   const identity = account.email && account.email !== account.label ? account.email : null;
-  const meta = account.capturedAt && identity ? identity : saved;
+  const meta = account.expiredAt ? t('account.expiredMeta') : account.capturedAt && identity ? identity : saved;
 
   return (
     <div className={`account${active ? ' account--active' : ''}${busy ? ' account--busy' : ''}`} role="listitem">
@@ -146,6 +147,7 @@ export function AccountRow({
                 {t('account.importantTag')}
               </span>
             )}
+            <ExpiredFlag account={account} />
             {active && <span className="seal">{t('account.inUse')}</span>}
           </span>
           <span className="account__meta truncate">{appName ? `${appName} · ${meta}` : meta}</span>

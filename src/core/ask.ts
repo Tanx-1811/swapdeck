@@ -75,7 +75,7 @@ export function askText(t: Translate, input: AskInput): AskText | null {
 
 /** A switch asked for outside the popup and the manager: keyboard shortcut, address bar or menu. */
 export type GuardedPlan =
-  | { kind: 'account'; appId: string; accountId: string; tabId?: number; focus?: boolean }
+  | { kind: 'account'; appId: string; accountId: string; tabId?: number; focus?: boolean; url?: string }
   | { kind: 'fresh'; appId: string; tabId?: number }
   | { kind: 'workspace'; workspaceId: string; tabId?: number };
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Account } from '../core/types';
 import { parseHttpUrl } from '../core/domains';
+import { MAX_LINK_RULES, normalizeLinkRule } from '../core/links';
 import type { AccountPatch } from '../shared/protocol';
 import { Avatar } from './Avatar';
 import { ColorPicker } from './ColorPicker';
@@ -8,7 +9,7 @@ import { Dialog, Field, ToggleRow } from './controls';
 import { IconPicker } from './IconPicker';
 import { useI18n } from './i18n';
 
-/** Edits an account's name, icon, color, note and fixed start page. */
+/** Edits an account's name, icon, color, note, fixed start page and the links that open with it. */
 export function AccountEditor({
   account,
   open,
@@ -29,11 +30,23 @@ export function AccountEditor({
   const [note, setNote] = useState(account.note ?? '');
   const [homeUrl, setHomeUrl] = useState(account.homeUrl ?? '');
   const [important, setImportant] = useState(Boolean(account.important));
+  const [rules, setRules] = useState((account.linkRules ?? []).join('\n'));
   const homeError = homeUrl.trim() && !parseHttpUrl(homeUrl.trim()) ? t('form.invalidUrl') : null;
+  const ruleLines = rules
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const badRule = ruleLines.findIndex((line) => !normalizeLinkRule(line));
+  const rulesError =
+    badRule !== -1
+      ? t('account.linkRulesInvalid', { line: ruleLines[badRule]! })
+      : ruleLines.length > MAX_LINK_RULES
+        ? t('account.linkRulesTooMany', { n: MAX_LINK_RULES })
+        : null;
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!label.trim() || homeError) return;
+    if (!label.trim() || homeError || rulesError) return;
     const clear: NonNullable<AccountPatch['clear']> = [];
     const patch: AccountPatch = { label: label.trim(), color };
     if (icon) patch.icon = icon;
@@ -48,6 +61,8 @@ export function AccountEditor({
       if (important) patch.important = true;
       else clear.push('important');
     }
+    const linkRules = [...new Set(ruleLines.map((line) => normalizeLinkRule(line)!))];
+    if (linkRules.join('\n') !== (account.linkRules ?? []).join('\n')) patch.linkRules = linkRules;
     onSave({ ...patch, clear });
   };
 
@@ -105,6 +120,24 @@ export function AccountEditor({
             onChange={(event) => setHomeUrl(event.target.value)}
           />
         </Field>
+        <Field
+          label={t('account.linkRules')}
+          hint={t('account.linkRulesHint')}
+          error={rulesError}
+          htmlFor="account-links"
+        >
+          <textarea
+            id="account-links"
+            className="textarea textarea--mono"
+            value={rules}
+            rows={2}
+            spellCheck={false}
+            autoCapitalize="off"
+            placeholder={t('account.linkRulesPlaceholder')}
+            aria-invalid={Boolean(rulesError)}
+            onChange={(event) => setRules(event.target.value)}
+          />
+        </Field>
         <div className="editor__important">
           <ToggleRow
             title={t('account.important')}
@@ -117,7 +150,11 @@ export function AccountEditor({
           <button type="button" className="btn" onClick={onClose}>
             {t('common.cancel')}
           </button>
-          <button type="submit" className="btn btn--primary" disabled={busy || !label.trim() || Boolean(homeError)}>
+          <button
+            type="submit"
+            className="btn btn--primary"
+            disabled={busy || !label.trim() || Boolean(homeError) || Boolean(rulesError)}
+          >
             {t('common.save')}
           </button>
         </div>

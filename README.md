@@ -59,6 +59,14 @@ Không cần đăng xuất, không gõ lại mật khẩu, không cần thêm h�
 - **Không mất nội dung đang gõ:** trước khi đổi tài khoản làm tải lại các tab, Swapdeck xem có biểu mẫu đã sửa, chữ đang
   gõ dở hay trang đang cảnh báo khi rời không, và hỏi trước. Đổi bằng phím tắt, thanh địa chỉ hay menu cũng được hỏi
   ngay trên trang.
+- **Mở link đúng tài khoản:** mở một trang thuộc tài khoản khác (vd. link dự án Supabase gửi qua Slack) khi đang dùng
+  tài khoản khác, Swapdeck đề nghị chuyển ngay trên trang rồi mở lại đúng trang đó — dựa vào dự án gần đây, trang đã ghim
+  và **link bạn đặt cho tài khoản** ("supabase.com/dashboard/project/…", "acme.example"). Có thể cho tự chuyển luôn. Chuột
+  phải vào link → **Mở link bằng tài khoản…**
+- **Báo phiên hết hạn:** khi trang không còn ai đăng nhập trong lúc một tài khoản đang dùng, tài khoản đó có nhãn **Hết
+  phiên** và nằm trong mục **Đăng nhập lại**; đăng nhập lại là Swapdeck lưu phiên mới ngay.
+- **Bắt đầu với Swapdeck:** danh sách việc cho người mới, tự đánh dấu khi xong; nút **Kiểm tra bản mới** ở trang Hướng dẫn
+  (chỉ khi bạn bấm).
 - **Sao lưu & chuyển máy:** xuất/nhập tệp sao lưu, kèm phiên đăng nhập (được mã hóa bằng mật khẩu bạn chọn). Swapdeck
   **nhắc sao lưu** (lần đầu sau vài ngày, rồi mỗi tháng) và **Sao lưu ngay** chỉ một nút; trang Sao lưu hướng dẫn
   chuyển sang máy mới, và mục **Đăng nhập lại trên máy này** liệt kê các tài khoản chưa có phiên ở máy này, mỗi tài khoản
@@ -75,7 +83,8 @@ Không cần đăng xuất, không gõ lại mật khẩu, không cần thêm h�
 
 Muốn tách hẳn từng bên? [**Swapdeck Desktop**](desktop/README.md) là app trên thanh menu macOS: mỗi bên là một hồ sơ
 Chrome riêng, một cú nhấp (hoặc <kbd>⌃⌥B</kbd>) đưa cửa sổ của bên lên trước; đặt làm trình duyệt mặc định thì link
-từ Slack, Mail… tự mở đúng bên. Không chép phiên đăng nhập nào, mở được nhiều bên cạnh nhau, đăng nhập Google vẫn chạy. Tiện ích này vẫn hữu ích bên trong từng hồ sơ khi một bên có nhiều tài
+từ Slack, Mail… tự mở đúng bên; mỗi bên còn có **Terminal riêng** nạp sẵn token CLI (Supabase, Vercel, GitHub…) cất
+trong Keychain. Không chép phiên đăng nhập nào, mở được nhiều bên cạnh nhau, đăng nhập Google vẫn chạy. Tiện ích này vẫn hữu ích bên trong từng hồ sơ khi một bên có nhiều tài
 khoản trên cùng một dịch vụ.
 
 ### Cài đặt
@@ -198,6 +207,14 @@ click. No signing out, no retyping passwords, no extra Chrome profiles.
   app while that account is in use, and a confirmation before switching to it.
 - **Unsaved work is safe:** before a switch reloads an app's tabs, Swapdeck looks for edited forms, text being typed and
   pages that warn before you leave, and asks first. Shortcut, address-bar and menu switches ask right on the page.
+- **Links open with the right account:** open a page that belongs to another account (say, a Supabase project link from
+  Slack) while another one is in use, and Swapdeck offers to switch right on the page, then reopens that page — it knows
+  from recent projects, pinned pages and **links you give an account** ("supabase.com/dashboard/project/…",
+  "acme.example"). It can switch by itself, too. Right-click a link → **Open link as…**
+- **Expired sessions:** when a site shows nobody signed in while one of your accounts is in use, the account gets an
+  **Expired** label and a place under **Sign in again**; signing in saves the new session at once.
+- **Get started with Swapdeck:** a checklist for new users that ticks itself off; **Check for updates** on the Help
+  page (only when you press it).
 - **Backup & move:** export/import a backup file, with sessions encrypted by a password you choose. Swapdeck **reminds
   you to back up** (after a few days, then monthly) and **Back up now** takes one click; the Backup page walks you
   through moving to a new computer, and **Sign in again on this computer** lists the accounts with no sign-in saved
@@ -214,7 +231,8 @@ click. No signing out, no retyping passwords, no extra Chrome profiles.
 
 Want each workspace fully apart? [**Swapdeck Desktop**](desktop/README.md) is a macOS menu bar app that keeps each
 workspace in its own Chrome profile and brings its window forward in one click (or <kbd>⌃⌥B</kbd>); as the default
-browser it sends links from Slack, Mail and other apps to the workspace they belong to. No sign-in is ever copied,
+browser it sends links from Slack, Mail and other apps to the workspace they belong to, and each workspace gets **its
+own terminal** with its command-line tokens (Supabase, Vercel, GitHub…) kept in the Keychain. No sign-in is ever copied,
 workspaces can sit side by side, and "Sign in with Google" keeps working. This extension stays useful inside a
 profile when one workspace has several accounts on the same service.
 

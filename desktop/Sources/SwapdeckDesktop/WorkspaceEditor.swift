@@ -1,8 +1,8 @@
 import SwapdeckCore
 import SwiftUI
 
-/// Edits one workspace: name and look, its browser profile, its pages.
-/// Changes save as you go.
+/// Edits one workspace: name and look, its browser profile, its pages, the
+/// links that open in it and its terminal. Changes save as you go.
 struct WorkspaceEditor: View {
     @Bindable var model: AppModel
     let id: String
@@ -10,6 +10,8 @@ struct WorkspaceEditor: View {
     @State private var confirmDelete = false
     @State private var newRule = ""
     @State private var ruleInvalid = false
+    @State private var newVariable = ""
+    @State private var variableInvalid = false
 
     private var t: Translator { model.t }
 
@@ -28,6 +30,7 @@ struct WorkspaceEditor: View {
                 profileCard
                 pagesCard
                 linksCard
+                terminalCard
                 HStack {
                     Spacer()
                     Button(role: .destructive) {
@@ -346,6 +349,180 @@ struct WorkspaceEditor: View {
         }
         if !workspace.wrappedValue.linkRules.contains(rule) { workspace.wrappedValue.linkRules.append(rule) }
         newRule = ""
+    }
+
+    // MARK: Terminal
+
+    private var terminalCard: some View {
+        let current = workspace.wrappedValue
+        let missing = CLIPresets.all.filter { preset in !current.cliVariables.contains { $0.name == preset.variable } }
+        return PaneCard(title: t("terminal.section"), hint: t("terminal.hint")) {
+            VStack(alignment: .leading, spacing: 6) {
+                FieldLabel(text: t("terminal.folder"))
+                HStack(spacing: 8) {
+                    Text(current.terminalFolder.isEmpty ? t("terminal.homeFolder") : current.terminalFolder)
+                        .font(Theme.mono(11.5))
+                        .foregroundStyle(current.terminalFolder.isEmpty ? Theme.ink3 : Theme.ink)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 8)
+                    Button(t("terminal.chooseFolder")) { chooseFolder() }
+                        .buttonStyle(PaperButtonStyle(small: true))
+                    if !current.terminalFolder.isEmpty {
+                        Button {
+                            workspace.wrappedValue.terminalFolder = ""
+                        } label: {
+                            Image(systemName: "xmark")
+                        }
+                        .buttonStyle(GhostButtonStyle())
+                        .help(t("terminal.clearFolder"))
+                        .accessibilityLabel(t("terminal.clearFolder"))
+                    }
+                }
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                FieldLabel(text: t("terminal.variables"))
+                ForEach(current.cliVariables) { variable in
+                    VariableRow(model: model, workspaceId: current.id, variable: variable)
+                }
+                HStack(spacing: 8) {
+                    Menu {
+                        ForEach(missing) { preset in
+                            Button("\(preset.tool) — \(preset.variable)") {
+                                model.addVariable(CLIVariable(name: preset.variable, secret: preset.secret), to: current)
+                            }
+                        }
+                    } label: {
+                        Label(t("terminal.addTool"), systemImage: "plus")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .disabled(missing.isEmpty)
+                    PaperField(placeholder: t("terminal.customPlaceholder"), text: $newVariable, invalid: variableInvalid, monospaced: true) {
+                        addVariable()
+                    }
+                    .onChange(of: newVariable) { variableInvalid = false }
+                    Button(t("terminal.add")) { addVariable() }
+                        .buttonStyle(PaperButtonStyle(small: true))
+                        .disabled(newVariable.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                if variableInvalid {
+                    Text(t("terminal.invalidName")).font(Theme.text(11)).foregroundStyle(Theme.danger)
+                }
+            }
+            HStack(spacing: 8) {
+                Button {
+                    model.openTerminal(current)
+                } label: {
+                    Label(t("terminal.open", ["app": model.data.settings.terminalApp.displayName]), systemImage: "terminal")
+                }
+                .buttonStyle(InkButtonStyle(small: true))
+                Button {
+                    model.copyTerminalCommand(current)
+                } label: {
+                    Label(t("terminal.copy"), systemImage: "doc.on.doc")
+                }
+                .buttonStyle(PaperButtonStyle(small: true))
+                Spacer()
+            }
+            Text(t("terminal.keychainNote"))
+                .font(Theme.text(11.5))
+                .foregroundStyle(Theme.ink3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func addVariable() {
+        let name = newVariable.trimmingCharacters(in: .whitespaces)
+        let preset = CLIPresets.preset(for: name)
+        guard model.addVariable(CLIVariable(name: name, secret: preset?.secret ?? true), to: workspace.wrappedValue) else {
+            variableInvalid = true
+            return
+        }
+        newVariable = ""
+    }
+
+    private func chooseFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = t("terminal.chooseFolder")
+        let current = workspace.wrappedValue.terminalFolder
+        panel.directoryURL = URL(fileURLWithPath: current.isEmpty ? NSHomeDirectory() : current, isDirectory: true)
+        guard panel.runModal() == .OK, let url = panel.url,
+              let folder = TerminalEnv.normalizedFolder(url.path(percentEncoded: false))
+        else { return }
+        workspace.wrappedValue.terminalFolder = folder
+    }
+}
+
+/// One terminal variable: its value (from and to the Keychain, saved a moment
+/// after typing stops) and a button to remove it.
+private struct VariableRow: View {
+    @Bindable var model: AppModel
+    let workspaceId: String
+    let variable: CLIVariable
+    @State private var value = ""
+    @State private var loaded = false
+    @State private var dirty = false
+    @State private var saving: Task<Void, Never>?
+
+    private var t: Translator { model.t }
+    private var workspace: Workspace? { model.workspace(workspaceId) }
+
+    var body: some View {
+        let preset = CLIPresets.preset(for: variable.name)
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(variable.name).font(Theme.mono(11.5)).foregroundStyle(Theme.ink).lineLimit(1)
+                if let preset {
+                    Text(preset.tool).font(Theme.text(10.5)).foregroundStyle(Theme.ink3).lineLimit(1)
+                }
+            }
+            .frame(width: 220, alignment: .leading)
+            PaperField(
+                placeholder: preset.map { t(variable.secret ? "terminal.pasteFrom" : "terminal.valueOf", ["source": $0.source]) }
+                    ?? t("terminal.value"),
+                text: $value,
+                secure: variable.secret,
+                monospaced: !variable.secret
+            ) { save() }
+            .onChange(of: value) {
+                guard loaded else { return }
+                dirty = true
+                saving?.cancel()
+                saving = Task {
+                    try? await Task.sleep(for: .milliseconds(700))
+                    if !Task.isCancelled { save() }
+                }
+            }
+            Button {
+                saving?.cancel()
+                dirty = false
+                if let workspace { model.removeVariable(variable.name, from: workspace) }
+            } label: {
+                Image(systemName: "xmark")
+            }
+            .buttonStyle(GhostButtonStyle())
+            .help(t("terminal.remove", ["name": variable.name]))
+            .accessibilityLabel(t("terminal.remove", ["name": variable.name]))
+        }
+        .onAppear {
+            guard !loaded, let workspace else { return }
+            value = model.secretValue(variable.name, in: workspace)
+            loaded = true
+        }
+        .onDisappear {
+            saving?.cancel()
+            save()
+        }
+    }
+
+    private func save() {
+        guard dirty, let workspace else { return }
+        dirty = false
+        model.setSecret(value, name: variable.name, in: workspace)
     }
 }
 

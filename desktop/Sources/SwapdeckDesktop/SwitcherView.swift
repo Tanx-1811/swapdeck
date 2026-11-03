@@ -283,6 +283,7 @@ struct WorkspaceCard: View {
             }
         }
         Divider()
+        Button(t("terminal.openShort")) { run { model.openTerminal(workspace) } }
         Button(t("switcher.edit")) { model.onShowManager?(.workspace(workspace.id)) }
     }
 

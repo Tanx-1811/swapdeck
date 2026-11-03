@@ -5,7 +5,7 @@ import { addAcme, readExtensionStorage, signIn, signOutByHand, storedAccounts } 
 test.describe('manager', () => {
   test('welcomes new users and adds Supabase from the gallery', async ({ openExtensionPage, context }) => {
     const page = await openExtensionPage('options/options.html?welcome=1');
-    await expect(page.getByRole('heading', { name: 'Get started in three steps' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Get started with Swapdeck' })).toBeVisible();
     await page.getByRole('link', { name: 'Add an app' }).click();
     await page.getByRole('searchbox', { name: 'Search apps' }).fill('supa');
     await page.getByRole('button', { name: /^Supabase/ }).click();

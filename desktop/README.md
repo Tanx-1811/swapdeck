@@ -22,7 +22,7 @@ mới kèm các trang của bên.
 
 ## Cài đặt
 
-1. Lấy `release/swapdeck-desktop-1.2.0.zip` (hoặc tự build, xem dưới), giải nén, kéo **Swapdeck Desktop.app** vào thư
+1. Lấy `release/swapdeck-desktop-1.3.0.zip` (hoặc tự build, xem dưới), giải nén, kéo **Swapdeck Desktop.app** vào thư
    mục Ứng dụng.
 2. Mở app. App chưa ký bằng Apple Developer ID, nên lần đầu macOS có thể chặn: chuột phải vào app → **Mở** → **Mở**.
 3. Biểu tượng bộ thẻ xuất hiện trên thanh menu.
@@ -76,13 +76,32 @@ khách), cài tiện ích Swapdeck trong hồ sơ của bên đó và bật kho�
 
 Trình duyệt hỗ trợ: Google Chrome (cả Beta, Dev, Canary), Brave, Microsoft Edge.
 
+## Terminal theo bên
+
+<img src="screenshots/terminal-vi-light.png" alt="Thẻ Terminal & dòng lệnh của một bên" width="420" align="right">
+
+Mỗi bên có thể có **Terminal riêng**: các công cụ dòng lệnh dùng đúng tài khoản của bên đó.
+
+- Trong trang sửa bên, mục _Terminal & dòng lệnh_: **Thêm công cụ** (Supabase CLI, Vercel CLI, GitHub CLI, Netlify,
+  Cloudflare Wrangler, Fly.io, Railway, Heroku, DigitalOcean; hồ sơ AWS và Google Cloud) hoặc một biến bất kỳ, rồi dán
+  token. Chọn thêm thư mục làm việc nếu muốn.
+- **Mở trong Terminal** (hoặc iTerm, chọn trong Cài đặt) mở một cửa sổ mang tên bên, đã nạp sẵn các biến, ở đúng thư mục.
+  Cũng có trong menu của bên ở thanh menu.
+- **Chép lệnh** cho một dòng `eval "$('/Applications/Swapdeck Desktop.app/Contents/MacOS/Swapdeck Desktop' --env ws_…)"`
+  để nạp token của bên vào bất kỳ Terminal nào (VS Code, Warp…). Lệnh `--env` nhận cả tên bên.
+- Token nằm trong **Keychain** của máy Mac: không bao giờ nằm trong tệp dữ liệu, tệp xuất, tệp lệnh trên ổ đĩa hay lịch sử
+  lệnh (tệp mà Terminal chạy không chứa token và tự xoá). Lần đầu sau khi cập nhật app, macOS có thể hỏi cho phép Swapdeck
+  Desktop đọc Keychain: chọn _Luôn cho phép_. Sang máy Mac khác, tên các biến đi theo tệp xuất, còn token thì nhập lại.
+
 ## Quyền riêng tư
 
-- Chạy hoàn toàn ngoại tuyến, không gửi gì đi đâu.
+- Chạy ngoại tuyến, không gửi gì đi đâu — trừ khi bạn bấm _Cài đặt → Kiểm tra bản mới_: một yêu cầu tới API công khai của
+  GitHub hỏi bản mới nhất, không mang gì của bạn.
 - Đọc danh sách hồ sơ từ tệp `Local State` của trình duyệt (tên hồ sơ, email Google đăng nhập trong Chrome, màu).
 - Lưu tên, màu, biểu tượng, thư mục hồ sơ (kèm tên và email Google của hồ sơ, để tìm lại khi chuyển máy) và địa chỉ các
-  trang của bên tại `~/Library/Application Support/Swapdeck Desktop/workspaces.json` — không có mật khẩu, không có phiên
-  đăng nhập. Tệp _Xuất các bên…_ chứa đúng những thứ đó.
+  trang của bên, tên các biến Terminal và thư mục của bên tại
+  `~/Library/Application Support/Swapdeck Desktop/workspaces.json` — không có mật khẩu, phiên đăng nhập hay token. Tệp
+  _Xuất các bên…_ chứa đúng những thứ đó. Token Terminal nằm trong Keychain (dịch vụ "Swapdeck Desktop CLI").
 - Quyền _Tự động hoá_ chỉ dùng để liệt kê, đặt tên và đưa cửa sổ trình duyệt lên trước.
 - Khi là trình duyệt mặc định, Swapdeck nhận địa chỉ các link bạn mở từ ứng dụng khác chỉ để chuyển chúng tới đúng bên;
   không lưu lại, trừ tên miền bạn chọn _Luôn mở … trong bên này_.
@@ -94,7 +113,7 @@ Cần Xcode 16 trở lên (Swift 6) trên macOS 14 trở lên.
 ```sh
 cd desktop
 swift test                    # kiểm thử phần lõi
-./scripts/build-app.sh        # build/Swapdeck Desktop.app + release/swapdeck-desktop-1.2.0.zip
+./scripts/build-app.sh        # build/Swapdeck Desktop.app + release/swapdeck-desktop-1.3.0.zip
 ```
 
 - `"build/Swapdeck Desktop.app/Contents/MacOS/Swapdeck Desktop" --render-previews <thư mục>` vẽ các màn hình bằng dữ
@@ -119,7 +138,7 @@ a new window with the workspace's pages.
 the Keychain; Swapdeck Desktop never reads, stores or moves a sign-in. Workspaces can sit side by side in named windows,
 "Sign in with Google" keeps working, and extensions, password managers and DevTools stay as they are.
 
-**Install:** unzip `release/swapdeck-desktop-1.2.0.zip`, move **Swapdeck Desktop.app** to Applications and open it (the
+**Install:** unzip `release/swapdeck-desktop-1.3.0.zip`, move **Swapdeck Desktop.app** to Applications and open it (the
 app isn't signed with a Developer ID yet: right-click → Open the first time).
 
 **First steps:** create workspaces from your browser profiles (or create one and pick or create a profile), sign in to
@@ -140,10 +159,22 @@ Slack, Mail and other apps open in the workspace they belong to — by the works
 workspace in use, or open normally); hold ⌥ Option while clicking to always choose. Profiles Swapdeck creates for a
 workspace get its name and color from the start.
 
-**Privacy:** offline. Reads the browser's `Local State` for profile names, the Google account signed in to Chrome and
-colors; stores names, colors, symbols, profile folders (with the profile's name and Google account, to find it again
-on another Mac) and page addresses in `~/Library/Application Support/Swapdeck Desktop/workspaces.json`, which is also
-what _Export workspaces…_ writes. Automation is only used to list, name and raise
+**A terminal per workspace:** in a workspace's editor, _Terminal & command line_ → **Add a tool** (Supabase CLI,
+Vercel CLI, GitHub CLI, Netlify, Cloudflare Wrangler, Fly.io, Railway, Heroku, DigitalOcean; AWS and Google Cloud
+profiles) or any variable, and paste its token; pick a folder if you like. **Open in Terminal** (or iTerm — Settings)
+opens a window named after the workspace with those variables, in that folder (also in the workspace's menu). **Copy
+command** gives `eval "$('/Applications/Swapdeck Desktop.app/Contents/MacOS/Swapdeck Desktop' --env ws_…)"` to load
+them into any terminal (VS Code, Warp…); `--env` takes the workspace's name too. Tokens stay in the **Keychain** — never
+in the data file, an exported file, a script on disk or the shell history (the script Terminal runs holds no token and
+removes itself). After an update macOS may ask to let Swapdeck Desktop use the Keychain: choose _Always Allow_. On
+another Mac the variable names come along with the export; enter the tokens again.
+
+**Privacy:** offline, except when you press _Settings → Check for updates_ (one request to GitHub's public API asking
+for the latest version; nothing of yours is sent). Reads the browser's `Local State` for profile names, the Google
+account signed in to Chrome and colors; stores names, colors, symbols, profile folders (with the profile's name and
+Google account, to find it again on another Mac), page addresses, the names of terminal variables and folders in
+`~/Library/Application Support/Swapdeck Desktop/workspaces.json`, which is also what _Export workspaces…_ writes;
+terminal tokens are in the Keychain (service "Swapdeck Desktop CLI"). Automation is only used to list, name and raise
 browser windows. As the default browser it sees the addresses of links you open from other apps only to route them,
 and keeps none of them except the sites you choose to always open in a workspace.
 

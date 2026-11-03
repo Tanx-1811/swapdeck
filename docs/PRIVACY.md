@@ -1,6 +1,6 @@
 # Swapdeck Privacy Policy
 
-_Last updated: 21 October 2026 · Applies to Swapdeck 1.0.0 and later (workspaces, side panel: 1.1.0; important accounts: 1.3.0; unsaved-work check: 1.4.0; optional sync of the list: 1.5.0)_ · [Tiếng Việt](#chính-sách-quyền-riêng-tư-swapdeck)
+_Last updated: 22 October 2026 · Applies to Swapdeck 1.0.0 and later (workspaces, side panel: 1.1.0; important accounts: 1.3.0; unsaved-work check: 1.4.0; optional sync of the list: 1.5.0; links of another account, check for updates: 1.6.0)_ · [Tiếng Việt](#chính-sách-quyền-riêng-tư-swapdeck)
 
 Swapdeck is a Chrome extension for switching between several accounts on the same website. It works entirely inside
 your browser.
@@ -19,21 +19,21 @@ your browser.
 
 ## What is stored on your device
 
-| Data                                                                                                                 | Purpose                                          | When                                                                    |
-| -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------- |
-| Apps you added (name, colour, domains, addresses, settings)                                                          | Know which sites to manage                       | When you add or edit an app                                             |
-| Accounts (name you give, colour, icon, note, the email/name/user id the site shows, picture address, start page)     | Show and recognise your accounts                 | When an account is saved; edit or delete it any time                    |
-| **Saved sessions**: the site's cookies and its stored data (local storage; session storage and IndexedDB if enabled) | Restore the account when you switch to it        | When you save, switch away from an account, or while you use it (fresh) |
-| The session each saved one replaced                                                                                  | Undo a save ("restore the session saved before") | Replaced at the next save                                               |
-| The last page, recent items (e.g. Supabase project names) and pinned pages per account                               | Open each account where you need it              | While you use an account on an added site; clear them any time          |
-| History of the last 200 switches and saves (time, app, account names, result)                                        | Show what happened                               | On each switch or save; clear it in History                             |
-| **Workspaces** (name, colour, icon, note, which saved account each app uses, the pages you listed)                   | Switch every app to a client's accounts at once  | When you create or edit a workspace; delete it any time                 |
-| Settings, and when you last made a backup                                                                            | Remember your preferences; remind you to back up | When you change them or export a backup                                 |
-| For sync of the list: an id for this installation, what was last synced, the ids of things you removed (180 days)    | Sync without copying or losing things            | While sync is on; removals are noted even while it is off               |
+| Data                                                                                                                                                                          | Purpose                                          | When                                                                    |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------- |
+| Apps you added (name, colour, domains, addresses, settings)                                                                                                                   | Know which sites to manage                       | When you add or edit an app                                             |
+| Accounts (name you give, colour, icon, note, the email/name/user id the site shows, picture address, start page, links that open with it, when its session was found expired) | Show and recognise your accounts                 | When an account is saved; edit or delete it any time                    |
+| **Saved sessions**: the site's cookies and its stored data (local storage; session storage and IndexedDB if enabled)                                                          | Restore the account when you switch to it        | When you save, switch away from an account, or while you use it (fresh) |
+| The session each saved one replaced                                                                                                                                           | Undo a save ("restore the session saved before") | Replaced at the next save                                               |
+| The last page, recent items (e.g. Supabase project names) and pinned pages per account                                                                                        | Open each account where you need it              | While you use an account on an added site; clear them any time          |
+| History of the last 200 switches and saves (time, app, account names, result)                                                                                                 | Show what happened                               | On each switch or save; clear it in History                             |
+| **Workspaces** (name, colour, icon, note, which saved account each app uses, the pages you listed)                                                                            | Switch every app to a client's accounts at once  | When you create or edit a workspace; delete it any time                 |
+| Settings, and when you last made a backup                                                                                                                                     | Remember your preferences; remind you to back up | When you change them or export a backup                                 |
+| For sync of the list: an id for this installation, what was last synced, the ids of things you removed (180 days)                                                             | Sync without copying or losing things            | While sync is on; removals are noted even while it is off               |
 
 While Chrome is open, the extension also keeps in memory (`chrome.storage.session`, erased when Chrome closes) who was
-last seen signed in on each app, the progress of a workspace switch while it runs and, while unlocked, the key that
-decrypts saved sessions.
+last seen signed in on each app, the progress of a workspace switch while it runs, the links you said "not now" to and,
+while unlocked, the key that decrypts saved sessions.
 
 **Saved sessions are sensitive:** anyone who can use your Chrome profile could sign in with them. Turn on the
 **passphrase lock** (Security) to encrypt them (RSA-OAEP and AES-256-GCM, with a key derived from your passphrase by
@@ -57,12 +57,18 @@ Everything is removed when you uninstall the extension, or with **Security → D
   a background tab that closes right after. "Open workspace" opens the pages you listed for that workspace.
 - Workspace suggestions are made on your computer from the email addresses of your saved accounts; nothing is looked up
   online.
+- **Links of another account:** when a page of an added site belongs to another saved account (by the links you gave
+  it, its recent items or pinned pages — compared on your computer), Swapdeck shows a small card on that page offering
+  to switch; only a real click answers it. It can also switch right away, or do nothing (Settings).
+- **Expired sessions:** when an added site shows nobody signed in while one of your accounts is in use, Swapdeck marks
+  that account "expired" on your computer, so you know to sign in again.
 
 ## Network requests
 
 Swapdeck has no server and sends no data anywhere (sync of the list, when you turn it on, goes through Chrome's own sync,
 above). Apart from the site pages a switch opens, the only requests its own pages make are for **account pictures** at the address the site itself provides (for example your GitHub avatar),
-sent without a referrer.
+sent without a referrer, and — **only when you press Help → Check for updates** — one request to GitHub's public API
+(`api.github.com`) asking which version is the latest; it carries nothing of yours (no cookies, no referrer).
 
 ## Sync of the list (optional)
 
@@ -73,7 +79,7 @@ nothing.
 
 - **What travels:** the apps you added (for a built-in site, just its name; for your own sites, the addresses and
   settings), accounts (the name, colour, icon and note you gave, the email/name/user id the site shows, start page,
-  pinned pages, the "important" flag) and workspaces (name, colour, icon, note, members, pages).
+  pinned pages, links that open with it, the "important" flag) and workspaces (name, colour, icon, note, members, pages).
 - **What never travels:** saved sessions — cookies, local and session storage, IndexedDB, tokens — and anything else
   that signs you in, the passphrase lock, history, recent items, last pages, statistics and settings. On another
   computer you sign in to each account once; Swapdeck files the sign-in under the right account.
@@ -107,7 +113,7 @@ Changes to this policy are listed here with a new date. Swapdeck is open source 
 
 # Chính sách quyền riêng tư Swapdeck
 
-_Cập nhật: 21/10/2026 · Áp dụng cho Swapdeck 1.0.0 trở lên (các bên, bảng bên: 1.1.0; tài khoản quan trọng: 1.3.0; kiểm tra nội dung chưa lưu: 1.4.0; đồng bộ danh sách tùy chọn: 1.5.0)_
+_Cập nhật: 22/10/2026 · Áp dụng cho Swapdeck 1.0.0 trở lên (các bên, bảng bên: 1.1.0; tài khoản quan trọng: 1.3.0; kiểm tra nội dung chưa lưu: 1.4.0; đồng bộ danh sách tùy chọn: 1.5.0; link của tài khoản khác, kiểm tra bản mới: 1.6.0)_
 
 Swapdeck là tiện ích Chrome giúp chuyển giữa nhiều tài khoản trên cùng một trang web. Tiện ích hoạt động hoàn toàn
 trong trình duyệt của bạn.
@@ -126,20 +132,21 @@ trong trình duyệt của bạn.
 
 ## Dữ liệu lưu trên máy bạn
 
-| Dữ liệu                                                                                                              | Mục đích                                             | Khi nào                                                          |
-| -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------- |
-| Ứng dụng bạn thêm (tên, màu, tên miền, địa chỉ, cài đặt)                                                             | Biết cần quản lý trang nào                           | Khi bạn thêm hoặc sửa ứng dụng                                   |
-| Tài khoản (tên bạn đặt, màu, biểu tượng, ghi chú, email/tên/mã người dùng trang hiển thị, địa chỉ ảnh, trang mở đầu) | Hiển thị và nhận ra tài khoản                        | Khi lưu tài khoản; sửa hoặc xóa bất cứ lúc nào                   |
-| **Phiên đã lưu**: cookie và dữ liệu lưu trữ của trang (localStorage; sessionStorage và IndexedDB nếu bật)            | Khôi phục tài khoản khi bạn chuyển sang              | Khi lưu, khi chuyển khỏi tài khoản, hoặc khi đang dùng (làm mới) |
-| Phiên mà bản lưu hiện tại đã thay thế                                                                                | Hoàn tác một lần lưu                                 | Bị thay ở lần lưu sau                                            |
-| Trang cuối, mục gần đây (vd. tên dự án Supabase) và trang đã ghim của từng tài khoản                                 | Mở mỗi tài khoản đúng chỗ bạn cần                    | Khi bạn dùng tài khoản trên trang đã thêm; xóa bất cứ lúc nào    |
-| Lịch sử 200 lần chuyển và lưu gần nhất (thời gian, ứng dụng, tên tài khoản, kết quả)                                 | Cho biết điều gì đã xảy ra                           | Mỗi lần chuyển hoặc lưu; xóa trong mục Lịch sử                   |
-| **Các bên** (tên, màu, biểu tượng, ghi chú, tài khoản đã lưu mà mỗi ứng dụng dùng, các trang bạn liệt kê)            | Đổi mọi ứng dụng sang tài khoản của một bên cùng lúc | Khi bạn tạo hoặc sửa một bên; xóa bất cứ lúc nào                 |
-| Cài đặt, và lần sao lưu gần nhất                                                                                     | Ghi nhớ lựa chọn; nhắc bạn sao lưu                   | Khi bạn thay đổi hoặc xuất bản sao lưu                           |
-| Cho đồng bộ danh sách: mã của bản cài này, những gì đã đồng bộ lần cuối, mã của những thứ bạn đã xóa (180 ngày)      | Đồng bộ mà không chép trùng hay làm mất              | Khi bật đồng bộ; việc xóa vẫn được ghi lại khi đang tắt          |
+| Dữ liệu                                                                                                                                                                      | Mục đích                                             | Khi nào                                                          |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------- |
+| Ứng dụng bạn thêm (tên, màu, tên miền, địa chỉ, cài đặt)                                                                                                                     | Biết cần quản lý trang nào                           | Khi bạn thêm hoặc sửa ứng dụng                                   |
+| Tài khoản (tên bạn đặt, màu, biểu tượng, ghi chú, email/tên/mã người dùng trang hiển thị, địa chỉ ảnh, trang mở đầu, link mở bằng tài khoản đó, lúc phát hiện phiên hết hạn) | Hiển thị và nhận ra tài khoản                        | Khi lưu tài khoản; sửa hoặc xóa bất cứ lúc nào                   |
+| **Phiên đã lưu**: cookie và dữ liệu lưu trữ của trang (localStorage; sessionStorage và IndexedDB nếu bật)                                                                    | Khôi phục tài khoản khi bạn chuyển sang              | Khi lưu, khi chuyển khỏi tài khoản, hoặc khi đang dùng (làm mới) |
+| Phiên mà bản lưu hiện tại đã thay thế                                                                                                                                        | Hoàn tác một lần lưu                                 | Bị thay ở lần lưu sau                                            |
+| Trang cuối, mục gần đây (vd. tên dự án Supabase) và trang đã ghim của từng tài khoản                                                                                         | Mở mỗi tài khoản đúng chỗ bạn cần                    | Khi bạn dùng tài khoản trên trang đã thêm; xóa bất cứ lúc nào    |
+| Lịch sử 200 lần chuyển và lưu gần nhất (thời gian, ứng dụng, tên tài khoản, kết quả)                                                                                         | Cho biết điều gì đã xảy ra                           | Mỗi lần chuyển hoặc lưu; xóa trong mục Lịch sử                   |
+| **Các bên** (tên, màu, biểu tượng, ghi chú, tài khoản đã lưu mà mỗi ứng dụng dùng, các trang bạn liệt kê)                                                                    | Đổi mọi ứng dụng sang tài khoản của một bên cùng lúc | Khi bạn tạo hoặc sửa một bên; xóa bất cứ lúc nào                 |
+| Cài đặt, và lần sao lưu gần nhất                                                                                                                                             | Ghi nhớ lựa chọn; nhắc bạn sao lưu                   | Khi bạn thay đổi hoặc xuất bản sao lưu                           |
+| Cho đồng bộ danh sách: mã của bản cài này, những gì đã đồng bộ lần cuối, mã của những thứ bạn đã xóa (180 ngày)                                                              | Đồng bộ mà không chép trùng hay làm mất              | Khi bật đồng bộ; việc xóa vẫn được ghi lại khi đang tắt          |
 
 Khi Chrome đang mở, tiện ích còn giữ trong bộ nhớ (`chrome.storage.session`, tự xóa khi đóng Chrome) ai đang đăng nhập
-ở mỗi ứng dụng, tiến độ của lần đổi bên đang chạy và, khi đã mở khóa, khóa dùng để giải mã các phiên đã lưu.
+ở mỗi ứng dụng, tiến độ của lần đổi bên đang chạy, các link bạn đã trả lời "Không" và, khi đã mở khóa, khóa dùng để giải mã các
+phiên đã lưu.
 
 **Phiên đã lưu là dữ liệu nhạy cảm:** ai dùng được hồ sơ Chrome của bạn cũng có thể đăng nhập bằng chúng. Hãy bật **khóa
 bằng mật khẩu** (mục Bảo mật) để mã hóa (RSA-OAEP và AES-256-GCM, khóa sinh từ mật khẩu bằng PBKDF2). Mật khẩu không bao
@@ -161,13 +168,19 @@ Mọi dữ liệu bị xóa khi gỡ tiện ích, hoặc bằng **Bảo mật �
   bạn cần), giống như bạn tự truy cập. Khi đổi một bên, các ứng dụng của bên đó không có tab nào đang mở sẽ được đổi
   trong một tab chạy nền, đóng ngay sau đó. "Mở bên" mở các trang bạn đã liệt kê cho bên đó.
 - Gợi ý tạo bên được tính ngay trên máy bạn từ địa chỉ email của các tài khoản đã lưu; không tra cứu gì trên mạng.
+- **Link của tài khoản khác:** khi một trang của trang web đã thêm thuộc một tài khoản đã lưu khác (theo link bạn đặt
+  cho nó, mục gần đây hay trang đã ghim — so sánh ngay trên máy bạn), Swapdeck hiện một thẻ nhỏ trên trang đề nghị
+  chuyển; chỉ cú bấm thật mới trả lời được. Cũng có thể tự chuyển luôn, hoặc không làm gì (Cài đặt).
+- **Phiên hết hạn:** khi trang đã thêm không còn ai đăng nhập trong lúc một tài khoản của bạn đang dùng, Swapdeck đánh dấu
+  tài khoản đó "hết phiên" ngay trên máy bạn, để bạn biết mà đăng nhập lại.
 
 ## Kết nối mạng
 
 Swapdeck không có máy chủ và không gửi dữ liệu đi đâu (đồng bộ danh sách, khi bạn bật, đi qua tính năng đồng bộ của
 chính Chrome, xem trên). Ngoài các trang web được mở khi chuyển, các trang của tiện ích
 chỉ tải **ảnh đại diện tài khoản** từ địa chỉ do chính trang web cung cấp (vd. ảnh GitHub của bạn), không kèm thông tin
-trang giới thiệu (referrer).
+trang giới thiệu (referrer), và — **chỉ khi bạn bấm Hướng dẫn → Kiểm tra bản mới** — một yêu cầu tới API công khai của
+GitHub (`api.github.com`) hỏi bản mới nhất là bản nào; yêu cầu này không mang gì của bạn (không cookie, không referrer).
 
 ## Đồng bộ danh sách (tùy chọn)
 
@@ -178,7 +191,7 @@ không nhận gì.
 
 - **Được gửi đi:** các ứng dụng bạn thêm (với trang có sẵn chỉ là tên; với trang tự thêm là địa chỉ và cài đặt), tài
   khoản (tên, màu, biểu tượng và ghi chú bạn đặt, email/tên/mã người dùng trang hiển thị, trang mở đầu, trang đã ghim,
-  dấu "quan trọng") và các bên (tên, màu, biểu tượng, ghi chú, thành viên, các trang).
+  link mở bằng tài khoản đó, dấu "quan trọng") và các bên (tên, màu, biểu tượng, ghi chú, thành viên, các trang).
 - **Không bao giờ gửi đi:** phiên đã lưu — cookie, localStorage, sessionStorage, IndexedDB, token — hay bất cứ thứ gì
   giúp đăng nhập, khóa bằng mật khẩu, lịch sử, mục gần đây, trang cuối, thống kê và cài đặt. Ở máy khác, bạn đăng nhập
   mỗi tài khoản một lần; Swapdeck lưu phiên vào đúng tài khoản.

@@ -44,6 +44,8 @@ final class AppModel {
     var banner: Banner?
     var query = ""
     var launchAtLogin = false
+    /// "Check for updates" in Settings.
+    var updateCheck: UpdateCheck = .idle
     /// Bumped after asking macOS to change the default browser, so views read it again.
     var defaultBrowserCheck = 0
 
@@ -62,11 +64,21 @@ final class AppModel {
     /// Shows the "which workspace?" chooser for a link.
     @ObservationIgnored var onChooseLink: ((URL) -> Void)?
 
-    init(store: DataStore, applicationSupport: URL, defaults: UserDefaults = .standard, offline: Bool = false) {
+    /// Values of the workspaces' terminal variables (the Keychain; in memory for previews).
+    @ObservationIgnored let secrets: SecretStore
+
+    init(
+        store: DataStore,
+        applicationSupport: URL,
+        defaults: UserDefaults = .standard,
+        offline: Bool = false,
+        secrets: SecretStore = KeychainSecretStore()
+    ) {
         self.store = store
         self.applicationSupport = applicationSupport
         self.defaults = defaults
         self.offline = offline
+        self.secrets = secrets
         self.data = DesktopData()
         self.automation = AutomationState(rawValue: defaults.string(forKey: "automation") ?? "") ?? .unknown
     }
@@ -205,6 +217,9 @@ final class AppModel {
     }
 
     func delete(_ id: String) {
+        if let workspace = workspace(id) {
+            try? secrets.removeAll(workspace: id, names: workspace.cliVariables.map(\.name))
+        }
         data.workspaces.removeAll { $0.id == id }
         openIds.remove(id)
         if frontId == id { frontId = nil }

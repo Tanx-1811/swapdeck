@@ -169,14 +169,15 @@ or email. `isSpecificDetector` (localStorage/cookie) means "finding nobody" can 
 `decideSave` decides where the live session goes before it is replaced. The invariant: a session is never written
 into an account it provably doesn't belong to, and a signed-in session nobody saved is never thrown away.
 
-| Live session                                          | Decision                                                        |
-| ----------------------------------------------------- | --------------------------------------------------------------- |
-| No cookies, no storage                                | skip (`empty`)                                                  |
-| Strong identity = active account (or active has none) | save into the active account                                    |
-| Strong identity = another saved account               | save into that account (the user signed in by hand)             |
-| Strong identity, nobody saved                         | save as a new account                                           |
-| No strong identity, specific detector                 | skip (`signed-out`) — never overwrite with a signed-out session |
-| No strong identity, `auto`/`none` detector            | save into the active account, else a new account                |
+| Live session                                   | Decision                                                        |
+| ---------------------------------------------- | --------------------------------------------------------------- |
+| No cookies, no storage                         | skip (`empty`)                                                  |
+| Strong identity = active account               | save into the active account                                    |
+| Strong identity = another saved account        | save into that account (the user signed in by hand)             |
+| Strong identity, nobody saved, active has none | save into the active account (it learns who it is)              |
+| Strong identity, nobody saved                  | save as a new account                                           |
+| No strong identity, specific detector          | skip (`signed-out`) — never overwrite with a signed-out session |
+| No strong identity, `auto`/`none` detector     | save into the active account, else a new account                |
 
 ## 6. Watching pages (`watcher.ts`)
 
@@ -344,14 +345,16 @@ stats, settings. One `chrome.storage.sync` item per thing — `sd1:a:<appId>`, `
 - **Pull** (`planPull`, `applyPull` inside one `update()`): applies every write it hasn't seen (by `t` + `by`, so
   clocks don't matter), apps first. Something arriving for a thing that is already here under another id — the same
   preset, origin or domain; the same signed-in user (`sameIdentity`); the same name or label once — is applied to it
-  (an alias stored in the memo) instead of copied. Ids are translated (an account's app, a workspace's members); an
+  (an alias stored in the memo) instead of copied — but two things written by the same computer never fold into one
+  here (`takenBy`): there they are two, and removing either would remove both here. Ids are translated (an account's app, a workspace's members); an
   account whose app hasn't arrived waits, a workspace with missing members is applied again later (`again`). An
   account keeps its local fields (session stats, recents, last page) and, when it has a session here, its identity;
   it is never moved to another app; app rules (blocked domains, overlap) are enforced.
 - **Removals:** removing an app/account/workspace notes it in `sd:syncRemoved` (`noteRemoved`, inside the removal's
   `update()`); the push writes a tombstone `{ gone, t, by }` for every key that maps to it, even over a concurrent
   edit. A tombstone removes the thing on the other computers (through `removeApp`/`removeAccount`/`removeWorkspace`,
-  sessions included). Anything that disappears **without** a tombstone is forgotten, never removed: a key gone from
+  sessions included) — unless another live key still maps to the same thing there (`stillStandsFor`): then only that
+  key is forgotten. A tombstone is never "already seen" (memo entries describe live writes only). Anything that disappears **without** a tombstone is forgotten, never removed: a key gone from
   Chrome Sync (cleared, an old tombstone dropped after 45 days) is just dropped from the memo, and a thing missing here
   that wasn't removed on purpose (lost data) is taken back from Chrome Sync by a second pull.
 - **Push** (`planPush`): writes what changed since the memo (hash), skips keys another computer changed that the pull

@@ -222,6 +222,7 @@ describe('backups', () => {
       accounts: 1,
       sessions: 1,
       workspaces: 0,
+      skipped: [],
       syncOff: false,
     });
     const state = await readState();
@@ -235,6 +236,7 @@ describe('backups', () => {
       accounts: 0,
       sessions: 0,
       workspaces: 0,
+      skipped: [],
       syncOff: false,
     });
   });
@@ -251,11 +253,28 @@ describe('backups', () => {
       accounts: 1,
       sessions: 0,
       workspaces: 0,
+      skipped: [],
       syncOff: false,
     });
     const state = await readState();
     expect(state.apps.map((item) => item.id)).toEqual([app.id]);
     expect(state.accounts.map((item) => item.id)).toEqual(['acc_a']);
+  });
+
+  it('files accounts of an app set up here with another main address under that app, without its sign-ins', async () => {
+    const there = await addApp(input({ origin: 'https://www.acme.test', homeUrl: 'https://www.acme.test/' }));
+    await addAccount(there.id, 'acc_b', { email: 'b@acme.test', capturedAt: 1 });
+    await storeSnapshot('acc_b', snapshot('from-www'));
+    const text = await exportBackup('backup password', true);
+    await wipeData();
+    const here = await addApp(input({ origin: 'https://app.acme.test', homeUrl: 'https://app.acme.test/' }));
+
+    expect(await importBackup(text, 'backup password', 'merge')).toMatchObject({ apps: 0, accounts: 1, sessions: 0 });
+    const state = await readState();
+    expect(state.apps.map((item) => item.id)).toEqual([here.id]);
+    expect(state.accounts).toHaveLength(1);
+    expect(state.accounts[0]).toMatchObject({ appId: here.id, email: 'b@acme.test' });
+    expect(state.accounts[0]).not.toHaveProperty('capturedAt');
   });
 });
 

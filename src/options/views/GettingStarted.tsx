@@ -117,9 +117,12 @@ export function GettingStarted({
       </div>
       <ol className="steps">
         {steps.map((step, index) => (
-          <li key={step.id} className={`step${step.done ? ' step--done' : ''}`}>
+          <li
+            key={step.id}
+            className={`step${step.done ? ' step--done' : ''}${step.optional ? ' step--optional' : ''}`}
+          >
             <span className="step__number" aria-hidden="true">
-              {index + 1}
+              {step.optional ? '+' : index + 1}
             </span>
             <div className="step__body">
               <p>

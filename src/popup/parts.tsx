@@ -200,7 +200,7 @@ export function ThisSite() {
       </h2>
       <div className="site-card">
         <Globe className="site-card__icon" aria-hidden="true" />
-        <span className="site-card__text truncate">{t('popup.notAdded', { host: url.hostname })}</span>
+        <span className="site-card__text">{t('popup.notAdded', { host: url.hostname })}</span>
         {preset ? (
           <button type="button" className="btn btn--primary btn--sm" onClick={() => void addPreset(preset.id)}>
             <Plus /> {t('popup.addPreset', { app: preset.name })}

@@ -315,7 +315,15 @@ export function planPull(remote: Record<string, SyncItem>, memo: SyncMemo): Pull
     const known = memo[key];
     const same = seen(known, item);
     if (item.gone) {
-      if (known && !same) plan.deletes.push({ kind: parsed.kind, id: known.local ?? parsed.id, key });
+      // A tombstone is never "seen": memo entries only describe live writes (both ends forget the key
+      // once a removal is handled), and one written in the same millisecond as the last write must count.
+      if (known) {
+        const id = known.local ?? parsed.id;
+        // The same thing here also stands for another key that is still alive (two accounts there
+        // matched one here): only that key went away, not the thing.
+        if (stillStandsFor(remote, memo, key, parsed.kind, id)) plan.forget.push(key);
+        else plan.deletes.push({ kind: parsed.kind, id, key });
+      }
       continue;
     }
     if (same && !known?.again) continue;
@@ -326,6 +334,23 @@ export function planPull(remote: Record<string, SyncItem>, memo: SyncMemo): Pull
   plan.upserts.sort((a, b) => RANK[a.kind] - RANK[b.kind] || a.t - b.t);
   plan.deletes.sort((a, b) => RANK[b.kind] - RANK[a.kind]);
   return plan;
+}
+
+/** Whether another live key in Chrome Sync is applied to the local `id`. */
+function stillStandsFor(
+  remote: Record<string, SyncItem>,
+  memo: SyncMemo,
+  gone: string,
+  kind: SyncKind,
+  id: string,
+): boolean {
+  return Object.entries(memo).some(([key, entry]) => {
+    if (key === gone) return false;
+    const parsed = parseSyncKey(key);
+    if (parsed?.kind !== kind || (entry.local ?? parsed.id) !== id) return false;
+    const item = remote[key];
+    return isSyncItem(item) && !item.gone;
+  });
 }
 
 function overlaps(a: Pick<AppDef, 'domains'>, b: Pick<AppDef, 'domains'>): boolean {
@@ -393,9 +418,14 @@ export function applyPull(
     (lists[kind] as Thing[]).find((item) => item.id === id);
   // key → local id, from the memo and from this pull.
   const bound: Record<string, string> = {};
+  /** key → the computer that wrote it. */
+  const writer: Record<string, string> = {};
   for (const [key, entry] of Object.entries(memo)) {
     const parsed = parseSyncKey(key);
-    if (parsed) bound[key] = entry.local ?? parsed.id;
+    if (parsed) {
+      bound[key] = entry.local ?? parsed.id;
+      writer[key] = entry.by;
+    }
   }
   /** The local id another computer's id stands for here. */
   const resolve = (kind: SyncKind, id: unknown): string | null => {
@@ -409,6 +439,12 @@ export function applyPull(
     Object.entries(bound).some(([key, local]) => {
       const parsed = parseSyncKey(key);
       return local === id && parsed?.kind === kind && parsed.id !== id;
+    });
+  /** Already standing in for another thing written by the same computer: there, they are two. */
+  const takenBy = (kind: SyncKind, id: string, by: string) =>
+    Object.entries(bound).some(([key, local]) => {
+      const parsed = parseSyncKey(key);
+      return local === id && parsed?.kind === kind && parsed.id !== id && writer[key] === by;
     });
   /** Seen before and changed here since: the change here wins. */
   const changedHere = (upsert: Upsert, target: string | null) => {
@@ -459,6 +495,7 @@ export function applyPull(
       if (draft.apps.some((item) => item.id !== final.id && overlaps(item, final))) continue;
       place(draft.apps, final);
       bound[upsert.key] = final.id;
+      writer[upsert.key] = upsert.by;
       done.push({ upsert, id: final.id, again: false });
     } else if (upsert.kind === 'account') {
       const appId = resolve('app', value.appId);
@@ -466,8 +503,12 @@ export function applyPull(
       if (!target) {
         const siblings = draft.accounts.filter((item) => item.appId === appId);
         const identity = { id: text(value.identityId), email: text(value.email) };
+        // Same person: prefer an account nothing stands for yet, and never fold two accounts of
+        // one computer into one here (removing either there would remove both here).
+        const same = identity.id || identity.email ? siblings.filter((item) => sameIdentity(item, identity)) : [];
         const strong =
-          identity.id || identity.email ? siblings.find((item) => sameIdentity(item, identity)) : undefined;
+          same.find((item) => !aliased('account', item.id)) ??
+          same.find((item) => !takenBy('account', item.id, upsert.by));
         const weak = strong
           ? undefined
           : siblings.find(
@@ -482,6 +523,7 @@ export function applyPull(
       if (!account) continue;
       place(draft.accounts, account);
       bound[upsert.key] = account.id;
+      writer[upsert.key] = upsert.by;
       done.push({ upsert, id: account.id, again: false });
     } else {
       let missing = false;
@@ -503,6 +545,7 @@ export function applyPull(
       if (!workspace) continue;
       place(draft.workspaces, workspace);
       bound[upsert.key] = workspace.id;
+      writer[upsert.key] = upsert.by;
       done.push({ upsert, id: workspace.id, again: missing });
     }
   }

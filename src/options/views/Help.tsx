@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { compareVersions, LATEST_RELEASE_API, parseRelease, type ReleaseInfo } from '../../core/version';
 import { Callout, Spinner } from '../../ui/controls';
 import { useI18n } from '../../ui/i18n';
+import { CommandList } from '../../ui/shortcuts';
 import { useManager } from '../context';
 import { Card, PageHeader } from '../Options';
 import { navigate } from '../router';
@@ -127,18 +128,7 @@ export function Help() {
       </Card>
       <Card title={t('help.shortcuts')} id="help-shortcuts">
         <ul className="shortcuts">
-          <li>
-            <span>{t('overview.tipPopup')}</span>
-            <span>
-              <kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>A</kbd>
-            </span>
-          </li>
-          <li>
-            <span>{t('overview.tipNext')}</span>
-            <span>
-              <kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>S</kbd>
-            </span>
-          </li>
+          <CommandList only={['_execute_action', 'switch-next', 'switch-workspace-next', 'open-side-panel']} />
           <li>
             <span>{t('popup.keys')}</span>
             <span>

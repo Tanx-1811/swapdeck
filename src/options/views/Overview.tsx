@@ -7,6 +7,7 @@ import { requestAccess } from '../../ui/access';
 import { AppIcon, Avatar } from '../../ui/Avatar';
 import { Spinner, useToast } from '../../ui/controls';
 import { useI18n } from '../../ui/i18n';
+import { CommandList } from '../../ui/shortcuts';
 import { Reminders } from '../../ui/Reminders';
 import { useManager } from '../context';
 import { DeckArt } from '../DeckArt';
@@ -18,6 +19,7 @@ import { ReloginCard } from './Relogin';
 import { useWorkspaceSwitch } from './Workspaces';
 import { WorkspaceBadge } from '../../popup/WorkspaceBar';
 import { suggestWorkspaces, workspaceStatus } from '../../core/workspaces';
+import { onboardingSteps, onboardingVisible } from '../../core/onboarding';
 
 const WEEK_MS = 7 * 24 * 3600 * 1000;
 
@@ -30,6 +32,9 @@ export function Overview() {
   const [weekAgo] = useState(() => Date.now() - WEEK_MS);
   const switches = state.history.filter((entry) => entry.ok && entry.kind === 'switch' && entry.at > weekAgo).length;
   const hasSupabase = state.apps.some((app) => app.presetId === 'supabase');
+  const startVisible = welcome || onboardingVisible(onboardingSteps(state), state.settings.onboardingHidden);
+  // Once set up, the hero shrinks to a ledger of figures: the pitch is for newcomers.
+  const settled = !startVisible && state.apps.length > 0;
 
   const addSupabase = async () => {
     const preset = findPreset('supabase')!;
@@ -46,13 +51,15 @@ export function Overview() {
 
   return (
     <div className="stack">
-      <section className="hero">
+      <section className={`hero${settled ? ' hero--settled' : ''}`}>
         <div className="hero__text">
-          <p className="hero__eyebrow">
-            {welcome || state.apps.length === 0 ? t('overview.welcome') : t('app.tagline')}
-          </p>
-          <h1 className="hero__title">{t('overview.title')}</h1>
-          <p className="hero__lead">{t('overview.lead')}</p>
+          {!settled && (
+            <p className="hero__eyebrow">
+              {welcome || state.apps.length === 0 ? t('overview.welcome') : t('app.tagline')}
+            </p>
+          )}
+          <h1 className="hero__title">{settled ? t('nav.overview') : t('overview.title')}</h1>
+          {!settled && <p className="hero__lead">{t('overview.lead')}</p>}
         </div>
         <div className="hero__stats">
           <div className="stat">
@@ -71,12 +78,15 @@ export function Overview() {
         <DeckArt seal={t('account.inUse')} />
       </section>
 
-      <Reminders
-        settings={state.settings}
-        vault={state.vault}
-        accounts={state.accounts}
-        onOpenSecurity={() => navigate('#/security')}
-      />
+      {/* The checklist already asks for the lock and a backup: one reminder at a time. */}
+      {!startVisible && (
+        <Reminders
+          settings={state.settings}
+          vault={state.vault}
+          accounts={state.accounts}
+          onOpenSecurity={() => navigate('#/security')}
+        />
+      )}
       <ReloginCard />
 
       <GettingStarted force={welcome} hasSupabase={hasSupabase} onAddSupabase={() => void addSupabase()} />
@@ -154,18 +164,7 @@ export function Overview() {
         </Card>
         <Card title={t('overview.tips')} id="tips">
           <ul className="shortcuts">
-            <li>
-              <span>{t('overview.tipPopup')}</span>
-              <span>
-                <kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>A</kbd>
-              </span>
-            </li>
-            <li>
-              <span>{t('overview.tipNext')}</span>
-              <span>
-                <kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>S</kbd>
-              </span>
-            </li>
+            <CommandList only={['_execute_action', 'switch-next']} />
             <li>
               <span>{t('overview.tipOmnibox', { keyword: 'swd' })}</span>
               <span>
@@ -217,22 +216,24 @@ function WorkspacesCard() {
                 <div className="workspace-mini__text">
                   <strong className="truncate">{workspace.name}</strong>
                   <span className="muted truncate">
-                    {status.state === 'active'
-                      ? t('workspaces.inUse')
-                      : status.state === 'partial'
-                        ? t('workspaces.partial', { n: status.matched, total: status.total })
-                        : t('workspaces.appCount', { n: status.total })}
+                    {status.state === 'partial'
+                      ? t('workspaces.partial', { n: status.matched, total: status.total })
+                      : t('workspaces.appCount', { n: status.total })}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn--sm"
-                  disabled={status.total === 0 || status.state === 'active' || pending !== null}
-                  onClick={() => void switchWorkspace(workspace)}
-                >
-                  {pending === `ws:${workspace.id}` ? <Spinner /> : <ArrowLeftRight />}
-                  <span className="visually-hidden">{workspace.name}</span> {t('apps.switchHere')}
-                </button>
+                {status.state === 'active' ? (
+                  <span className="seal">{t('workspaces.inUse')}</span>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    disabled={status.total === 0 || pending !== null}
+                    onClick={() => void switchWorkspace(workspace)}
+                  >
+                    {pending === `ws:${workspace.id}` ? <Spinner /> : <ArrowLeftRight />}
+                    <span className="visually-hidden">{workspace.name}</span> {t('apps.switchHere')}
+                  </button>
+                )}
               </div>
             );
           })}

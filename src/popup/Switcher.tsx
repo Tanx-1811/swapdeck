@@ -1,6 +1,7 @@
 import { Search } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { findPreset, isBlockedDomain } from '../core/presets';
+import { parseHttpUrl } from '../core/domains';
 import { importantTargets, liveMembers } from '../core/workspaces';
 import type { Account, AppDef, Workspace } from '../core/types';
 import { customAppFromUrl, presetToInput } from '../shared/apps';
@@ -323,6 +324,8 @@ export function Switcher({ data, mode }: { data: Snapshot | null; mode: Mode }) 
       if (!preset) return;
       // Ask for access in the click itself; add the app at the same time so nothing is
       // lost if Chrome closes the popup while its permission prompt is open.
+      const before = Date.now();
+      const existed = apps.some((app) => app.presetId === preset.id);
       const [granted, added] = await Promise.all([
         requestAccess(preset),
         send('app.add', { app: presetToInput(preset) }),
@@ -332,14 +335,16 @@ export function Switcher({ data, mode }: { data: Snapshot | null; mode: Mode }) 
         return;
       }
       if (!granted) {
-        await send('app.remove', { id: added.data.id });
+        // Undo only what this click created: "app.add" hands back an app of this preset that was
+        // already there (with its accounts and sign-ins), which must never be removed here.
+        if (!existed && added.data.createdAt >= before) await send('app.remove', { id: added.data.id });
         notify(t('add.denied'), 'error');
         return;
       }
       notify(t('add.addedToast', { app: preset.name }));
       refresh();
     },
-    [notify, t],
+    [apps, notify, t],
   );
 
   const addSite = useCallback(
@@ -351,13 +356,14 @@ export function Switcher({ data, mode }: { data: Snapshot | null; mode: Mode }) 
         notify(t('error.BLOCKED_DOMAIN', { domain: blocked }), 'error');
         return;
       }
+      const before = Date.now();
       const [granted, added] = await Promise.all([requestAccess(input), send('app.add', { app: input })]);
       if (!added.ok) {
         notify(errorText(t, added), 'error');
         return;
       }
       if (!granted) {
-        await send('app.remove', { id: added.data.id });
+        if (added.data.createdAt >= before) await send('app.remove', { id: added.data.id });
         notify(t('add.denied'), 'error');
         return;
       }
@@ -408,20 +414,30 @@ export function Switcher({ data, mode }: { data: Snapshot | null; mode: Mode }) 
   };
 
   const currentApp = apps.find((app) => app.id === probe.appId) ?? null;
+  // The wide layout never leaves its main column empty: away from any app, it shows the one used last.
+  const lastUsedApp = (): AppDef | null => {
+    let best: { app: AppDef; at: number } | null = null;
+    for (const account of state.accounts) {
+      const app = apps.find((item) => item.id === account.appId);
+      if (app && account.lastUsedAt && (!best || account.lastUsedAt > best.at)) best = { app, at: account.lastUsedAt };
+    }
+    return best?.app ?? apps[0] ?? null;
+  };
   const selectedApp =
     view.kind === 'app'
       ? (apps.find((app) => app.id === view.appId) ?? null)
       : view.kind === 'current'
-        ? currentApp
+        ? (currentApp ?? (wide ? lastUsedApp() : null))
         : null;
   const accountsTotal = state.accounts.length;
   const showSearch = wide || apps.length > 2 || accountsTotal > 5 || state.workspaces.length > 0;
   const showWorkspaces = state.workspaces.length > 0 || apps.length > 1;
   const searching = query.trim().length > 0;
-  const currentHasAccounts = Boolean(currentApp && state.accounts.some((account) => account.appId === currentApp.id));
-  const unlock = locked && (needsUnlock || (currentHasAccounts && selectedApp?.id === currentApp?.id)) && (
-    <UnlockForm />
+  const selectedHasAccounts = Boolean(
+    selectedApp && state.accounts.some((account) => account.appId === selectedApp.id && account.capturedAt),
   );
+  // Locked with saved sign-ins in view: offer the passphrase up front instead of after a failed switch.
+  const unlock = locked && (needsUnlock || selectedHasAccounts) && <UnlockForm />;
   const nudge = !locked && (
     <Reminders
       settings={state.settings}
@@ -456,15 +472,19 @@ export function Switcher({ data, mode }: { data: Snapshot | null; mode: Mode }) 
     </div>
   );
 
+  // When the tab's own site can be added (the "This page" card), that is the one primary action.
+  const canAddThisSite = !currentApp && Boolean(parseHttpUrl(probe.url));
   const welcome = apps.length === 0 && (
     <div className="welcome">
       <h2>{t('overview.welcome')}</h2>
       <p>{t('overview.lead')}</p>
-      <button type="button" className="btn btn--primary btn--lg" onClick={() => void addPreset('supabase')}>
-        {t('overview.step1Action')}
-      </button>
+      {!canAddThisSite && (
+        <button type="button" className="btn btn--primary btn--lg" onClick={() => void addPreset('supabase')}>
+          {t('overview.step1Action')}
+        </button>
+      )}
       <button type="button" className="btn btn--ghost" onClick={() => openManager('#/add')}>
-        {t('overview.addApp')}…
+        {t(canAddThisSite ? 'popup.browseApps' : 'overview.addApp')}…
       </button>
     </div>
   );

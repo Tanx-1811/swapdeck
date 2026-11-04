@@ -2,10 +2,11 @@
 
 All notable changes to Swapdeck are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
-## 1.6.0 — 2026-10-22
+## 1.6.0 — 2026-11-04
 
 Links open with the right account, expired sessions show up before they bite, and Swapdeck Desktop 1.3.0 gives each
-workspace its own terminal.
+workspace its own terminal. Before release, a review of every screen and of the switching and sync code brought the
+fixes and polish listed at the end.
 
 - **Links of another account:** open a page that belongs to another saved account — a project link from Slack or an
   email, say — and Swapdeck offers to switch right on the page ("Switch to Bob" / "Always switch" / "Not now"), then
@@ -28,6 +29,44 @@ workspace its own terminal.
   any other variable) and a folder; **Open in Terminal** (or iTerm) starts a shell with them, and **Copy command** gives a
   line that loads them into any terminal (`eval "$(… --env acme)"`). Tokens live in the Keychain — never in the data
   file, an exported file, a script on disk or the shell history. Also **Check for updates** in Settings.
+
+**Fixes**
+
+- **Sync of the list:** removing a duplicate account on one computer could remove the matching account — and its saved
+  sign-in — on every computer, when that computer had matched both duplicates to one account. Two accounts of one
+  computer are no longer folded into one elsewhere, and a removal only takes something away when nothing else still
+  stands for it. A removal written in the same millisecond as the last change is no longer missed.
+- **Adding a preset from the popup** and then refusing access no longer removes an app of that preset that was already
+  there (with its accounts).
+- **Saving before a switch:** when the account in use doesn't know who it is yet and someone already saved under
+  another account signed in by hand, their session goes to their own account instead of taking over the one in use.
+  "Save this session" no longer files a session under an account on a weak guess.
+- **"Next account"** skips accounts that have no saved sign-in here instead of getting stuck on them.
+- **IndexedDB:** restoring it while another tab holds the database open no longer hangs the switch (and every later
+  switch of that app); it gives up after a while and the switch is undone as on any other error.
+- **Backups:** merging no longer silently drops an app set up here with another main address on the same site; its
+  accounts join the app here (sign-ins saved for the other address stay out). Apps that can't be imported are named.
+- A session saved for an account deleted meanwhile is no longer left behind on disk; two apps checked at once no longer
+  lose each other's page status.
+
+**Polish**
+
+- Popup: the "This page" card wraps instead of cutting off its buttons; on a site that can be added, that is the one
+  primary action. The wide popup shows the app used last instead of an empty column, and asks for the passphrase up
+  front when the saved sign-ins are locked. "Workspaces" is spelled out in the bar.
+- Manager at half-screen width: the sidebar becomes a rail of icons (names as tooltips), and a strip of tabs on narrow
+  windows, instead of wrapping.
+- Shortcuts are listed in Swapdeck's language with the keys set in Chrome, the same way in Overview, Settings and Help.
+- Overview: the "Get started" checklist and the lock/backup reminders no longer repeat each other, its buttons keep
+  their size, the optional step is unnumbered; once set up, the banner slims down. The workspace in use wears the seal
+  instead of a disabled button (also on the Workspaces page).
+- Apps with nothing added offer six popular apps in one click; the gallery starts with "Another website" by address,
+  shows 30 apps with "Show all", and labels the ones already added.
+- Backup: the list alone (no password) is the default, and a greyed-out download says why. Empty workspaces point to
+  saving accounts first; a new workspace starts with a symbol.
+- Vietnamese: one word for switching ("chuyển"), one spelling (khóa, xóa), typographic quotes, "liên kết" and "cửa sổ
+  Swapdeck" instead of English words, no more "Chưa dùng" next to "Đang dùng", lower-case relative times mid-sentence,
+  sizes under 1 KB no longer read "1.003 B". Settings toggles all explain themselves.
 
 ## 1.5.0 — 2026-10-21
 

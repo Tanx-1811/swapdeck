@@ -50,7 +50,7 @@ export function WorkspaceBar() {
   return (
     <div className="ws-bar" role="group" aria-label={t('workspaces.title')}>
       <span className="ws-bar__label">
-        <Layers aria-hidden="true" /> {t('workspaces.short')}
+        <Layers aria-hidden="true" /> {t('nav.workspaces')}
       </span>
       <div className="ws-bar__chips">
         {state.workspaces.map((workspace) => {

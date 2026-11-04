@@ -114,5 +114,8 @@ describe('i18n', () => {
     expect(formatBytes(512, 'en')).toBe('512 B');
     expect(formatBytes(1536, 'en')).toBe('1.5 KB');
     expect(formatBytes(1536, 'vi')).toBe('1,5 KB');
+    // Never "1.003 B" (Vietnamese groups thousands with a dot); mid-sentence times stay lower case.
+    expect(formatBytes(1003, 'vi')).toBe('1 KB');
+    expect(relativeTime(now - 86400_000, 'vi', now)).toBe('hôm qua');
   });
 });

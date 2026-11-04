@@ -212,6 +212,12 @@ describe('decideSave', () => {
     ).toEqual({ kind: 'active', accountId: 'c' });
   });
 
+  it('saves someone already saved into their own account, even when the active one has no identity', () => {
+    expect(
+      decideSave({ accounts, activeId: 'c', detector: specific, identity: strong({ email: 'b@x.co' }), empty: false }),
+    ).toEqual({ kind: 'existing', accountId: 'b' });
+  });
+
   it('does not overwrite a saved session with a signed-out one', () => {
     expect(decideSave({ accounts, activeId: 'a', detector: specific, identity: null, empty: false })).toEqual({
       kind: 'skip',
@@ -241,13 +247,26 @@ describe('decideSave', () => {
 });
 
 describe('cycleAccount', () => {
-  const list = [account('a', { order: 0 }), account('b', { order: 1 }), account('c', { order: 2 })];
+  const list = [
+    account('a', { order: 0, capturedAt: 1 }),
+    account('b', { order: 1, capturedAt: 1 }),
+    account('c', { order: 2, capturedAt: 1 }),
+  ];
   it('wraps around in both directions', () => {
     expect(cycleAccount(list, 'c', 1)?.id).toBe('a');
     expect(cycleAccount(list, 'a', -1)?.id).toBe('c');
     expect(cycleAccount(list, null, 1)?.id).toBe('a');
     expect(cycleAccount(list, 'zzz', -1)?.id).toBe('c');
     expect(cycleAccount([], 'a', 1)).toBeNull();
+  });
+
+  it('skips accounts without a saved sign-in, and has nowhere to go with only the current one', () => {
+    const mixed = [list[0]!, account('x', { order: 1 }), list[2]!];
+    expect(cycleAccount(mixed, 'a', 1)?.id).toBe('c');
+    expect(cycleAccount(mixed, 'c', 1)?.id).toBe('a');
+    // The current account keeps its place even without a saved sign-in (say, it expired).
+    expect(cycleAccount(mixed, 'x', 1)?.id).toBe('c');
+    expect(cycleAccount([list[0]!, account('y', { order: 1 })], 'a', 1)).toBeNull();
   });
 });
 

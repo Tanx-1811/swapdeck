@@ -259,7 +259,14 @@ export async function writePageStorage(data: PageWriteData, options: PageWriteOp
     }
     for (const dump of dumps) {
       await new Promise<void>((resolve) => {
+        // Another tab holding the database open blocks the delete above and this open behind it:
+        // give up on this database after a while instead of holding the switch forever.
+        const timer = setTimeout(() => {
+          errors.push(`IndexedDB ${dump.name}: blocked by another open tab`);
+          resolve();
+        }, 8000);
         const req = indexedDB.open(dump.name, Math.max(1, Math.floor(dump.version) || 1));
+        req.onblocked = () => errors.push(`IndexedDB ${dump.name}: waiting for another open tab`);
         req.onupgradeneeded = () => {
           const db = req.result;
           for (const store of dump.stores) {
@@ -291,10 +298,12 @@ export async function writePageStorage(data: PageWriteData, options: PageWriteOp
           }
         };
         req.onsuccess = () => {
+          clearTimeout(timer);
           req.result.close();
           resolve();
         };
         req.onerror = () => {
+          clearTimeout(timer);
           errors.push(`IndexedDB ${dump.name}: ${req.error?.message ?? 'open failed'}`);
           resolve();
         };

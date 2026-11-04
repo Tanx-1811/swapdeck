@@ -292,6 +292,54 @@ describe('receiving', () => {
     expect(outcome.applied['sd1:w:ws_there']?.local).toBe('ws_here');
   });
 
+  it('never folds two accounts of one computer into one here, so removing a duplicate there removes nothing here', () => {
+    const here = account({ id: 'acc_here', email: 'bob@acme.test', capturedAt: 3 });
+    const draft = { apps: [app()], accounts: [here], workspaces: [] as Workspace[] };
+    // The other computer has Bob twice (e.g. "Save as new account").
+    const entries = syncEntries({
+      apps: [app()],
+      accounts: [
+        account({ id: 'acc_bob1', label: 'Bob', email: 'bob@acme.test' }),
+        account({ id: 'acc_bob2', label: 'Bob (2)', email: 'bob@acme.test' }),
+      ],
+      workspaces: [],
+    });
+    const remote = Object.fromEntries(Object.entries(entries).map(([key, value]) => [key, live(value, 5, 'other')]));
+    const memo: SyncMemo = { ...applyPull(draft, planPull(remote, {}).upserts, {}).applied };
+    // One of them matches the account saved here; the other stays its own (without a sign-in).
+    expect(memo['sd1:c:acc_bob1']?.local).toBe('acc_here');
+    expect(draft.accounts.map((item) => item.id).sort()).toEqual(['acc_bob2', 'acc_here']);
+
+    // Removing either one there never removes the account (and sign-in) saved here by mistake.
+    remote['sd1:c:acc_bob2'] = { gone: true, t: 6, by: 'other' };
+    expect(planPull(remote, memo).deletes).toEqual([{ kind: 'account', id: 'acc_bob2', key: 'sd1:c:acc_bob2' }]);
+  });
+
+  it('takes a tombstone written in the same millisecond as the last write', () => {
+    const memo: SyncMemo = { 'sd1:c:acc_one': { hash: 'h', t: 5, by: 'other' } };
+    const plan = planPull({ 'sd1:c:acc_one': { gone: true, t: 5, by: 'other' } }, memo);
+    expect(plan.deletes).toEqual([{ kind: 'account', id: 'acc_one', key: 'sd1:c:acc_one' }]);
+  });
+
+  it('only removes what a tombstone stood for when no live key still stands for it here', () => {
+    // Older memos may already map two keys to one account here.
+    const memo: SyncMemo = {
+      'sd1:c:acc_a': { hash: 'h', t: 5, by: 'other', local: 'acc_here' },
+      'sd1:c:acc_b': { hash: 'h', t: 5, by: 'other', local: 'acc_here' },
+    };
+    const remote: Record<string, SyncItem> = {
+      'sd1:c:acc_a': live({}, 5, 'other'),
+      'sd1:c:acc_b': { gone: true, t: 6, by: 'other' },
+    };
+    let plan = planPull(remote, memo);
+    expect(plan.deletes).toEqual([]);
+    expect(plan.forget).toContain('sd1:c:acc_b');
+    // Removed there for real: every key that stood for it is a tombstone, so it goes here too.
+    remote['sd1:c:acc_a'] = { gone: true, t: 7, by: 'other' };
+    plan = planPull(remote, memo);
+    expect(plan.deletes.map((item) => item.id)).toEqual(['acc_here', 'acc_here']);
+  });
+
   it('never adds an app that shares a site with another one here, nor a blocked site', () => {
     const draft = { apps: [app({ id: 'app_here', domains: ['acme.test'] })], accounts: [], workspaces: [] };
     const remote = {

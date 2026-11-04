@@ -1,4 +1,4 @@
-import { Plus, Trash2, Wand2, X } from 'lucide-react';
+import { ArrowRight, Plus, Trash2, Wand2, X } from 'lucide-react';
 import { useState } from 'react';
 import { parseHttpUrl } from '../../core/domains';
 import type { Workspace } from '../../core/types';
@@ -24,7 +24,8 @@ export function WorkspaceEditor({ id }: { id: string | null }) {
   const { state } = data;
   const existing = id ? state.workspaces.find((workspace) => workspace.id === id) : undefined;
   const [name, setName] = useState(existing?.name ?? '');
-  const [icon, setIcon] = useState(existing?.icon ?? '');
+  // A new workspace starts with a symbol, so its badge never shows a placeholder.
+  const [icon, setIcon] = useState(existing ? (existing.icon ?? '') : 'briefcase');
   const [color, setColor] = useState(
     existing?.color ?? ACCOUNT_COLORS[state.workspaces.length % ACCOUNT_COLORS.length]!,
   );
@@ -153,7 +154,12 @@ export function WorkspaceEditor({ id }: { id: string | null }) {
           }
         >
           {appsWithAccounts.length === 0 ? (
-            <p className="muted">{t('workspaces.noApps')}</p>
+            <div className="row">
+              <p className="muted grow">{t('workspaces.noApps')}</p>
+              <a className="btn btn--sm" href={state.apps.length ? '#/apps' : '#/add'}>
+                {state.apps.length ? t('nav.apps') : t('apps.add')} <ArrowRight />
+              </a>
+            </div>
           ) : (
             <div className="member-table" role="table" aria-label={t('workspaces.members')}>
               {appsWithAccounts.map((app) => {

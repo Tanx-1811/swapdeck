@@ -268,6 +268,9 @@ function destinationFor(
   return app.homeUrl;
 }
 
+/** Writing a page's storage is quick; IndexedDB held open elsewhere can block it for good. */
+const WRITE_STORAGE_TIMEOUT_MS = 30_000;
+
 async function applySnapshot(app: AppDef, tabId: number, snapshot: Snapshot | null): Promise<void> {
   if (app.storage.cookies) {
     await clearCookies(app.domains);
@@ -278,14 +281,20 @@ async function applySnapshot(app: AppDef, tabId: number, snapshot: Snapshot | nu
   }
   const kinds = { local: app.storage.localStorage, session: app.storage.sessionStorage, idb: app.storage.indexedDB };
   if (!kinds.local && !kinds.session && !kinds.idb) return;
-  const result = await runInTab(tabId, writePageStorage, [
-    {
-      local: snapshot?.storage.localStorage ?? {},
-      session: snapshot?.storage.sessionStorage ?? {},
-      idb: snapshot?.storage.indexedDB ?? [],
-    },
-    kinds,
-  ]);
+  const result = await runInTab(
+    tabId,
+    writePageStorage,
+    [
+      {
+        local: snapshot?.storage.localStorage ?? {},
+        session: snapshot?.storage.sessionStorage ?? {},
+        idb: snapshot?.storage.indexedDB ?? [],
+      },
+      kinds,
+    ],
+    'ISOLATED',
+    WRITE_STORAGE_TIMEOUT_MS,
+  );
   if (result.origin !== app.origin) throw new SwapdeckError('STAGING_FAILED', result.origin);
   if (result.errors.length) console.warn('Swapdeck: some stored data could not be restored', result.errors);
 }
@@ -507,7 +516,9 @@ export function saveLive(appId: string, tabId?: number, target?: 'new' | string)
       }
       decision = { kind: 'existing', accountId: account.id };
     } else {
-      const owner = appAccounts.find((account) => sameIdentity(account, captured.identity));
+      // A weak guess at who is signed in is shown, never acted on: without a strong match, keep it as new.
+      const strong = captured.identity?.confidence === 'strong' ? captured.identity : null;
+      const owner = strong ? appAccounts.find((account) => sameIdentity(account, strong)) : undefined;
       decision = owner ? { kind: 'existing', accountId: owner.id } : { kind: 'new' };
     }
     const saved = await persist(app, captured, decision, t);

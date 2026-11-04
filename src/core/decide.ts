@@ -38,11 +38,12 @@ export function decideSave(options: {
   const active = activeId ? accounts.find((account) => account.id === activeId) : undefined;
 
   if (identity && identity.confidence === 'strong') {
-    if (active && (sameIdentity(active, identity) || !hasIdentity(active))) {
-      return { kind: 'active', accountId: active.id };
-    }
+    if (active && sameIdentity(active, identity)) return { kind: 'active', accountId: active.id };
+    // Someone already saved under their own account goes there, even when the account in use
+    // doesn't know who it is yet (it would otherwise take over their session and identity).
     const owner = accounts.find((account) => sameIdentity(account, identity));
     if (owner) return { kind: 'existing', accountId: owner.id };
+    if (active && !hasIdentity(active)) return { kind: 'active', accountId: active.id };
     return { kind: 'new' };
   }
 
@@ -54,9 +55,13 @@ export function decideSave(options: {
 
 /** The account after `currentId` in display order, wrapping around. */
 export function cycleAccount(accounts: readonly Account[], currentId: string | null | undefined, step: 1 | -1) {
-  const sorted = [...accounts].sort((a, b) => a.order - b.order);
+  // Only accounts with a saved sign-in can be switched to; the current one keeps its place in the round.
+  const sorted = accounts
+    .filter((account) => account.capturedAt || account.id === currentId)
+    .sort((a, b) => a.order - b.order);
   if (sorted.length === 0) return null;
   const index = sorted.findIndex((account) => account.id === currentId);
   if (index === -1) return sorted[step === 1 ? 0 : sorted.length - 1]!;
-  return sorted[(index + step + sorted.length) % sorted.length]!;
+  const next = sorted[(index + step + sorted.length) % sorted.length]!;
+  return next.id === currentId ? null : next;
 }

@@ -93,7 +93,7 @@ export function Security() {
               }
             }}
           >
-            <Trash2 /> {t('security.wipe')}
+            <Trash2 /> {t('security.wipeButton')}
           </button>
         </div>
       </Card>

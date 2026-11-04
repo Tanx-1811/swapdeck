@@ -40,7 +40,8 @@ function ExportCard() {
   const { t, language } = useI18n();
   const { data, run, pending } = useManager();
   const notify = useToast();
-  const [includeSessions, setIncludeSessions] = useState(true);
+  // The list alone needs no password and is enough to move computers (step 1 below); sign-ins are opt-in.
+  const [includeSessions, setIncludeSessions] = useState(false);
   const [password, setPassword] = useState('');
   const [repeat, setRepeat] = useState('');
   const locked = Boolean(data.state.vault && !data.unlocked);
@@ -120,6 +121,9 @@ function ExportCard() {
           <button type="submit" className="btn btn--primary" disabled={!ready || pending === 'backup.export'}>
             {pending === 'backup.export' ? <Spinner /> : <Download />} {t('backup.download')}
           </button>
+          {!ready && (
+            <span className="muted small">{locked ? t('backup.needsUnlock') : t('backup.needsPassword')}</span>
+          )}
         </div>
       </form>
     </Card>
@@ -177,7 +181,7 @@ function ImportCard() {
           <FileJson aria-hidden="true" />
           {file ? <strong className="truncate">{file.name}</strong> : <span className="muted">{t('backup.drop')}</span>}
           <button type="button" className="btn btn--sm" onClick={() => inputRef.current?.click()}>
-            <Upload /> {t('backup.choose')}
+            <Upload /> {file ? t('backup.chooseOther') : t('backup.choose')}
           </button>
           <input
             ref={inputRef}
@@ -276,6 +280,7 @@ function ImportCard() {
                           sessions: result.sessions,
                           workspaces: result.workspaces,
                         }),
+                        result.skipped.length ? t('backup.skipped', { apps: result.skipped.join(', ') }) : '',
                         result.sessions < result.accounts ? t('backup.importedNext') : '',
                         result.syncOff ? t('sync.offAfterReplace') : '',
                       ]

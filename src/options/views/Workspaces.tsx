@@ -1,6 +1,7 @@
 import {
   ArrowDown,
   ArrowLeftRight,
+  ArrowRight,
   ArrowUp,
   Ellipsis,
   FolderOpen,
@@ -168,9 +169,18 @@ export function Workspaces() {
           <Layers className="empty-card__icon" aria-hidden="true" />
           <strong>{t('workspaces.emptyTitle')}</strong>
           <p>{t('workspaces.emptyBody')}</p>
-          <a className="btn btn--primary" href="#/workspaces/new">
-            <Plus /> {t('workspaces.new')}
-          </a>
+          {state.accounts.length > 0 ? (
+            <a className="btn btn--primary" href="#/workspaces/new">
+              <Plus /> {t('workspaces.new')}
+            </a>
+          ) : (
+            <>
+              <p className="muted small">{t('workspaces.noApps')}</p>
+              <a className="btn btn--primary" href={state.apps.length ? '#/apps' : '#/add'}>
+                {state.apps.length ? t('nav.apps') : t('apps.add')} <ArrowRight />
+              </a>
+            </>
+          )}
         </div>
       ) : (
         <ul className="workspace-cards" aria-label={t('workspaces.title')}>
@@ -200,14 +210,16 @@ export function Workspaces() {
                     </span>
                   </div>
                   <div className="workspace-card__actions">
-                    <button
-                      type="button"
-                      className="btn btn--primary btn--sm"
-                      disabled={status.total === 0 || pending !== null}
-                      onClick={() => void switchWorkspace(workspace)}
-                    >
-                      {switching ? <Spinner /> : <ArrowLeftRight />} {t('apps.switchHere')}
-                    </button>
+                    {status.state !== 'active' && (
+                      <button
+                        type="button"
+                        className="btn btn--primary btn--sm"
+                        disabled={status.total === 0 || pending !== null}
+                        onClick={() => void switchWorkspace(workspace)}
+                      >
+                        {switching ? <Spinner /> : <ArrowLeftRight />} {t('apps.switchHere')}
+                      </button>
+                    )}
                     {workspace.links.length > 0 && (
                       <button
                         type="button"

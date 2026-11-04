@@ -216,10 +216,6 @@ body {
   font-size: 11.5px;
 }
 
-.account__note::before {
-  content: '— ';
-}
-
 .account__side {
   display: grid;
   place-items: center;
@@ -358,9 +354,10 @@ body {
 
 .site-card {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  justify-content: flex-end;
+  gap: 8px 10px;
   padding: 10px 10px 10px 12px;
   border: 1px dashed var(--border-strong);
   border-radius: var(--r-lg);
@@ -376,7 +373,9 @@ body {
 }
 
 .site-card__text {
-  flex: 1;
+  flex: 1 1 180px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .site-card__actions {

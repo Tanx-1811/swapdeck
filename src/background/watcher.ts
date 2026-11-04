@@ -52,11 +52,18 @@ function isStagingUrl(app: AppDef, url: string | null): boolean {
   return busyApps.has(app.id) && stagingCandidates(app).includes(url);
 }
 
-export async function setLive(appId: string, info: LiveInfo | null): Promise<void> {
-  const { live } = await readSessionInfo();
-  if (info) live[appId] = info;
-  else delete live[appId];
-  await chrome.storage.session.set({ [SESSION_KEYS.live]: live });
+/** One read-modify-write of the live map at a time: two apps reconciled together must not drop each other. */
+let liveQueue: Promise<void> = Promise.resolve();
+
+export function setLive(appId: string, info: LiveInfo | null): Promise<void> {
+  const task = liveQueue.then(async () => {
+    const { live } = await readSessionInfo();
+    if (info) live[appId] = info;
+    else delete live[appId];
+    await chrome.storage.session.set({ [SESSION_KEYS.live]: live });
+  });
+  liveQueue = task.catch(() => undefined);
+  return task;
 }
 
 export function isTrackableUrl(app: AppDef, url: string): boolean {

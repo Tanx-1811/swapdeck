@@ -144,8 +144,8 @@ type Api = {
   'backup.inspect': { req: { text: string; password?: string }; res: BackupSummary };
   'backup.import': {
     req: { text: string; password?: string; mode: 'merge' | 'replace' };
-    /** syncOff: a replace turned off sync of the list on this computer. */
-    res: { apps: number; accounts: number; sessions: number; workspaces: number; syncOff: boolean };
+    /** skipped: names of apps that can't be added (blocked sites); syncOff: a replace turned off sync of the list here. */
+    res: { apps: number; accounts: number; sessions: number; workspaces: number; skipped: string[]; syncOff: boolean };
   };
   'history.clear': { req: Record<string, never>; res: true };
   'data.wipe': { req: Record<string, never>; res: true };

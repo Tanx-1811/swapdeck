@@ -293,12 +293,14 @@ function AccountsPanel({
                       {t('account.expiredHint', { time: relativeTime(account.expiredAt, language) })}
                     </span>
                   )}
-                  <span className="account-card__meta">
-                    {account.lastUsedAt
-                      ? t('account.lastUsed', { time: relativeTime(account.lastUsedAt, language) })
-                      : t('account.neverUsed')}
-                    {account.switchCount > 0 && ` · ${t('account.switchCount', { n: account.switchCount })}`}
-                  </span>
+                  {(account.lastUsedAt || !isActive) && (
+                    <span className="account-card__meta">
+                      {account.lastUsedAt
+                        ? t('account.lastUsed', { time: relativeTime(account.lastUsedAt, language) })
+                        : t('account.neverUsed')}
+                      {account.switchCount > 0 && ` · ${t('account.switchCount', { n: account.switchCount })}`}
+                    </span>
+                  )}
                 </div>
                 <div className="account-card__actions">
                   <button

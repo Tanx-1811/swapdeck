@@ -96,18 +96,32 @@ export async function runInTab<Args extends unknown[], Result>(
   args: Args,
   /** MAIN: in the page's own world (to see its handlers); ISOLATED by default. */
   world: 'ISOLATED' | 'MAIN' = 'ISOLATED',
+  /** Gives up (TIMEOUT) when the page doesn't answer in time, so a stuck page can't hold a switch forever. */
+  timeoutMs?: number,
 ): Promise<Awaited<Result>> {
   let results: chrome.scripting.InjectionResult<Awaited<Result>>[];
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    results = (await chrome.scripting.executeScript({
+    const running = chrome.scripting.executeScript({
       target: { tabId, frameIds: [0] },
       func,
       args,
       world,
-    })) as chrome.scripting.InjectionResult<Awaited<Result>>[];
+    }) as Promise<chrome.scripting.InjectionResult<Awaited<Result>>[]>;
+    results = timeoutMs
+      ? await Promise.race([
+          running,
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new SwapdeckError('TIMEOUT', 'page script')), timeoutMs);
+          }),
+        ])
+      : await running;
   } catch (error) {
+    if (error instanceof SwapdeckError) throw error;
     const message = error instanceof Error ? error.message : String(error);
     throw new SwapdeckError(/permission|cannot access/i.test(message) ? 'NO_ACCESS' : 'UNKNOWN', message);
+  } finally {
+    clearTimeout(timer);
   }
   const first = results[0];
   if (!first) throw new SwapdeckError('UNKNOWN', 'No result from the page');

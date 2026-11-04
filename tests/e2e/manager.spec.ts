@@ -105,6 +105,7 @@ test.describe('manager', () => {
     await expect.poll(() => storedAccounts(context, acme.id)).toHaveLength(1);
 
     const page = await openExtensionPage('options/options.html#/backup');
+    await page.getByRole('checkbox', { name: /Include saved sessions/ }).check();
     await page.getByLabel('File password').fill('backup password');
     await page.getByLabel('Repeat password').fill('backup password');
     const downloading = page.waitForEvent('download');
@@ -142,13 +143,13 @@ test.describe('manager', () => {
     await expect(page.getByRole('heading', { name: 'Cài đặt' })).toBeVisible();
     await page.getByRole('button', { name: 'Tối' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-    await page.getByRole('switch', { name: 'Hỏi trước khi chuyển' }).check();
-    await expect(page.getByRole('switch', { name: 'Hỏi trước khi chuyển' })).toBeChecked();
+    await page.getByRole('switch', { name: 'Hỏi trước khi chuyển', exact: true }).check();
+    await expect(page.getByRole('switch', { name: 'Hỏi trước khi chuyển', exact: true })).toBeChecked();
 
     await page.getByRole('link', { name: 'Bảo mật' }).click();
     await page.getByLabel('Mật khẩu', { exact: true }).fill('correct horse battery');
     await page.getByLabel('Nhập lại mật khẩu').fill('correct horse battery');
-    await page.getByRole('button', { name: 'Bật khóa bằng mật khẩu' }).click();
+    await page.getByRole('button', { name: 'Đặt mật khẩu và khóa' }).click();
     await expect(page.getByText('Đã bật khóa bằng mật khẩu.')).toBeVisible();
     await page.getByRole('button', { name: 'Khóa ngay' }).click();
     await expect(page.locator('.sidebar__vault')).toContainText('Đã khóa');

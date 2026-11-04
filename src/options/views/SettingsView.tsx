@@ -6,6 +6,7 @@ import type { Settings } from '../../core/types';
 import { relativeTime } from '../../i18n/translate';
 import { Callout, Field, Spinner, ToggleRow, useConfirm, useToast } from '../../ui/controls';
 import { useI18n } from '../../ui/i18n';
+import { CommandList } from '../../ui/shortcuts';
 import { useManager } from '../context';
 import { Card, PageHeader } from '../Options';
 
@@ -13,10 +14,6 @@ export function SettingsView() {
   const { t } = useI18n();
   const { data, run } = useManager();
   const settings = data.state.settings;
-  const [commands, setCommands] = useState<chrome.commands.Command[]>([]);
-  useEffect(() => {
-    void chrome.commands.getAll().then(setCommands);
-  }, []);
   const set = (patch: Partial<Settings>) => void run('settings.update', { patch });
 
   return (
@@ -162,10 +159,16 @@ export function SettingsView() {
         />
         <ToggleRow
           title={t('settings.confirmSwitch')}
+          hint={t('settings.confirmSwitchHint')}
           checked={settings.confirmSwitch}
           onChange={(confirmSwitch) => set({ confirmSwitch })}
         />
-        <ToggleRow title={t('settings.badge')} checked={settings.badge} onChange={(badge) => set({ badge })} />
+        <ToggleRow
+          title={t('settings.badge')}
+          hint={t('settings.badgeHint')}
+          checked={settings.badge}
+          onChange={(badge) => set({ badge })}
+        />
       </Card>
 
       <SyncCard />
@@ -185,21 +188,7 @@ export function SettingsView() {
         }
       >
         <ul className="shortcuts">
-          {commands.map((command) => (
-            <li key={command.name}>
-              <span>{command.name === '_execute_action' ? t('overview.tipPopup') : command.description}</span>
-              <span>
-                {command.shortcut ? (
-                  command.shortcut
-                    .split(/\+|(?<=⌥|⇧|⌘|⌃)/)
-                    .filter(Boolean)
-                    .map((key, index) => <kbd key={index}>{key}</kbd>)
-                ) : (
-                  <span className="muted">{t('settings.notSet')}</span>
-                )}
-              </span>
-            </li>
-          ))}
+          <CommandList />
         </ul>
       </Card>
 

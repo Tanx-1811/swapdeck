@@ -484,7 +484,14 @@ export async function importBackup(
   text: string,
   password: string | undefined,
   mode: 'merge' | 'replace',
-): Promise<{ apps: number; accounts: number; sessions: number; workspaces: number; syncOff: boolean }> {
+): Promise<{
+  apps: number;
+  accounts: number;
+  sessions: number;
+  workspaces: number;
+  skipped: string[];
+  syncOff: boolean;
+}> {
   const { payload } = await readBackup(text, password);
   // What belongs to this computer survives a replace (read before the wipe clears it).
   const before = (await readState()).settings;
@@ -493,19 +500,28 @@ export async function importBackup(
   const appIdMap = new Map<string, string>();
   const accountIdMap = new Map<string, string>();
   const sessionTargets: [string, Snapshot][] = [];
+  /** Backup apps filed under an app here with another main address: their stored data belongs elsewhere. */
+  const otherOrigin = new Set<string>();
+  const skipped: string[] = [];
   const counts = await update((draft) => {
     let apps = 0;
     let accounts = 0;
     for (const app of payload.apps) {
-      const existing = draft.apps.find(
-        (item) => (app.presetId && item.presetId === app.presetId) || item.origin === app.origin,
-      );
+      // The same app set up here, even with other details (another main address on the same site):
+      // its accounts join the app here, as sync does, instead of being dropped.
+      const existing =
+        draft.apps.find((item) => (app.presetId && item.presetId === app.presetId) || item.origin === app.origin) ??
+        overlapping({ ...app, id: '' }, draft.apps);
       if (existing) {
         appIdMap.set(app.id, existing.id);
+        if (existing.origin !== app.origin) otherOrigin.add(app.id);
         continue;
       }
       const copy: AppDef = { ...app, id: mode === 'replace' ? app.id : newId('app'), order: draft.apps.length };
-      if (overlapping(copy, draft.apps) || copy.domains.some(isBlockedDomain)) continue;
+      if (copy.domains.some(isBlockedDomain)) {
+        skipped.push(app.name);
+        continue;
+      }
       draft.apps.push(copy);
       appIdMap.set(app.id, copy.id);
       apps++;
@@ -518,7 +534,8 @@ export async function importBackup(
       const existing = siblings.find((item) =>
         account.identityId || account.email ? sameIdentity(item, identity) : item.label === account.label,
       );
-      const session = payload.sessions[account.id];
+      // A sign-in saved for another main address can't be restored on this app's.
+      const session = otherOrigin.has(account.appId) ? undefined : payload.sessions[account.id];
       if (existing) {
         accountIdMap.set(account.id, existing.id);
         if (session && session.capturedAt > (existing.capturedAt ?? 0)) {
@@ -578,7 +595,7 @@ export async function importBackup(
     return { apps, accounts, workspaces };
   });
   for (const [accountId, snapshot] of sessionTargets) await storeSnapshot(accountId, snapshot);
-  return { ...counts, sessions: sessionTargets.length, syncOff: mode === 'replace' && before.syncList };
+  return { ...counts, sessions: sessionTargets.length, skipped, syncOff: mode === 'replace' && before.syncList };
 }
 
 // --- Wipe --------------------------------------------------------------------

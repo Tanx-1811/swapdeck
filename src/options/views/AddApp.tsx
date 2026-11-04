@@ -19,24 +19,18 @@ import { Card, PageHeader } from '../Options';
 import { navigate } from '../router';
 import { AppForm } from './AppForm';
 
-export function AddApp() {
-  const { t } = useI18n();
-  const { data, run, pending } = useManager();
-  const notify = useToast();
-  const [query, setQuery] = useState('');
-  const [category, setCategory] = useState<PresetCategory | 'all'>('all');
-  const [selecting, setSelecting] = useState(false);
-  const [selected, setSelected] = useState<string[]>([]);
-  const added = new Map(data.state.apps.filter((app) => app.presetId).map((app) => [app.presetId!, app.id]));
-  const results = useMemo(
-    () => searchPresets(query).filter((preset) => category === 'all' || preset.category === category),
-    [query, category],
-  );
+/** Popular first picks, offered where nothing has been added yet. */
+export const STARTER_PRESETS = ['supabase', 'vercel', 'github', 'netlify', 'cloudflare', 'chatgpt'];
 
-  const add = async (preset: Preset) => {
-    const existing = added.get(preset.id);
+/** Adds a preset (asking for its sites first) and opens it; an app already added just opens. */
+export function useAddPreset(): (preset: Preset) => Promise<void> {
+  const { t } = useI18n();
+  const { data, run } = useManager();
+  const notify = useToast();
+  return async (preset) => {
+    const existing = data.state.apps.find((app) => app.presetId === preset.id);
     if (existing) {
-      navigate(`#/apps/${existing}`);
+      navigate(`#/apps/${existing.id}`);
       return;
     }
     if (!(await requestAccess(preset))) {
@@ -49,6 +43,28 @@ export function AddApp() {
       navigate(`#/apps/${app.id}`);
     }
   };
+}
+
+/** How many presets the gallery shows before "Show all", when nothing narrows it. */
+const GALLERY_FIRST = 30;
+
+export function AddApp() {
+  const { t } = useI18n();
+  const { data, run, pending } = useManager();
+  const notify = useToast();
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState<PresetCategory | 'all'>('all');
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [showAll, setShowAll] = useState(false);
+  const added = new Map(data.state.apps.filter((app) => app.presetId).map((app) => [app.presetId!, app.id]));
+  const results = useMemo(
+    () => searchPresets(query).filter((preset) => category === 'all' || preset.category === category),
+    [query, category],
+  );
+  const narrowed = query.trim() !== '' || category !== 'all';
+  const shown = narrowed || showAll || selecting ? results : results.slice(0, GALLERY_FIRST);
+  const add = useAddPreset();
 
   const toggle = (preset: Preset) => {
     if (added.has(preset.id)) return;
@@ -121,8 +137,10 @@ export function AddApp() {
         </div>
       </div>
 
+      <CustomUrlRow />
+
       <div className="gallery">
-        {results.map((preset) => {
+        {shown.map((preset) => {
           const isAdded = added.has(preset.id);
           const isSelected = selected.includes(preset.id);
           return (
@@ -138,19 +156,29 @@ export function AddApp() {
               <span className="preset__text">
                 <span className="preset__name">
                   {preset.name}
-                  {preset.id === 'supabase' && <span className="pill pill--brand">{t('add.recommended')}</span>}
+                  {preset.id === 'supabase' && !isAdded && (
+                    <span className="pill pill--brand">{t('add.recommended')}</span>
+                  )}
                 </span>
                 <span className="muted truncate">{preset.domains.join(', ')}</span>
                 {preset.nativeSwitcher && <span className="preset__note">{t('add.native')}</span>}
               </span>
-              <span className="preset__action" aria-hidden="true">
-                {isAdded || isSelected ? <Check /> : <Plus />}
-              </span>
-              <span className="visually-hidden">{isAdded ? t('add.alreadyAdded') : t('common.add')}</span>
+              {isAdded && !selecting ? (
+                <span className="pill pill--success preset__added">
+                  <Check aria-hidden="true" /> {t('add.alreadyAdded')}
+                </span>
+              ) : (
+                <>
+                  <span className="preset__action" aria-hidden="true">
+                    {isAdded || isSelected ? <Check /> : <Plus />}
+                  </span>
+                  <span className="visually-hidden">{isAdded ? t('add.alreadyAdded') : t('common.add')}</span>
+                </>
+              )}
             </button>
           );
         })}
-        {!selecting && (
+        {!selecting && shown.length === results.length && (
           <a className="preset preset--custom" href="#/add/custom">
             <span className="app-icon app-icon--lg app-icon--custom" aria-hidden="true">
               <Globe />
@@ -165,6 +193,13 @@ export function AddApp() {
           </a>
         )}
       </div>
+      {shown.length < results.length && (
+        <div className="gallery-more">
+          <button type="button" className="btn" onClick={() => setShowAll(true)}>
+            {t('add.showAll', { n: results.length })}
+          </button>
+        </div>
+      )}
       {results.length === 0 && <p className="muted">{t('add.noResults', { query })}</p>}
       {selecting && (
         <div className="selection-bar" role="region" aria-label={t('add.selectMany')}>
@@ -188,6 +223,43 @@ export function AddApp() {
         </div>
       )}
     </div>
+  );
+}
+
+/** Any other site, by its address, without scrolling past every preset. */
+function CustomUrlRow() {
+  const { t } = useI18n();
+  const [url, setUrl] = useState('');
+  const valid = Boolean(customAppFromUrl(url.includes('://') ? url : `https://${url}`));
+  return (
+    <form
+      className="custom-url-row"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const full = url.includes('://') ? url : `https://${url}`;
+        navigate(`#/add/custom?url=${encodeURIComponent(full)}`);
+      }}
+    >
+      <span className="app-icon app-icon--custom" aria-hidden="true">
+        <Globe />
+      </span>
+      <label className="custom-url-row__label" htmlFor="gallery-custom-url">
+        <strong>{t('add.custom')}</strong>
+        <span className="muted small">{t('add.customLead')}</span>
+      </label>
+      <input
+        id="gallery-custom-url"
+        className="input"
+        type="text"
+        inputMode="url"
+        value={url}
+        placeholder="app.example.com"
+        onChange={(event) => setUrl(event.target.value)}
+      />
+      <button type="submit" className="btn btn--sm" disabled={!url.trim() || !valid}>
+        <Plus /> {t('common.add')}
+      </button>
+    </form>
   );
 }
 

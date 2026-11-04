@@ -48,19 +48,22 @@ export function relativeTime(timestamp: number, language: Language, now = Date.n
   const seconds = Math.round((timestamp - now) / 1000);
   const abs = Math.abs(seconds);
   const format = new Intl.RelativeTimeFormat(language, { numeric: 'auto' });
-  if (abs < 45) return format.format(0, 'second');
-  if (abs < 45 * 60) return format.format(Math.round(seconds / 60), 'minute');
-  if (abs < 22 * 3600) return format.format(Math.round(seconds / 3600), 'hour');
-  if (abs < 26 * 86400) return format.format(Math.round(seconds / 86400), 'day');
-  if (abs < 320 * 86400) return format.format(Math.round(seconds / (30 * 86400)), 'month');
-  return format.format(Math.round(seconds / (365 * 86400)), 'year');
+  // Lower case, as English is: these phrases go mid-sentence ("Used yesterday", "Dùng hôm qua").
+  const lower = (text: string) => text.charAt(0).toLocaleLowerCase(language) + text.slice(1);
+  if (abs < 45) return lower(format.format(0, 'second'));
+  if (abs < 45 * 60) return lower(format.format(Math.round(seconds / 60), 'minute'));
+  if (abs < 22 * 3600) return lower(format.format(Math.round(seconds / 3600), 'hour'));
+  if (abs < 26 * 86400) return lower(format.format(Math.round(seconds / 86400), 'day'));
+  if (abs < 320 * 86400) return lower(format.format(Math.round(seconds / (30 * 86400)), 'month'));
+  return lower(format.format(Math.round(seconds / (365 * 86400)), 'year'));
 }
 
 export function formatBytes(bytes: number, language: Language): string {
   const units = ['B', 'KB', 'MB', 'GB'];
   let value = bytes;
   let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
+  // Switch unit at 1000, so a size never reads "1.003 B" (Vietnamese groups thousands with a dot).
+  while (value >= 1000 && unit < units.length - 1) {
     value /= 1024;
     unit++;
   }

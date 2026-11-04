@@ -30,10 +30,10 @@ const CAPTIONS = {
   vi: [
     [
       'Mọi ứng dụng, mọi tài khoản — cách một cú nhấp',
-      'Đổi một ứng dụng — hoặc cả một bên trên mọi ứng dụng cùng lúc.',
+      'Chuyển một ứng dụng — hoặc cả một bên trên mọi ứng dụng cùng lúc.',
     ],
     [
-      'Đổi cả một bên chỉ với một cú nhấp',
+      'Chuyển cả một bên chỉ với một cú nhấp',
       'Mỗi bên nhớ tài khoản dùng trên từng ứng dụng cho khách hàng, công ty hay dự án.',
     ],
     [

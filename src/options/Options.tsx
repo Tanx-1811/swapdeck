@@ -119,10 +119,11 @@ export function Options({ data }: { data: Snapshot | null }) {
                   <a
                     href={item.hash}
                     className="sidebar__link"
+                    title={item.label}
                     aria-current={item.match.includes(route.name) ? 'page' : undefined}
                   >
                     {item.icon}
-                    <span>{item.label}</span>
+                    <span className="sidebar__label">{item.label}</span>
                     {item.route === 'apps' && state.apps.length > 0 && (
                       <span className="sidebar__count">{state.apps.length}</span>
                     )}
@@ -135,9 +136,9 @@ export function Options({ data }: { data: Snapshot | null }) {
             </ul>
           </nav>
           {state.vault && (
-            <div className="sidebar__vault">
+            <div className="sidebar__vault" title={unlocked ? t('vault.unlockedShort') : t('vault.lockedShort')}>
               {unlocked ? <LockOpen aria-hidden="true" /> : <Lock aria-hidden="true" />}
-              <span>{unlocked ? t('vault.unlockedShort') : t('vault.lockedShort')}</span>
+              <span className="sidebar__label">{unlocked ? t('vault.unlockedShort') : t('vault.lockedShort')}</span>
               {unlocked ? (
                 <button type="button" className="link-button" onClick={() => void run('vault.lock', {})}>
                   {t('common.lock')}

@@ -798,8 +798,9 @@ kbd {
   box-shadow: 0 0 0 2px var(--bg-elev);
 }
 
+/* A light overlap: enough to read as a stack, never over the initials. */
 .avatar-stack .avatar + .avatar {
-  margin-left: -6px;
+  margin-left: -3px;
 }
 
 /* App tiles carry the app's initial in the title face. */

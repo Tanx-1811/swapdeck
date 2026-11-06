@@ -54,6 +54,18 @@ describe('link rules', () => {
     expect(ruleScore('acme.example', 'ftp://acme.example/')).toBe(-1);
   });
 
+  it('encodes a rule typed with accents or spaces like a link address (same as Swapdeck Desktop)', () => {
+    // The value Swapdeck Desktop's LinkRouter.normalize gives for the same rule (ReviewFindingsTests).
+    expect(normalizeLinkRule('acme.example/dự án')).toBe('acme.example/d%E1%BB%B1%20%C3%A1n');
+    expect(normalizeLinkRule('acme.example/caf%C3%A9/')).toBe('acme.example/caf%C3%A9');
+    expect(normalizeLinkRule('acme.example/a/./b/../c')).toBe('acme.example/a/c');
+    for (const link of ['https://acme.example/d%E1%BB%B1%20%C3%A1n/x', 'https://acme.example/dự án']) {
+      expect(ruleScore('acme.example/dự án', link), link).toBeGreaterThan(0);
+    }
+    expect(ruleScore('acme.example/café', 'https://acme.example/caf%C3%A9')).toBeGreaterThan(0);
+    expect(ruleScore('acme.example/dự án', 'https://acme.example/du-an')).toBe(-1);
+  });
+
   it('reads the recent item key of a page', () => {
     expect(recentKey(supabase, `https://supabase.com/dashboard/project/${REF_A}/editor`)).toBe(REF_A);
     expect(recentKey(supabase, 'https://supabase.com/dashboard/projects')).toBeNull();

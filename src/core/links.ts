@@ -39,6 +39,15 @@ export function normalizeLinkRule(text: string): string | null {
   let path = slash === -1 ? '' : value.slice(slash);
   const cut = path.search(/[?#]/);
   if (cut !== -1) path = path.slice(0, cut);
+  if (path) {
+    // Encoded as the browser shows a link's address ("dự án" → "d%E1%BB%B1%20%C3%A1n", dot segments
+    // resolved), so a rule typed with accents or spaces matches — as in Swapdeck Desktop's LinkRouter.
+    try {
+      path = new URL(`https://rule.invalid${path}`).pathname;
+    } catch {
+      return null;
+    }
+  }
   while (path.endsWith('/')) path = path.slice(0, -1);
   return (host + path).slice(0, 300);
 }

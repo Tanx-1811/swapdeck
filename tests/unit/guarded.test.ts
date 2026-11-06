@@ -129,4 +129,33 @@ describe('workspace switches', () => {
     expect(outcome.results).toEqual([{ appId: 'acme', accountId: 'accA', status: 'switched' }]);
     expect(browser.cookie('sid')).toBe('A-session');
   });
+
+  it('do not count a workspace as used when none of its apps could be switched', async () => {
+    await seedAcme(browser);
+    await chrome.storage.local.remove('sd:snap:accB');
+    await chrome.storage.local.set({
+      'sd:workspaces': [
+        {
+          id: 'ws1',
+          name: 'Client B',
+          color: '#2f4e86',
+          members: { acme: 'accB' },
+          links: [],
+          order: 0,
+          createdAt: 1,
+          switchCount: 0,
+        },
+      ],
+    });
+    const tab = browser.addTab('https://acme.test/');
+    const { switchWorkspace } = await import('../../src/background/workspaces');
+
+    const outcome = await switchWorkspace('ws1', tab.id);
+    await settle();
+
+    expect(outcome).toMatchObject({ switched: 0, failed: 1 });
+    const workspace = (await readState()).workspaces[0]!;
+    expect(workspace.lastUsedAt).toBeUndefined();
+    expect(workspace.switchCount).toBe(0);
+  });
 });

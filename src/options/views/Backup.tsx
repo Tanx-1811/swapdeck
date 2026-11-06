@@ -229,10 +229,10 @@ function ImportCard() {
           <>
             <Callout tone="success">
               {t('backup.summary', {
-                apps: summary.apps,
-                accounts: summary.accounts,
-                sessions: summary.sessions,
-                workspaces: summary.workspaces,
+                apps: t('workspaces.appCount', { n: summary.apps }),
+                accounts: t('apps.accounts', { n: summary.accounts }),
+                sessions: t('count.sessions', { n: summary.sessions }),
+                workspaces: t('count.workspaces', { n: summary.workspaces }),
                 date: summary.createdAt ? formatDateTime(summary.createdAt, language) : '—',
               })}
             </Callout>
@@ -279,10 +279,10 @@ function ImportCard() {
                     notify(
                       [
                         t('backup.imported', {
-                          apps: result.apps,
-                          accounts: result.accounts,
-                          sessions: result.sessions,
-                          workspaces: result.workspaces,
+                          apps: t('workspaces.appCount', { n: result.apps }),
+                          accounts: t('apps.accounts', { n: result.accounts }),
+                          sessions: t('count.sessions', { n: result.sessions }),
+                          workspaces: t('count.workspaces', { n: result.workspaces }),
                         }),
                         result.skipped.length ? t('backup.skipped', { apps: result.skipped.join(', ') }) : '',
                         result.sessions < result.accounts ? t('backup.importedNext') : '',

@@ -124,9 +124,9 @@ test.describe('manager', () => {
       .setInputFiles({ name: 'backup.json', mimeType: 'application/json', buffer: Buffer.from(text) });
     await page.getByLabel(/This backup is encrypted/).fill('backup password');
     await page.getByRole('button', { name: 'Unlock' }).click();
-    await expect(page.getByText(/1 apps · 1 accounts · 1 saved sessions · 0 workspaces/)).toBeVisible();
+    await expect(page.getByText(/1 app · 1 account · 1 saved session · 0 workspaces/)).toBeVisible();
     await page.getByRole('button', { name: 'Import', exact: true }).click();
-    await expect(page.getByText('Imported 1 apps, 1 accounts, 1 sessions and 0 workspaces.')).toBeVisible();
+    await expect(page.getByText('Imported 1 app, 1 account, 1 saved session and 0 workspaces.')).toBeVisible();
 
     // The imported session really works (the app got a new id when it was imported).
     await site.goto(`${acme.origin}/dashboard`);

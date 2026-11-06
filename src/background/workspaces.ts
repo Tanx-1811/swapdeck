@@ -82,12 +82,16 @@ export async function switchWorkspace(id: string, tabId?: number): Promise<Works
     await setProgress(null);
   }
 
-  await update((draft) => {
-    const item = draft.workspaces.find((entry) => entry.id === id);
-    if (!item) return;
-    item.lastUsedAt = Date.now();
-    item.switchCount += 1;
-  });
+  // Only a workspace that is now (at least partly) in use counts as used: a switch where every app failed
+  // must not read "used just now".
+  if (results.some((result) => result.status === 'switched' || result.status === 'already')) {
+    await update((draft) => {
+      const item = draft.workspaces.find((entry) => entry.id === id);
+      if (!item) return;
+      item.lastUsedAt = Date.now();
+      item.switchCount += 1;
+    });
+  }
   return {
     workspaceId: id,
     results,

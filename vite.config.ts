@@ -103,7 +103,7 @@ export default defineConfig(({ mode }) => ({
         sidepanel: resolve(src, 'sidepanel/sidepanel.html'),
       },
       output: {
-        advancedChunks: {
+        codeSplitting: {
           groups: [
             { name: 'react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
             { name: 'vendor', test: /node_modules/ },

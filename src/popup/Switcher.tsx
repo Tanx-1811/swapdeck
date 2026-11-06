@@ -5,19 +5,21 @@ import { parseHttpUrl } from '../core/domains';
 import { importantTargets, liveMembers } from '../core/workspaces';
 import type { Account, AppDef, Workspace } from '../core/types';
 import { customAppFromUrl, presetToInput } from '../shared/apps';
-import { send, type MemberResult, type Probe } from '../shared/protocol';
+import { send, type Probe } from '../shared/protocol';
 import { requestAccess } from '../ui/access';
 import { useAskBeforeSwitch } from '../ui/askBeforeSwitch';
 import { useToast } from '../ui/controls';
 import { Reminders } from '../ui/Reminders';
 import { errorText, useAction, type Snapshot } from '../ui/hooks';
 import { useI18n } from '../ui/i18n';
+import { workspaceOutcomeMessage } from '../ui/workspaceOutcome';
 import { AppList } from './AppList';
 import { AppPanel } from './AppPanel';
 import { START_APP, SwitcherContext, TEST_TAB, type Mode, type SwitchOptions, type Switcher as Api } from './context';
 import { Footer, Header, ThisSite, UnlockForm } from './parts';
 import { SearchResults } from './SearchResults';
 import { WorkspaceBar } from './WorkspaceBar';
+import { WorkspacePicker } from './WorkspacePicker';
 
 /** The tab the popup or side panel acts on: the active tab of its window. */
 async function currentTab(): Promise<chrome.tabs.Tab | null> {
@@ -52,6 +54,43 @@ function useMediaQuery(query: string): boolean {
     return () => list.removeEventListener('change', onChange);
   }, [query]);
   return matches;
+}
+
+/** The wide layout's width. */
+const WIDE_WIDTH = 720;
+
+/**
+ * True when the window can't show the wide layout: Chrome caps popups at 800 × 600
+ * screen pixels, so with the page zoomed past about 110 % the 720 px layout would be
+ * cut off. The popup sizes itself to its content, so it is judged once it has stopped
+ * resizing, and stays compact from then on. Tests open the popup as a tab and resize
+ * it freely: there it simply follows the width.
+ */
+function usePopupTooNarrow(mode: Mode, wantsWide: boolean): boolean {
+  const [narrow, setNarrow] = useState(false);
+  const follow = TEST_TAB !== null;
+  useEffect(() => {
+    if (mode !== 'popup' || (!follow && !wantsWide)) return;
+    let timer = 0;
+    const tooNarrow = () => window.innerWidth > 0 && window.innerWidth < WIDE_WIDTH - 8;
+    const check = () => {
+      if (follow) setNarrow(tooNarrow());
+      // Only once the page has asked for the wide layout and Chrome has sized the popup to it.
+      else if (document.documentElement.classList.contains('layout-wide') && tooNarrow()) setNarrow(true);
+    };
+    const onResize = () => {
+      if (follow) return check();
+      clearTimeout(timer);
+      timer = window.setTimeout(check, 300);
+    };
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [mode, follow, wantsWide]);
+  return narrow;
 }
 
 type View = { kind: 'current' } | { kind: 'app'; appId: string } | { kind: 'apps' };
@@ -120,10 +159,11 @@ export function Switcher({ data, mode }: { data: Snapshot | null; mode: Mode }) 
   const state = data?.state;
   const apps = useMemo(() => state?.apps ?? [], [state]);
   const locked = Boolean(state?.vault && !data?.unlocked);
-  const wide =
-    mode === 'panel'
-      ? panelWide
-      : state?.settings.popupLayout === 'wide' || (state?.settings.popupLayout !== 'compact' && apps.length >= 3);
+  const wantsWide =
+    state?.settings.popupLayout === 'wide' || (state?.settings.popupLayout !== 'compact' && apps.length >= 3);
+  const narrow = usePopupTooNarrow(mode, wantsWide);
+  const wide = mode === 'panel' ? panelWide : wantsWide && !narrow;
+  const [picking, setPicking] = useState(false);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -254,25 +294,6 @@ export function Switcher({ data, mode }: { data: Snapshot | null; mode: Mode }) 
     [run, onCurrentTab, probe, notify, t],
   );
 
-  const describe = useCallback(
-    (results: MemberResult[]) => {
-      const problems = results.filter((result) => result.status !== 'switched' && result.status !== 'already');
-      return problems
-        .map((result) => {
-          const name = state?.apps.find((app) => app.id === result.appId)?.name ?? result.appId;
-          const reason =
-            result.status === 'no-access'
-              ? t('workspaces.reasonAccess')
-              : result.status === 'no-session'
-                ? t('workspaces.reasonSession')
-                : errorText(t, { error: result.error ?? 'UNKNOWN' });
-          return `${name}: ${reason}`;
-        })
-        .join(' · ');
-    },
-    [state, t],
-  );
-
   const switchWorkspace = useCallback(
     async (workspace: Workspace, open = false, justUnlocked = false) => {
       if (!state || busy) return;
@@ -305,17 +326,11 @@ export function Switcher({ data, mode }: { data: Snapshot | null; mode: Mode }) 
         notify(errorText(t, result), 'error');
         return;
       }
-      const { switched, failed, results } = result.data;
-      notify(
-        switched === 0 && failed === 0
-          ? t('workspaces.alreadyInUse', { name: workspace.name })
-          : t('workspaces.switched', { name: workspace.name, n: switched }) +
-              (failed ? ` ${t('workspaces.someFailed', { details: describe(results) })}` : ''),
-        failed ? 'info' : 'success',
-      );
+      const message = workspaceOutcomeMessage(t, workspace.name, result.data, state.apps);
+      notify(message.text, message.tone);
       refresh();
     },
-    [state, busy, locked, askBeforeSwitch, t, probe, notify, describe],
+    [state, busy, locked, askBeforeSwitch, t, probe, notify],
   );
 
   const addPreset = useCallback(
@@ -410,6 +425,7 @@ export function Switcher({ data, mode }: { data: Snapshot | null; mode: Mode }) 
     addPreset,
     addSite,
     openManager,
+    openPicker: () => setPicking(true),
     close,
   };
 
@@ -545,6 +561,7 @@ export function Switcher({ data, mode }: { data: Snapshot | null; mode: Mode }) 
         <Footer
           showKeys={Boolean(selectedApp) && state.accounts.filter((a) => a.appId === selectedApp?.id).length > 1}
         />
+        {state.workspaces.length > 0 && <WorkspacePicker open={picking} onClose={() => setPicking(false)} />}
       </div>
     </SwitcherContext>
   );

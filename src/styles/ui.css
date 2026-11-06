@@ -854,6 +854,32 @@ kbd {
   box-shadow: inset 0 0 0 1px var(--tile-ring);
 }
 
+/* Which workspaces use an account: a dot in each one's color, then the first name. */
+.ws-tags {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--text-3);
+}
+
+.ws-tags__dots {
+  display: inline-flex;
+  flex: none;
+}
+
+.ws-tags__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1.5px var(--bg-elev);
+}
+
+.ws-tags__dot + .ws-tags__dot {
+  margin-left: -2px;
+}
+
 /* --- The seal: what is in use ---------------------------------------------- */
 
 .seal {
@@ -1276,6 +1302,8 @@ button.chip:hover {
 .toast__text {
   flex: 1;
   min-width: 0;
+  /* Messages with several parts (a workspace switch's failures) put one per line. */
+  white-space: pre-line;
 }
 
 .toast button {

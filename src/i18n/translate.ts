@@ -30,9 +30,23 @@ export function formatMessage(template: string, params?: MessageParams): string 
   return template.replace(/\{(\w+)\}/g, (match, name: string) => (name in params ? String(params[name]) : match));
 }
 
+/**
+ * Translates a key. A count (`n`) picks the plural form when the dictionary has one:
+ * "workspaces.appCount.one" ("{n} app") for 1 in English. Vietnamese has no plural,
+ * so its ".one" forms are never chosen (they exist only because vi defines every key).
+ */
 export function createTranslator(language: Language): Translate {
   const dictionary = DICTIONARIES[language];
-  return (key, params) => formatMessage(dictionary[key] ?? en[key], params);
+  const plural = new Intl.PluralRules(language);
+  return (key, params) => {
+    let template = dictionary[key] ?? en[key];
+    const count = params?.n;
+    if (typeof count === 'number') {
+      const form = `${key}.${plural.select(count)}`;
+      if (Object.prototype.hasOwnProperty.call(dictionary, form)) template = dictionary[form as MessageKey];
+    }
+    return formatMessage(template, params);
+  };
 }
 
 export function isMessageKey(key: string): key is MessageKey {
@@ -50,7 +64,8 @@ export function relativeTime(timestamp: number, language: Language, now = Date.n
   const format = new Intl.RelativeTimeFormat(language, { numeric: 'auto' });
   // Lower case, as English is: these phrases go mid-sentence ("Used yesterday", "Dùng hôm qua").
   const lower = (text: string) => text.charAt(0).toLocaleLowerCase(language) + text.slice(1);
-  if (abs < 45) return lower(format.format(0, 'second'));
+  // "just now" / "vừa xong" ("now" / "bây giờ" read like a command: "Saved now", "Lưu bây giờ").
+  if (abs < 45) return DICTIONARIES[language]['time.justNow'];
   if (abs < 45 * 60) return lower(format.format(Math.round(seconds / 60), 'minute'));
   if (abs < 22 * 3600) return lower(format.format(Math.round(seconds / 3600), 'hour'));
   if (abs < 26 * 86400) return lower(format.format(Math.round(seconds / 86400), 'day'));

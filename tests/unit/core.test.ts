@@ -363,6 +363,13 @@ describe('util', () => {
     expect(initials('work')).toBe('WO');
     expect(initials('an@example.org')).toBe('AN');
     expect(initials('')).toBe('?');
+    // Punctuation between words is not a word.
+    expect(initials('Client — Acme')).toBe('CA');
+    expect(initials('Acme (prod)')).toBe('AP');
+    expect(initials('A & B')).toBe('AB');
+    expect(initials('“Phương” Nam')).toBe('PN');
+    expect(initials('Đội ngũ / QA')).toBe('ĐN');
+    expect(initials('🚀')).toBe('🚀');
   });
 
   it('suggests labels and colors', () => {

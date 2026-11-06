@@ -77,7 +77,7 @@ export function WorkspaceEditor({ id }: { id: string | null }) {
 
   return (
     <div className="stack">
-      <nav className="breadcrumb" aria-label="Breadcrumb">
+      <nav className="breadcrumb" aria-label={t('nav.breadcrumb')}>
         <a href="#/workspaces">{t('workspaces.title')}</a>
         <span aria-hidden="true">/</span>
         <span aria-current="page">{existing ? existing.name : t('workspaces.new')}</span>

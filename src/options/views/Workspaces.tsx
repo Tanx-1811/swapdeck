@@ -19,6 +19,7 @@ import { AppIcon } from '../../ui/Avatar';
 import { useAskBeforeSwitch } from '../../ui/askBeforeSwitch';
 import { MenuButton, Spinner, useConfirm, useToast } from '../../ui/controls';
 import { useI18n } from '../../ui/i18n';
+import { workspaceOutcomeMessage } from '../../ui/workspaceOutcome';
 import { WorkspaceBadge } from '../../popup/WorkspaceBar';
 import { useManager } from '../context';
 import { Card, PageHeader } from '../Options';
@@ -27,16 +28,18 @@ import { moveId } from './Apps';
 
 export function useWorkspaceSwitch() {
   const { t } = useI18n();
-  const { data, run } = useManager();
+  const { data, run, requireUnlock } = useManager();
   const notify = useToast();
   const askBeforeSwitch = useAskBeforeSwitch();
   return async (workspace: Workspace, open = false) => {
     const { state } = data;
+    // Locked: the passphrase first, right here, then the switch goes on.
+    if (!(await requireUnlock())) return;
     const go = await askBeforeSwitch({
       kind: 'workspace',
       label: workspace.name,
       important: importantTargets(workspace, state.apps, state.accounts, state.active),
-      confirmAll: false,
+      confirmAll: state.settings.confirmSwitch,
       appIds: liveMembers(workspace, state.apps, state.accounts)
         .filter(([appId, accountId]) => state.active[appId] !== accountId)
         .map(([appId]) => appId),
@@ -44,13 +47,8 @@ export function useWorkspaceSwitch() {
     if (!go) return;
     const outcome = await run(open ? 'workspace.open' : 'workspace.switch', { id: workspace.id }, `ws:${workspace.id}`);
     if (!outcome) return;
-    notify(
-      outcome.switched === 0 && outcome.failed === 0
-        ? t('workspaces.alreadyInUse', { name: workspace.name })
-        : t('workspaces.switched', { name: workspace.name, n: outcome.switched }) +
-            (outcome.failed ? ` ${t('workspaces.failedCount', { n: outcome.failed })}` : ''),
-      outcome.failed ? 'info' : 'success',
-    );
+    const message = workspaceOutcomeMessage(t, workspace.name, outcome, state.apps);
+    notify(message.text, message.tone);
   };
 }
 

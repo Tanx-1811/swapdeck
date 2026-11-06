@@ -63,6 +63,55 @@ body {
   color: var(--on-lacquer);
 }
 
+.popup__header-actions {
+  margin-left: auto;
+}
+
+/* The workspace in use, on the lid: always in sight, opens the workspace list. */
+.ws-current {
+  display: inline-flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 240px;
+  min-height: 26px;
+  margin-left: 4px;
+  padding: 0 7px 0 5px;
+  border: 1px solid var(--lacquer-border);
+  border-radius: var(--r-sm);
+  background: var(--lacquer-hover);
+  color: var(--on-lacquer);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.ws-current:hover {
+  border-color: var(--on-lacquer-2);
+  background: var(--lacquer-active);
+}
+
+.ws-current--none {
+  color: var(--on-lacquer-2);
+  font-weight: 500;
+}
+
+.ws-current > svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--on-lacquer-2);
+}
+
+.ws-current .spinner {
+  width: 12px;
+  height: 12px;
+}
+
 .popup__body {
   display: grid;
   align-content: start;
@@ -197,18 +246,45 @@ body {
   min-width: 0;
 }
 
+/* The name keeps its line; labels (important, expired, in use) move to the next one when they don't fit beside it. */
 .account__name {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 3px 6px;
   min-width: 0;
   font-weight: 600;
   font-size: 13.5px;
 }
 
+.account__name > .truncate {
+  flex: 0 1 auto;
+  max-width: 100%;
+}
+
 .account__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
   color: var(--text-2);
   font-size: 11.5px;
+}
+
+.account__meta .ws-tags {
+  flex: 0 1 auto;
+  max-width: 45%;
+}
+
+/* In a narrow row, the workspace keeps only its colored dot (its name stays in the tooltip). */
+.account__text {
+  container-type: inline-size;
+}
+
+@container (max-width: 240px) {
+  .account__meta .ws-tags__names {
+    display: none;
+  }
 }
 
 .account__note {
@@ -413,6 +489,11 @@ body {
   color: var(--text-2);
   font-size: 12px;
   line-height: 1.5;
+}
+
+.empty__action {
+  justify-self: center;
+  margin-top: 8px;
 }
 
 .welcome {
@@ -659,6 +740,111 @@ html.mode-panel .popup {
 
 .ws-bar__chips::-webkit-scrollbar {
   display: none;
+}
+
+/* Chips scrolled out of sight fade at the edge, so the strip says there is more. */
+.ws-bar__chips[data-fade='start'] {
+  mask-image: linear-gradient(to right, transparent, black 28px);
+}
+
+.ws-bar__chips[data-fade='end'] {
+  mask-image: linear-gradient(to left, transparent, black 28px);
+}
+
+.ws-bar__chips[data-fade='start end'] {
+  mask-image: linear-gradient(to right, transparent, black 28px, black calc(100% - 28px), transparent);
+}
+
+.ws-chip--all {
+  padding: 0 9px 0 7px;
+  border-style: dashed;
+  border-color: var(--border-strong);
+  color: var(--text-2);
+}
+
+.ws-chip--all svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* --- Workspace picker ------------------------------------------------------------ */
+
+.picker {
+  display: grid;
+  gap: 10px;
+}
+
+.picker__list {
+  display: grid;
+  gap: 4px;
+  max-height: min(340px, calc(100vh - 220px));
+  margin: 0;
+  padding: 2px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.picker-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.picker-row:hover:not(:disabled) {
+  border-color: var(--border);
+  background: var(--bg-hover);
+}
+
+.picker-row:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.picker-row--active {
+  border-color: var(--border);
+  background: var(--bg);
+}
+
+.picker-row__text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+}
+
+.picker-row__name {
+  display: flex;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.picker__empty {
+  margin: 8px 2px;
+}
+
+.picker__footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.picker__footer .link-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.picker__footer svg {
+  width: 14px;
+  height: 14px;
 }
 
 .ws-bar__empty {

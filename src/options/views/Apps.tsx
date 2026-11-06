@@ -103,7 +103,7 @@ export function Apps() {
                       ))}
                     </span>
                     <span className="muted">
-                      {accounts.length === 1 ? t('apps.oneAccount') : t('apps.accounts', { n: accounts.length })}
+                      {t('apps.accounts', { n: accounts.length })}
                       {active ? ` · ${active.label}` : ''}
                     </span>
                   </span>

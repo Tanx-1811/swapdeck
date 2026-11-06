@@ -43,6 +43,8 @@ export type Switcher = {
   addPreset: (presetId: string) => Promise<void>;
   addSite: (url: string) => Promise<void>;
   openManager: (path?: string) => void;
+  /** Opens the searchable list of workspaces. */
+  openPicker: () => void;
   /** Closes the popup (never the side panel, nor the popup opened as a tab by tests). */
   close: () => void;
 };

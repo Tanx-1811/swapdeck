@@ -109,10 +109,13 @@ export function nextColor(accounts: readonly Pick<Account, 'color'>[]): string {
 
 /** "Ngọc Ánh" → "NA", "work" → "WO", "an@example.org" → "AN". */
 export function initials(label: string): string {
-  const text = label.split('@')[0]!.trim();
-  const words = text.split(/[\s._-]+/).filter(Boolean);
+  // Words are runs of letters and digits: "Client — Acme" is "CA", "Acme (prod)" is "AP".
+  const text = label.normalize('NFC').split('@')[0]!;
+  const words = text.split(/[^\p{L}\p{M}\p{N}]+/u).filter(Boolean);
   if (words.length >= 2) return (firstChar(words[0]!) + firstChar(words[1]!)).toUpperCase();
-  const chars = Array.from(words[0] ?? '?').map(firstChar);
+  // Nothing but symbols (an emoji, say): show the first one rather than "?".
+  if (!words.length) return Array.from(text.trim())[0] ?? '?';
+  const chars = Array.from(words[0]!).map(firstChar);
   return (chars.slice(0, 2).join('') || '?').toUpperCase();
 }
 

@@ -90,7 +90,7 @@ export function AddApp() {
 
   return (
     <div className="stack">
-      <nav className="breadcrumb" aria-label="Breadcrumb">
+      <nav className="breadcrumb" aria-label={t('nav.breadcrumb')}>
         <a href="#/apps">{t('nav.apps')}</a>
         <span aria-hidden="true">/</span>
         <span aria-current="page">{t('add.title')}</span>
@@ -273,7 +273,7 @@ export function CustomApp({ initialUrl }: { initialUrl: string }) {
 
   return (
     <div className="stack">
-      <nav className="breadcrumb" aria-label="Breadcrumb">
+      <nav className="breadcrumb" aria-label={t('nav.breadcrumb')}>
         <a href="#/apps">{t('nav.apps')}</a>
         <span aria-hidden="true">/</span>
         <a href="#/add">{t('add.title')}</a>
@@ -301,8 +301,13 @@ export function CustomApp({ initialUrl }: { initialUrl: string }) {
                 aria-invalid={Boolean(urlError)}
                 onChange={(event) => setUrl(event.target.value)}
               />
-              <button type="submit" className="btn btn--primary" disabled={!url || Boolean(urlError)}>
-                {t('common.add')}
+              {/* This step only fills in the form below; "Add" is the form's own button. */}
+              <button
+                type="submit"
+                className={`btn${draft ? '' : ' btn--primary'}`}
+                disabled={!url || Boolean(urlError)}
+              >
+                {t('add.customContinue')}
               </button>
             </div>
           </Field>

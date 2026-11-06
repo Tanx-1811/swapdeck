@@ -10,7 +10,7 @@ import {
   ShieldCheck,
   Users,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ErrorCode } from '../shared/protocol';
 import { useToast } from '../ui/controls';
 import { useAction, type Snapshot } from '../ui/hooks';
@@ -18,6 +18,7 @@ import { useI18n } from '../ui/i18n';
 import { Logo } from '../ui/Logo';
 import { ManagerContext, type Manager } from './context';
 import { useRoute, type Route } from './router';
+import { UnlockDialog } from './UnlockDialog';
 import { AddApp, CustomApp } from './views/AddApp';
 import { AppDetail } from './views/AppDetail';
 import { Apps } from './views/Apps';
@@ -32,6 +33,14 @@ import { Workspaces } from './views/Workspaces';
 
 type NavItem = { route: Route['name']; hash: string; label: string; icon: ReactNode; match: Route['name'][] };
 
+/** Moves the focus to the page's heading (else the content itself), e.g. for "Skip to content". */
+function focusHeading(main: HTMLElement | null, preventScroll: boolean) {
+  const target = main?.querySelector<HTMLElement>('h1') ?? main;
+  if (!target) return;
+  target.tabIndex = -1;
+  target.focus({ preventScroll });
+}
+
 export function Options({ data }: { data: Snapshot | null }) {
   const { t } = useI18n();
   const notify = useToast();
@@ -45,10 +54,35 @@ export function Options({ data }: { data: Snapshot | null }) {
     [notify],
   );
   const { run, pending } = useAction(onError, t);
+  const mainRef = useRef<HTMLElement>(null);
+  const shownRoute = useRef<Route | null>(null);
+  const [unlocking, setUnlocking] = useState<((unlocked: boolean) => void) | null>(null);
+  const locked = Boolean(data?.state.vault && !data.unlocked);
+  const requireUnlock = useCallback(
+    () => (locked ? new Promise<boolean>((resolve) => setUnlocking(() => resolve)) : Promise.resolve(true)),
+    [locked],
+  );
 
   useEffect(() => {
     if (data) document.documentElement.dataset.ready = 'true';
   }, [data]);
+
+  // A new page: its heading takes the focus (screen readers hear where they are), unless
+  // something in the page already took it on purpose (a search box that focuses itself).
+  const ready = Boolean(data);
+  useEffect(() => {
+    if (!ready || shownRoute.current === route) return;
+    const first = shownRoute.current === null;
+    shownRoute.current = route;
+    // On a narrow window the nav is a scrolling strip: keep the current page's tab in sight.
+    document
+      .querySelector('.sidebar__link[aria-current="page"]')
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    if (first) return;
+    const main = mainRef.current;
+    if (!main || (main.contains(document.activeElement) && document.activeElement !== main)) return;
+    focusHeading(main, true);
+  }, [route, ready]);
 
   useEffect(() => {
     const titles: Partial<Record<Route['name'], string>> = {
@@ -102,11 +136,14 @@ export function Options({ data }: { data: Snapshot | null }) {
     );
   }
 
-  const manager: Manager = { data, run, pending, lastError };
+  const manager: Manager = { data, run, pending, lastError, requireUnlock };
   const { state, unlocked } = data;
 
   return (
     <ManagerContext value={manager}>
+      <button type="button" className="skip-link" onClick={() => focusHeading(mainRef.current, false)}>
+        {t('nav.skip')}
+      </button>
       <div className="manager">
         <aside className="sidebar">
           <a className="sidebar__brand" href="#/">
@@ -152,7 +189,7 @@ export function Options({ data }: { data: Snapshot | null }) {
           )}
           <p className="sidebar__tagline">{t('app.tagline')}</p>
         </aside>
-        <main className="content" id="main">
+        <main className="content" id="main" ref={mainRef}>
           {route.name === 'overview' && <Overview />}
           {route.name === 'workspaces' && <Workspaces />}
           {route.name === 'workspace' && <WorkspaceEditor key={route.id ?? 'new'} id={route.id} />}
@@ -167,6 +204,13 @@ export function Options({ data }: { data: Snapshot | null }) {
           {route.name === 'help' && <Help />}
         </main>
       </div>
+      <UnlockDialog
+        open={unlocking !== null}
+        onDone={(ok) => {
+          unlocking?.(ok);
+          setUnlocking(null);
+        }}
+      />
     </ManagerContext>
   );
 }

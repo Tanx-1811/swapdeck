@@ -14,6 +14,11 @@ export type Manager = {
   pending: string | null;
   /** The last failed request's error code, for views that react to e.g. LOCKED. */
   lastError: ErrorCode | null;
+  /**
+   * Resolves true at once when saved sessions are readable; otherwise asks for the
+   * passphrase in a dialog and resolves true once unlocked, false if the user gives up.
+   */
+  requireUnlock: () => Promise<boolean>;
 };
 
 export const ManagerContext = createContext<Manager | null>(null);

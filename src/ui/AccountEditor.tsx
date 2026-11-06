@@ -92,7 +92,7 @@ export function AccountEditor({
             value={label}
             maxLength={120}
             required
-            autoFocus
+            data-autofocus
             onChange={(event) => setLabel(event.target.value)}
           />
         </Field>

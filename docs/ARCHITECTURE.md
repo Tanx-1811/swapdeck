@@ -324,9 +324,13 @@ client, company or project.
   workspace;
 - **wide** (720 × 600): app list on the left (the current tab's app first, tagged "This tab", mismatch warning from
   `sd:live`), the selected app's accounts or the search results on the right. Setting `popupLayout`: `auto` (wide with
-  three or more apps, default), `compact`, `wide`;
+  three or more apps, default), `compact`, `wide`. When Chrome can't give the popup 720 px (page zoom past ~110 %,
+  popups are capped at 800 screen pixels), it falls back to compact (`usePopupTooNarrow`);
 - **panel** (side panel): same switcher at full height, wide from 640 px of width; it follows the active tab of its
   window (`tabs.onActivated`/`onUpdated`) and never closes itself.
+
+The lid shows the workspace fully in use as a pill that opens `WorkspacePicker` (search, arrows, Enter); with more than
+six workspaces (`WS_BAR_MAX`) the bar keeps the three in use or used last and an "All N" chip that opens the same picker.
 
 Switching an account of the current tab's app happens in that tab (and closes the popup); for any other app it is a
 **background** switch (`switch` with `background: true`) unless the user picks "Switch and open" (`focus: true`). The

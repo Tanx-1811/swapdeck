@@ -37,7 +37,7 @@ export function ReloginCard() {
 
 function ReloginRow({ account, app }: { account: Account; app: AppDef }) {
   const { t } = useI18n();
-  const { run, pending } = useManager();
+  const { data, run, pending } = useManager();
   const notify = useToast();
   const askBeforeSwitch = useAskBeforeSwitch();
   const [granted, allow] = useAccess(app);
@@ -71,7 +71,7 @@ function ReloginRow({ account, app }: { account: Account; app: AppDef }) {
               label: app.name,
               app: app.name,
               important: [],
-              confirmAll: false,
+              confirmAll: data.state.settings.confirmSwitch,
               appIds: [app.id],
             });
             if (!go) return;

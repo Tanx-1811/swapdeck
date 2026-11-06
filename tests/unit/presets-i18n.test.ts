@@ -101,13 +101,20 @@ describe('i18n', () => {
     expect(resolveLanguage('en', 'vi')).toBe('en');
     expect(formatMessage('{a} and {b}', { a: 1 })).toBe('1 and {b}');
     expect(createTranslator('vi')('common.save')).toBe('Lưu');
+    // A count picks the plural form where the language has one.
+    expect(createTranslator('en')('workspaces.appCount', { n: 1 })).toBe('1 app');
+    expect(createTranslator('en')('workspaces.appCount', { n: 0 })).toBe('0 apps');
+    expect(createTranslator('en')('workspaces.appCount', { n: 3 })).toBe('3 apps');
+    expect(createTranslator('vi')('workspaces.appCount', { n: 1 })).toBe('1 ứng dụng');
+    expect(createTranslator('en')('account.defaultLabel', { n: 1 })).toBe('Account 1');
     expect(isMessageKey('common.save')).toBe(true);
     expect(isMessageKey('nope.nope')).toBe(false);
   });
 
   it('formats relative times and sizes', () => {
     const now = Date.UTC(2026, 9, 19, 12);
-    expect(relativeTime(now - 5_000, 'en', now)).toBe('now');
+    expect(relativeTime(now - 5_000, 'en', now)).toBe('just now');
+    expect(relativeTime(now - 5_000, 'vi', now)).toBe('vừa xong');
     expect(relativeTime(now - 3 * 60_000, 'en', now)).toBe('3 minutes ago');
     expect(relativeTime(now - 2 * 3600_000, 'vi', now)).toBe('2 giờ trước');
     expect(relativeTime(now - 86400_000, 'en', now)).toBe('yesterday');

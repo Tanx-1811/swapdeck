@@ -51,11 +51,20 @@ test.describe('workspaces', () => {
     const tabsBefore = context.pages().length;
 
     const popup = await openPopup(site);
-    await expect(popup.getByRole('button', { name: /Team Bob/ })).toHaveAttribute('aria-pressed', 'true');
-    await popup.getByRole('button', { name: /Team Alice/ }).click();
+    await expect(popup.locator('.ws-bar').getByRole('button', { name: /Team Bob/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await popup
+      .locator('.ws-bar')
+      .getByRole('button', { name: /Team Alice/ })
+      .click();
     await expect(site.locator('#server-user')).toHaveText('alice@acme.test');
     await expect.poll(() => activeAccount(context, setup.globex.id)).toBe(setup.alice[setup.globex.id]);
-    await expect(popup.getByRole('button', { name: /Team Alice/ })).toHaveAttribute('aria-pressed', 'true');
+    await expect(popup.locator('.ws-bar').getByRole('button', { name: /Team Alice/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     await expect(popup.getByText(/Switched to "Team Alice": 2 apps/)).toBeVisible();
     expect(context.pages().length).toBe(tabsBefore + 1); // only the popup itself
 
@@ -83,7 +92,10 @@ test.describe('workspaces', () => {
     await popup.goto(`chrome-extension://${extensionId}/popup/popup.html?tab=-1`);
     await popup.locator('html[data-ready]').waitFor({ state: 'attached' });
     const before = context.pages().length;
-    await popup.getByRole('button', { name: /Team Alice/ }).click();
+    await popup
+      .locator('.ws-bar')
+      .getByRole('button', { name: /Team Alice/ })
+      .click();
     await expect(popup.getByText(/Switched to "Team Alice": 2 apps/)).toBeVisible();
     expect(context.pages().length).toBe(before);
     for (const app of [setup.acme, setup.globex]) {
@@ -118,7 +130,7 @@ test.describe('workspaces', () => {
     await page.getByLabel('Address').fill(`${setup.globex.origin}/project/alpha`);
     await page.getByRole('button', { name: 'Save', exact: true }).click();
     const card = page.getByRole('listitem').filter({ hasText: 'Client Globex' });
-    await expect(card).toContainText('1 pages');
+    await expect(card).toContainText('1 page');
 
     await card.getByRole('button', { name: 'Open workspace' }).click();
     await expect.poll(() => context.pages().some((tab) => tab.url().endsWith('/project/alpha'))).toBe(true);

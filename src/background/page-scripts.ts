@@ -453,7 +453,9 @@ export function showToast(content: ToastContent): void {
   document.getElementById(id)?.remove();
   const host = document.createElement('div');
   host.id = id;
-  host.style.cssText = 'position:fixed;top:16px;right:16px;z-index:2147483647;';
+  // Below the important-account ribbon's tag when it is shown.
+  const top = document.getElementById('swapdeck-ribbon') ? 30 : 16;
+  host.style.cssText = `position:fixed;top:${top}px;right:16px;z-index:2147483647;`;
   const root = host.attachShadow({ mode: 'closed' });
   const sheet = new CSSStyleSheet();
   const dark =
@@ -514,11 +516,20 @@ export function showToast(content: ToastContent): void {
   close.type = 'button';
   close.textContent = '×';
   close.setAttribute('aria-label', content.closeLabel);
-  close.addEventListener('click', () => host.remove());
+  // The important-account ribbon can arrive just after the toast: step down below its tag then.
+  const place = new MutationObserver(() => {
+    host.style.top = document.getElementById('swapdeck-ribbon') ? '30px' : '16px';
+  });
+  place.observe(document.documentElement, { childList: true });
+  const remove = () => {
+    place.disconnect();
+    host.remove();
+  };
+  close.addEventListener('click', remove);
   toast.append(badge, text, close);
   root.append(toast);
   (document.body ?? document.documentElement).append(host);
-  setTimeout(() => host.remove(), content.durationMs);
+  setTimeout(remove, content.durationMs);
 }
 
 export type RibbonContent = {
@@ -804,7 +815,9 @@ export function askLinkOnPage(content: LinkAskContent): Promise<LinkAnswer> {
     document.getElementById('swapdeck-toast')?.remove();
     const host = document.createElement('div');
     host.id = id;
-    host.style.cssText = 'position:fixed;top:16px;right:16px;z-index:2147483647;';
+    // Below the important-account ribbon's tag when it is shown.
+    const top = document.getElementById('swapdeck-ribbon') ? 30 : 16;
+    host.style.cssText = `position:fixed;top:${top}px;right:16px;z-index:2147483647;`;
     const root = host.attachShadow({ mode: 'closed' });
     const dark =
       content.theme === 'dark' ||
@@ -835,7 +848,8 @@ export function askLinkOnPage(content: LinkAskContent): Promise<LinkAnswer> {
         font-size: 18px; line-height: 1; cursor: pointer; }
       .close:hover { background: ${hover}; color: ${ink}; }
       .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-top: 12px; }
-      .actions button { min-height: 30px; padding: 0 12px; border-radius: 8px; font: 600 12.5px/1 system-ui, -apple-system, sans-serif; cursor: pointer; }
+      .actions button { min-height: 30px; max-width: 100%; padding: 6px 12px; border-radius: 8px; overflow: hidden;
+        white-space: nowrap; text-overflow: ellipsis; font: 600 12.5px/1.3 system-ui, -apple-system, sans-serif; cursor: pointer; }
       .no { border: 1px solid transparent; background: transparent; color: ${muted}; }
       .no:hover { background: ${hover}; color: ${ink}; }
       .always { border: 1px solid ${line}; background: transparent; color: ${ink}; }
@@ -887,6 +901,8 @@ export function askLinkOnPage(content: LinkAskContent): Promise<LinkAnswer> {
     const no = button('no', content.noLabel);
     const always = button('always', content.alwaysLabel);
     const yes = button('switch', content.switchLabel);
+    // A long account name is cut to one line on the button; the whole of it is in the title above and here.
+    yes.title = content.switchLabel;
     actions.append(no, always, yes);
     card.append(head, actions);
     root.append(card);

@@ -162,9 +162,63 @@ body {
   padding: 36px 44px 72px;
 }
 
+/* Headings take the focus on a new page for screen readers; they are not controls, so no ring. */
+.content h1[tabindex='-1']:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+/* "Skip to content": hidden until the keyboard reaches it, first thing on the page. */
+.skip-link {
+  position: fixed;
+  z-index: 60;
+  top: 8px;
+  left: 8px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--ink);
+  color: var(--on-ink);
+  font: 600 13px/1.4 var(--font);
+  cursor: pointer;
+  transform: translateY(-160%);
+}
+
+.skip-link:focus-visible {
+  transform: none;
+}
+
+/* minmax(0, 1fr): a long unbreakable line (an address, a name) truncates inside its card
+   instead of making the whole page wider than the window. */
 .stack {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 20px;
+}
+
+/* The same for every one-column list of cards and rows, and the text beside an icon. */
+.account-cards,
+.account-card,
+.account-card__text,
+.workspace-cards,
+.workspace-card,
+.workspace-card__text,
+.workspace-mini__text,
+.list-row__text,
+.relogin__text,
+.suggestion__text,
+.preset__text,
+.step__body,
+.relogin,
+.suggestions,
+.shortcuts,
+.steps,
+.faq,
+.link-rows,
+.member-table,
+.subpanel,
+.form {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .stack--tight {
@@ -735,8 +789,16 @@ body {
   font-size: 12px;
 }
 
+/* On the overview's half-width card, entries wrap instead of cutting names to "Khách h…". */
 .activity li > .history-line {
   flex: 1;
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+
+.activity .history-line > .truncate {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .history-line {
@@ -805,6 +867,7 @@ body {
 
 .list-card {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   margin: 0;
   padding: 6px;
   border: 1px solid var(--border);
@@ -859,10 +922,11 @@ body {
   background: var(--bg-hover);
 }
 
+/* The app's name keeps room; the accounts summary beside it gives way first. */
 .list-row__text {
   display: grid;
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 180px;
+  min-width: 120px;
 }
 
 .list-row__text strong {
@@ -875,9 +939,23 @@ body {
 
 .list-row__accounts {
   display: flex;
+  flex: 0 1 auto;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+  max-width: 55%;
   font-size: 12.5px;
+}
+
+.list-row__accounts .avatar-stack {
+  flex: none;
+}
+
+.list-row__accounts > .muted {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .list-row__chevron {
@@ -999,16 +1077,34 @@ body {
   min-width: 0;
 }
 
+/* Long names keep their own line; the labels wrap below them instead of squeezing them. */
 .account-card__title {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 4px 10px;
   min-width: 0;
   font-size: 15px;
 }
 
 .account-card__title strong {
+  flex: 0 1 auto;
+  max-width: 100%;
   font-weight: 600;
+}
+
+.account-card__ws {
+  display: flex;
+  min-width: 0;
+  font-size: 12.5px;
+}
+
+.account-card__ws:empty {
+  display: none;
+}
+
+.account-filter {
+  max-width: 360px;
 }
 
 .account-card__note {
@@ -2009,9 +2105,47 @@ body {
 
 /* Narrow: the spine lies down as one scrolling strip of tabs. */
 @media (max-width: 760px) {
+  /* minmax(0, …): the strip of tabs scrolls inside the column instead of widening the page. */
   .manager {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     background: none;
+  }
+
+  /* Headers and cards stack their actions under the text instead of pushing past the edge. */
+  .page-header,
+  .app-header,
+  .account-card__main,
+  .workspace-card__head {
+    flex-wrap: wrap;
+  }
+
+  .page-header__actions,
+  .app-header__actions {
+    flex-wrap: wrap;
+  }
+
+  .account-card__text,
+  .workspace-card__text {
+    flex: 1 1 calc(100% - 80px);
+  }
+
+  .account-card__actions,
+  .workspace-card__actions {
+    width: 100%;
+    justify-content: flex-start;
+    padding-left: 62px;
+  }
+
+  .workspace-card__actions {
+    padding-left: 58px;
+  }
+
+  .account-card__links {
+    padding-left: 0;
+  }
+
+  .list-row__accounts .avatar-stack {
+    display: none;
   }
 
   .sidebar {

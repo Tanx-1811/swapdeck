@@ -4,17 +4,20 @@ import {
   ArrowUp,
   Ellipsis,
   ExternalLink,
+  LockOpen,
   LogIn,
   Pencil,
   Pin,
   RotateCcw,
+  Search,
   Trash2,
   TriangleAlert,
   UserPlus,
   X,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { displayUrl } from '../../core/domains';
+import { rankAccounts } from '../../core/search';
 import type { Account, AppDef } from '../../core/types';
 import { formatBytes, relativeTime } from '../../i18n/translate';
 import { appToInput } from '../../shared/apps';
@@ -24,12 +27,17 @@ import { useAskBeforeSwitch } from '../../ui/askBeforeSwitch';
 import { AppIcon, Avatar } from '../../ui/Avatar';
 import { Callout, MenuButton, Spinner, useConfirm, useToast } from '../../ui/controls';
 import { ExpiredFlag } from '../../ui/flags';
+import { usePreviousSessions } from '../../ui/hooks';
 import { useI18n } from '../../ui/i18n';
+import { WorkspaceTags } from '../../ui/WorkspaceTags';
 import { useManager } from '../context';
 import { Card } from '../Options';
 import { navigate } from '../router';
 import { moveId } from './Apps';
 import { AppForm } from './AppForm';
+
+/** With more accounts than this, an app's page offers a filter box. */
+const FILTER_FROM = 8;
 
 export function useAccess(app: AppDef | undefined): [boolean | null, () => Promise<void>] {
   const [granted, setGranted] = useState<boolean | null>(null);
@@ -79,7 +87,7 @@ export function AppDetail({ id, tab }: { id: string; tab: 'accounts' | 'settings
 
   return (
     <div className="stack">
-      <nav className="breadcrumb" aria-label="Breadcrumb">
+      <nav className="breadcrumb" aria-label={t('nav.breadcrumb')}>
         <a href="#/apps">{t('nav.apps')}</a>
         <span aria-hidden="true">/</span>
         <span aria-current="page">{app.name}</span>
@@ -108,7 +116,7 @@ export function AppDetail({ id, tab }: { id: string; tab: 'accounts' | 'settings
                 label: app.name,
                 app: app.name,
                 important: [],
-                confirmAll: false,
+                confirmAll: data.state.settings.confirmSwitch,
                 appIds: [app.id],
               });
               if (!go) return;
@@ -201,12 +209,26 @@ function AccountsPanel({
 }) {
   const { t, language } = useI18n();
   const askBeforeSwitch = useAskBeforeSwitch();
-  const { data, run, pending } = useManager();
+  const { data, run, pending, requireUnlock } = useManager();
   const notify = useToast();
   const confirm = useConfirm();
   const [editing, setEditing] = useState<Account | null>(null);
-  const ids = accounts.map((account) => account.id);
+  const [filter, setFilter] = useState('');
+  const listRef = useRef<HTMLUListElement>(null);
+  const ids = useMemo(() => accounts.map((account) => account.id), [accounts]);
+  const previous = usePreviousSessions(ids);
   const locked = Boolean(data.state.vault && !data.unlocked);
+  const filtering = accounts.length > FILTER_FROM && filter.trim() !== '';
+  const matching = filtering ? new Set(rankAccounts([app], accounts, filter).map((item) => item.account.id)) : null;
+  const shown = matching ? accounts.filter((account) => matching.has(account.id)) : accounts;
+
+  // With many accounts, the one in use may be far down the page: bring it into view on arrival.
+  useEffect(() => {
+    if (!activeId) return;
+    listRef.current
+      ?.querySelector<HTMLElement>(`[data-account="${CSS.escape(activeId)}"]`)
+      ?.scrollIntoView({ block: 'nearest' });
+  }, [activeId]);
 
   if (accounts.length === 0) {
     return (
@@ -235,16 +257,31 @@ function AccountsPanel({
           tone="info"
           title={t('vault.locked')}
           actions={
-            <a className="btn btn--sm" href="#/security">
-              {t('common.unlock')}
-            </a>
+            <button type="button" className="btn btn--sm" onClick={() => void requireUnlock()}>
+              <LockOpen /> {t('common.unlock')}
+            </button>
           }
         >
           {t('vault.lockedHint')}
         </Callout>
       )}
-      <ul className="account-cards" aria-label={t('apps.accountsHeading')}>
-        {accounts.map((account, index) => {
+      {accounts.length > FILTER_FROM && (
+        <div className="input-with-icon account-filter">
+          <Search aria-hidden="true" />
+          <input
+            className="input"
+            type="search"
+            value={filter}
+            aria-label={t('apps.filterAccounts')}
+            placeholder={t('apps.filterPlaceholder')}
+            onChange={(event) => setFilter(event.target.value)}
+          />
+        </div>
+      )}
+      {filtering && shown.length === 0 && <p className="muted">{t('apps.filterEmpty', { query: filter.trim() })}</p>}
+      <ul className="account-cards" aria-label={t('apps.accountsHeading')} ref={listRef}>
+        {shown.map((account) => {
+          const index = accounts.indexOf(account);
           const isActive = account.id === activeId;
           const stats = account.stats;
           const session = stats
@@ -262,7 +299,11 @@ function AccountsPanel({
                 })
             : null;
           return (
-            <li key={account.id} className={`account-card${isActive ? ' account-card--active' : ''}`}>
+            <li
+              key={account.id}
+              className={`account-card${isActive ? ' account-card--active' : ''}`}
+              data-account={account.id}
+            >
               <div className="account-card__main">
                 <Avatar account={account} size="lg" />
                 <div className="account-card__text">
@@ -281,6 +322,9 @@ function AccountsPanel({
                     {[account.email, account.name !== account.label ? account.name : null]
                       .filter(Boolean)
                       .join(' · ') || t('account.unknownIdentity')}
+                  </span>
+                  <span className="account-card__ws">
+                    <WorkspaceTags account={account} workspaces={data.state.workspaces} max={3} />
                   </span>
                   {account.note && <span className="account-card__note">{account.note}</span>}
                   <span className="account-card__meta">
@@ -308,12 +352,14 @@ function AccountsPanel({
                     className={`btn btn--sm ${isActive ? '' : 'btn--primary'}`}
                     disabled={!canSwitch || !account.capturedAt || pending === `switch:${account.id}`}
                     onClick={async () => {
+                      // Locked: the passphrase first, right here, then the switch goes on.
+                      if (!(await requireUnlock())) return;
                       const go = await askBeforeSwitch({
                         kind: 'account',
                         label: account.label,
                         app: app.name,
                         important: account.important && !isActive ? [`${app.name}: ${account.label}`] : [],
-                        confirmAll: false,
+                        confirmAll: data.state.settings.confirmSwitch && !isActive,
                         appIds: [app.id],
                       });
                       if (!go) return;
@@ -345,7 +391,7 @@ function AccountsPanel({
                           label: app.name,
                           app: app.name,
                           important: [],
-                          confirmAll: false,
+                          confirmAll: data.state.settings.confirmSwitch,
                           appIds: [app.id],
                         });
                         if (!go) return;
@@ -377,14 +423,19 @@ function AccountsPanel({
                         onSelect: () =>
                           void run('account.reorder', { appId: app.id, ids: moveId(ids, index, index + 1) }),
                       },
-                      {
-                        label: t('account.restorePrevious'),
-                        icon: <RotateCcw />,
-                        onSelect: async () => {
-                          if (await run('restorePrevious', { accountId: account.id }))
-                            notify(t('account.restoredPrevious'), 'info');
-                        },
-                      },
+                      // Only when there is an earlier session to go back to.
+                      ...(previous.has(account.id)
+                        ? [
+                            {
+                              label: t('account.restorePrevious'),
+                              icon: <RotateCcw />,
+                              onSelect: async () => {
+                                if (await run('restorePrevious', { accountId: account.id }))
+                                  notify(t('account.restoredPrevious'), 'info');
+                              },
+                            },
+                          ]
+                        : []),
                       { kind: 'separator' },
                       {
                         label: t('account.delete'),

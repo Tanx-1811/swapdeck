@@ -141,7 +141,18 @@ export function Callout({
 
 // --- Dialog ------------------------------------------------------------------
 
-/** A modal built on <dialog>: focus is trapped, Escape closes it. */
+/**
+ * Puts the focus back where it was before a dialog opened, once the dialog is gone,
+ * unless something else has taken it meanwhile (only when it would be lost on the page).
+ */
+function restoreFocus(target: HTMLElement | null) {
+  setTimeout(() => {
+    const lost = !document.activeElement || document.activeElement === document.body;
+    if (lost && target?.isConnected) target.focus({ preventScroll: true });
+  });
+}
+
+/** A modal built on <dialog>: focus is trapped, Escape closes it, and returns where it was. */
 export function Dialog({
   open,
   onClose,
@@ -156,14 +167,26 @@ export function Dialog({
   wide?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const returnTo = useRef<HTMLElement | null>(null);
   const { t } = useI18n();
   const titleId = useId();
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
-    if (!open && dialog.open) dialog.close();
+    if (open && !dialog.open) {
+      returnTo.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      dialog.showModal();
+      // React's autoFocus runs before the dialog is shown (and so does nothing): the element
+      // marked data-autofocus gets the focus instead of the dialog's first button (its ×).
+      dialog.querySelector<HTMLElement>('[data-autofocus]')?.focus();
+    }
+    if (!open && dialog.open) {
+      dialog.close();
+      restoreFocus(returnTo.current);
+    }
   }, [open]);
+  // Dialogs that are removed while open (closed by unmounting) give the focus back too.
+  useEffect(() => () => restoreFocus(returnTo.current), []);
   return (
     <dialog
       ref={ref}
@@ -238,14 +261,19 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           </ul>
         )}
         <div className="dialog__actions">
-          <button type="button" className="btn" onClick={() => finish(false)} autoFocus={Boolean(request?.danger)}>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => finish(false)}
+            data-autofocus={request?.danger ? true : undefined}
+          >
             {t('common.cancel')}
           </button>
           <button
             type="button"
             className={`btn ${request?.danger ? 'btn--danger' : 'btn--primary'}`}
             onClick={() => finish(true)}
-            autoFocus={!request?.danger}
+            data-autofocus={request?.danger ? undefined : true}
           >
             {request?.confirmLabel}
           </button>
@@ -293,7 +321,7 @@ export function MenuButton({
     const below = anchor.bottom + 4;
     const top = below + menu.height > window.innerHeight - 8 ? Math.max(8, anchor.top - menu.height - 4) : below;
     setPosition({ top, left });
-    menuRef.current.querySelector<HTMLButtonElement>('.menu__item:not(:disabled)')?.focus();
+    menuRef.current.querySelector<HTMLButtonElement>('.menu__item:not(:disabled)')?.focus({ preventScroll: true });
   }, [open]);
 
   useEffect(() => {
@@ -303,12 +331,18 @@ export function MenuButton({
         setOpen(false);
       }
     };
-    const onScroll = () => setOpen(false);
+    // The menu is fixed where its button was: once anything scrolls, it would float over other rows.
+    const onMove = (event: Event) => {
+      if (event.type === 'scroll' && menuRef.current?.contains(event.target as Node)) return;
+      setOpen(false);
+    };
     document.addEventListener('pointerdown', onPointer);
-    window.addEventListener('resize', onScroll);
+    window.addEventListener('resize', onMove);
+    document.addEventListener('scroll', onMove, true);
     return () => {
       document.removeEventListener('pointerdown', onPointer);
-      window.removeEventListener('resize', onScroll);
+      window.removeEventListener('resize', onMove);
+      document.removeEventListener('scroll', onMove, true);
     };
   }, [open]);
 
@@ -372,6 +406,9 @@ export function MenuButton({
                 disabled={item.disabled}
                 onClick={() => {
                   setOpen(false);
+                  // Focus goes back to the menu's button first, so a dialog the item opens
+                  // returns focus there when it closes (the item itself is gone by then).
+                  triggerRef.current?.focus({ preventScroll: true });
                   item.onSelect();
                 }}
               >

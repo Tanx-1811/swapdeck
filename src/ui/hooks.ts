@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Accent, ThemePreference } from '../core/types';
 import { isMessageKey, type Translate } from '../i18n/translate';
 import { send, type ErrorCode, type RequestType, type ResponseOf, type Result } from '../shared/protocol';
-import { readSessionInfo, readState, subscribe, type SessionInfo, type State } from '../shared/store';
+import { prevSnapKey, readSessionInfo, readState, subscribe, type SessionInfo, type State } from '../shared/store';
 
 export type Snapshot = { state: State } & SessionInfo;
 
@@ -74,19 +74,26 @@ export function errorText(t: Translate, result: { error: ErrorCode; detail?: str
 
 /**
  * Wraps `send` for components: tracks which request is running and reports
- * failures through `onError`.
+ * failures through `onError`. A request made again while the same one (same
+ * key and payload) is still running is ignored and resolves to null: a double
+ * click or a second Enter never saves twice. Different payloads under one key
+ * (two settings toggled quickly) still both go through.
  */
 export function useAction(
   onError: (message: string, result: { error: ErrorCode; detail?: string }) => void,
   t: Translate,
 ) {
   const [pending, setPending] = useState<string | null>(null);
+  const running = useRef(new Set<string>());
   const run = useCallback(
     async <T extends RequestType>(
       type: T,
       payload: Parameters<typeof send<T>>[1],
       key: string = type,
     ): Promise<ResponseOf<T> | null> => {
+      const request = `${key}\u0000${JSON.stringify(payload)}`;
+      if (running.current.has(request)) return null;
+      running.current.add(request);
       setPending(key);
       try {
         const result: Result<ResponseOf<T>> = await send(type, payload);
@@ -94,10 +101,40 @@ export function useAction(
         onError(errorText(t, result), result);
         return null;
       } finally {
+        running.current.delete(request);
         setPending((current) => (current === key ? null : current));
       }
     },
     [onError, t],
   );
   return { run, pending };
+}
+
+/**
+ * Which of these accounts still have the session saved before their current one
+ * ("Restore previous" has something to restore). Reads only sizes, never the sessions.
+ */
+export function usePreviousSessions(accountIds: readonly string[]): ReadonlySet<string> {
+  const [found, setFound] = useState<ReadonlySet<string>>(() => new Set());
+  const key = accountIds.join(',');
+  useEffect(() => {
+    let alive = true;
+    const ids = key ? key.split(',') : [];
+    const check = async () => {
+      const sizes = await Promise.all(
+        ids.map((id) => chrome.storage.local.getBytesInUse(prevSnapKey(id)).catch(() => 0)),
+      );
+      if (alive) setFound(new Set(ids.filter((_, index) => (sizes[index] ?? 0) > 0)));
+    };
+    void check();
+    const onChanged = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area === 'local' && Object.keys(changes).some((name) => name.startsWith('sd:prev:'))) void check();
+    };
+    chrome.storage.onChanged.addListener(onChanged);
+    return () => {
+      alive = false;
+      chrome.storage.onChanged.removeListener(onChanged);
+    };
+  }, [key]);
+  return found;
 }

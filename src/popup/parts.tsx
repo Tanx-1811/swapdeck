@@ -1,8 +1,21 @@
-import { Ellipsis, Globe, Lock, LockOpen, PanelRight, Pin, Plus, Settings, TriangleAlert } from 'lucide-react';
+import {
+  ChevronDown,
+  Ellipsis,
+  Globe,
+  Layers,
+  Lock,
+  LockOpen,
+  PanelRight,
+  Pin,
+  Plus,
+  Settings,
+  TriangleAlert,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { displayUrl, parseHttpUrl } from '../core/domains';
 import { findPreset } from '../core/presets';
 import type { Account, AppDef } from '../core/types';
+import { workspaceStatus } from '../core/workspaces';
 import { relativeTime } from '../i18n/translate';
 import { send } from '../shared/protocol';
 import { hasAccess, onAccessChange, requestAccess } from '../ui/access';
@@ -12,7 +25,9 @@ import { ExpiredFlag } from '../ui/flags';
 import { errorText } from '../ui/hooks';
 import { useI18n } from '../ui/i18n';
 import { LogoMark } from '../ui/Logo';
+import { WorkspaceTags } from '../ui/WorkspaceTags';
 import { TEST_TAB, useSwitcher } from './context';
+import { WorkspaceBadge } from './WorkspaceBar';
 
 export function Header() {
   const { t } = useI18n();
@@ -29,6 +44,7 @@ export function Header() {
         <LogoMark size={22} />
         <span>Swapdeck</span>
       </span>
+      <WorkspacePill />
       <div className="popup__header-actions">
         {hasVault &&
           (locked ? (
@@ -76,6 +92,37 @@ export function Header() {
   );
 }
 
+/**
+ * The workspace in use, always in sight on the lid ("which client am I acting for?");
+ * a click opens the searchable list of workspaces.
+ */
+function WorkspacePill() {
+  const { t } = useI18n();
+  const { data, openPicker } = useSwitcher();
+  const { state, progress } = data;
+  if (!state.workspaces.length) return null;
+  const current = state.workspaces.find(
+    (workspace) => workspaceStatus(workspace, state.apps, state.accounts, state.active).state === 'active',
+  );
+  const switching = progress ? state.workspaces.find((workspace) => workspace.id === progress.workspaceId) : undefined;
+  const shown = switching ?? current;
+  const label = shown ? t('workspaces.current', { name: shown.name }) : t('workspaces.noneActiveLabel');
+  return (
+    <button
+      type="button"
+      className={`ws-current${shown ? '' : ' ws-current--none'}`}
+      aria-haspopup="dialog"
+      aria-label={label}
+      title={label}
+      onClick={openPicker}
+    >
+      {shown ? <WorkspaceBadge workspace={shown} size={16} /> : <Layers aria-hidden="true" />}
+      <span className="truncate">{shown ? shown.name : t('workspaces.noneActive')}</span>
+      {switching ? <Spinner /> : <ChevronDown aria-hidden="true" />}
+    </button>
+  );
+}
+
 export function Footer({ showKeys = false }: { showKeys?: boolean }) {
   const { t } = useI18n();
   const { openManager } = useSwitcher();
@@ -113,6 +160,7 @@ export function AccountRow({
   appName?: string;
 }) {
   const { t, language } = useI18n();
+  const workspaces = useSwitcher().data.state.workspaces;
   const shortcuts = [...account.pins.map((pin) => ({ key: pin.id, title: pin.title, url: pin.url, pinned: true }))];
   for (const recent of account.recents) {
     if (shortcuts.length >= 4) break;
@@ -127,7 +175,11 @@ export function AccountRow({
   const meta = account.expiredAt ? t('account.expiredMeta') : account.capturedAt && identity ? identity : saved;
 
   return (
-    <div className={`account${active ? ' account--active' : ''}${busy ? ' account--busy' : ''}`} role="listitem">
+    <div
+      className={`account${active ? ' account--active' : ''}${busy ? ' account--busy' : ''}`}
+      role="listitem"
+      data-account={account.id}
+    >
       <button
         type="button"
         className="account__main"
@@ -150,7 +202,10 @@ export function AccountRow({
             <ExpiredFlag account={account} />
             {active && <span className="seal">{t('account.inUse')}</span>}
           </span>
-          <span className="account__meta truncate">{appName ? `${appName} · ${meta}` : meta}</span>
+          <span className="account__meta">
+            <WorkspaceTags account={account} workspaces={workspaces} />
+            <span className="truncate">{appName ? `${appName} · ${meta}` : meta}</span>
+          </span>
           {account.note && <span className="account__note truncate">{account.note}</span>}
         </span>
         {busy && (
@@ -283,6 +338,8 @@ export function UnlockForm() {
           className="input"
           type="password"
           autoComplete="current-password"
+          // Locked with saved sign-ins in view: the passphrase is the one thing to type.
+          autoFocus
           value={passphrase}
           aria-label={t('vault.passphrase')}
           placeholder={t('vault.passphrase')}

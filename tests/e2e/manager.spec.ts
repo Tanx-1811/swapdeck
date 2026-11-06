@@ -26,10 +26,10 @@ test.describe('manager', () => {
   test('adds any website from its address and edits its settings', async ({ openExtensionPage, server }) => {
     const page = await openExtensionPage('options/options.html#/add/custom');
     await page.getByLabel('Website address').fill(server.url('shop.test', '/account'));
-    await page.getByRole('button', { name: 'Add', exact: true }).first().click();
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(page.getByLabel('Name')).toHaveValue('Shop');
     await expect(page.locator('.tag')).toHaveText(['shop.test']);
-    await page.getByRole('button', { name: 'Add', exact: true }).last().click();
+    await page.getByRole('button', { name: 'Add', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Shop', level: 1 })).toBeVisible();
 
     await page.getByRole('tab', { name: 'Settings' }).click();
@@ -42,8 +42,8 @@ test.describe('manager', () => {
     // A domain that another app already uses is refused.
     await page.goto(page.url().replace(/#.*$/, '#/add/custom'));
     await page.getByLabel('Website address').fill(server.url('www.shop.test', '/'));
-    await page.getByRole('button', { name: 'Add', exact: true }).first().click();
-    await page.getByRole('button', { name: 'Add', exact: true }).last().click();
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.getByRole('button', { name: 'Add', exact: true }).click();
     await expect(page.getByText('Another app ("Shop Admin") already uses this domain.')).toBeVisible();
   });
 
@@ -153,7 +153,7 @@ test.describe('manager', () => {
     await expect(page.getByText('Đã bật khóa bằng mật khẩu.')).toBeVisible();
     await page.getByRole('button', { name: 'Khóa ngay' }).click();
     await expect(page.locator('.sidebar__vault')).toContainText('Đã khóa');
-    await page.getByLabel('Mật khẩu', { exact: true }).fill('correct horse battery');
+    await page.getByLabel('Mật khẩu Swapdeck', { exact: true }).fill('correct horse battery');
     await page.getByRole('button', { name: 'Mở khóa' }).click();
     await expect(page.locator('.sidebar__vault')).toContainText('Đã mở khóa');
   });

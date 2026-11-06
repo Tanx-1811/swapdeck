@@ -21,6 +21,7 @@ import type { Account, AppDef } from '../core/types';
 import { AccountEditor } from '../ui/AccountEditor';
 import { AppIcon } from '../ui/Avatar';
 import { Callout, MenuButton, Spinner, useConfirm, useToast, type MenuItem } from '../ui/controls';
+import { usePreviousSessions } from '../ui/hooks';
 import { useI18n } from '../ui/i18n';
 import { useSwitcher } from './context';
 import { AccessCheck, AccountRow } from './parts';
@@ -47,6 +48,17 @@ export function AppPanel({ app, onBack }: { app: AppDef; onBack?: () => void }) 
   const match = accounts.find((account) => account.id === probe.matchId);
   const mismatch = !onCurrentTab && data.live[app.id]?.mismatch;
   const showSave = onCurrentTab && probe.access && (status === 'unsaved' || status === 'unknown' || !accounts.length);
+  const accountIds = useMemo(() => accounts.map((account) => account.id), [accounts]);
+  const previous = usePreviousSessions(accountIds);
+
+  // With many accounts, the one in use may sit far down the list: bring it into view once.
+  useEffect(() => {
+    if (!activeId) return;
+    listRef.current
+      ?.querySelector<HTMLElement>(`[data-account="${CSS.escape(activeId)}"]`)
+      ?.scrollIntoView({ block: 'nearest' });
+    // Only when the panel opens (or another account comes into use), not on every update.
+  }, [activeId]);
 
   // Keyboard: 1–9 switch, arrows move between accounts.
   useEffect(() => {
@@ -123,14 +135,17 @@ export function AppPanel({ app, onBack }: { app: AppDef; onBack?: () => void }) 
         onSelect: () => void saveSession(app, account.id),
       });
     }
-    items.push(
-      {
+    // "Restore previous" only when there is an earlier session to go back to.
+    if (previous.has(account.id)) {
+      items.push({
         label: t('account.restorePrevious'),
         icon: <RotateCcw />,
         onSelect: async () => {
           if (await run('restorePrevious', { accountId: account.id })) notify(t('account.restoredPrevious'), 'info');
         },
-      },
+      });
+    }
+    items.push(
       { kind: 'separator' },
       {
         label: t('account.delete'),
@@ -260,6 +275,18 @@ export function AppPanel({ app, onBack }: { app: AppDef; onBack?: () => void }) 
           <p className="empty__text">
             {onCurrentTab ? t('popup.noAccountsHint') : t('popup.noAccountsElsewhere', { app: app.name })}
           </p>
+          {!onCurrentTab && (
+            <button
+              type="button"
+              className="btn btn--primary empty__action"
+              onClick={() => {
+                void chrome.tabs.create({ url: app.homeUrl });
+                close();
+              }}
+            >
+              <ExternalLink /> {t('popup.openToSignIn', { app: app.name })}
+            </button>
+          )}
         </div>
       ) : (
         <div className="accounts" ref={listRef} role="list" aria-label={t('apps.accountsHeading')}>
@@ -287,15 +314,18 @@ export function AppPanel({ app, onBack }: { app: AppDef; onBack?: () => void }) 
       )}
 
       <div className="popup__actions">
-        <button
-          type="button"
-          className="btn btn--dashed"
-          onClick={() => void freshLogin(app)}
-          disabled={busy !== null || (onCurrentTab && !probe.access)}
-          title={t('popup.newLoginHint', { app: app.name })}
-        >
-          {busy === `fresh:${app.id}` ? <Spinner /> : <UserPlus />} {t('popup.newLogin')}
-        </button>
+        {/* With nothing saved and the app not open here, "another account" means nothing yet. */}
+        {(accounts.length > 0 || onCurrentTab) && (
+          <button
+            type="button"
+            className="btn btn--dashed"
+            onClick={() => void freshLogin(app)}
+            disabled={busy !== null || (onCurrentTab && !probe.access)}
+            title={t('popup.newLoginHint', { app: app.name })}
+          >
+            {busy === `fresh:${app.id}` ? <Spinner /> : <UserPlus />} {t('popup.newLogin')}
+          </button>
+        )}
         {showSave && (
           <button type="button" className="btn" onClick={() => void saveSession(app)} disabled={pending !== null}>
             {pending === 'save:' ? <Spinner /> : <Save />} {t('popup.saveSession')}

@@ -103,7 +103,9 @@ tests, demo data and screenshots (use `*.example`/`*.test` addresses). Contribut
   `ProfileReader.isProfileDirectory`); AppleScript strings go through `BrowserScript.literal`. Keep it that way.
 - Terminal per workspace (`Terminal.swift`, `Keychain.swift`, `TerminalActions.swift`): variable values only ever go
   to the Keychain (`SecretStore`), never to the data file, exports, the `.command` script or arguments; names go
-  through `TerminalEnv.isAllowedName` and values through `shellQuote`. `--env <workspace>` prints `export` lines.
+  through `TerminalEnv.isAllowedName` and values through `shellQuote`. `--env <workspace>` prints `export` lines —
+  only with a single-use ticket from "Open in Terminal" (`TerminalTickets`) or after Touch ID / the Mac's password
+  (`EnvCommand`); keep it that way, and keep stdout empty on every failure.
 - UI text lives in `SwapdeckCore/L10n.swift` (en and vi must have the same keys — tested). Colors mirror the
   extension's tokens (`Theme.swift`); keep the pigment palette and symbol keys in step with `src/core/util.ts`.
 - The extension's backup format (`swapdeck-backup` v1, PBKDF2-SHA-256 + AES-256-GCM) is read by `BackupImport`; if it

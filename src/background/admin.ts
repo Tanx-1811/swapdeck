@@ -6,28 +6,20 @@ import {
   serializeBackup,
   type BackupPayload,
 } from '../core/backup';
-import {
-  createVault,
-  CryptoError,
-  encryptWithPassword,
-  isSealedBox,
-  rekeyVault,
-  seal,
-  unlockVault,
-  unseal,
-} from '../core/crypto';
+import { createVault, CryptoError, encryptWithPassword, isSealedBox, seal, unlockVault, unseal } from '../core/crypto';
 import { appForUrl, hostMatchesDomain, matchPatterns } from '../core/domains';
 import { sameIdentity } from '../core/identity';
 import { cleanLinkRules } from '../core/links';
 import { isBlockedDomain } from '../core/presets';
 import { parseSettings } from '../core/settings';
 import type { Account, AppDef, Settings, Snapshot, Workspace } from '../core/types';
-import { ACCOUNT_COLORS, newId, nextColor, reorder } from '../core/util';
+import { ACCOUNT_COLORS, newId, nextColor, record, reorder } from '../core/util';
 import {
   sanitizeAccount,
   sanitizeApp,
   sanitizeSnapshot,
   sanitizeStoredSnapshot,
+  sanitizeVault,
   sanitizeWorkspace,
 } from '../core/validate';
 import { pruneMembers } from '../core/workspaces';
@@ -317,12 +309,44 @@ async function requireVault(): Promise<NonNullable<State['vault']>> {
   return state.vault;
 }
 
+/** Whether the private key opens what the vault's public key seals (if not, nothing saved could be restored). */
+async function keysMatch(publicKey: string, privateKey: string): Promise<boolean> {
+  const probe = 'swapdeck-key-check';
+  try {
+    return (await unseal<unknown>(await seal(probe, publicKey), privateKey)) === probe;
+  } catch {
+    return false;
+  }
+}
+
+async function storedVault(): Promise<NonNullable<State['vault']> | null> {
+  return sanitizeVault((await chrome.storage.local.get(KEYS.vault))[KEYS.vault]);
+}
+
+const accountIdsOf = (snapshotKeys: readonly string[]) =>
+  new Set(snapshotKeys.filter((key) => key.startsWith('sd:snap:')).map((key) => key.slice('sd:snap:'.length)));
+
+/** Accounts whose saved session was dropped have nothing saved any more. Never call inside update(). */
+async function forgetSessions(accountIds: ReadonlySet<string>): Promise<void> {
+  if (!accountIds.size) return;
+  await update((draft) => {
+    for (const account of draft.accounts) {
+      if (!accountIds.has(account.id)) continue;
+      delete account.capturedAt;
+      delete account.stats;
+    }
+  });
+}
+
 export async function vaultCreate(passphrase: string): Promise<void> {
   checkPassphrase(passphrase);
   if ((await readState()).vault) throw new SwapdeckError('VAULT_EXISTS');
   const { meta, privateKey } = await createVault(passphrase);
   // Sealing every saved session and recording the vault happen as one step.
   await exclusive(async () => {
+    // Checked again in the queue: of two requests at once, only one makes a vault (the other's keys
+    // could not open what the first one sealed).
+    if (await storedVault()) throw new SwapdeckError('VAULT_EXISTS');
     const keys = await allSnapshotKeys();
     const stored = await chrome.storage.local.get(keys);
     const changes: Record<string, unknown> = { [KEYS.vault]: meta };
@@ -331,19 +355,23 @@ export async function vaultCreate(passphrase: string): Promise<void> {
       if (value && 'plain' in value) changes[key] = { v: 1, sealed: await seal(value.plain, meta.publicKey) };
     }
     await chrome.storage.local.set(changes);
+    await setPrivateKey(privateKey);
   });
-  await setPrivateKey(privateKey);
   await scheduleAutoLock();
 }
 
 export async function vaultUnlock(passphrase: string): Promise<void> {
   const vault = await requireVault();
+  let privateKey: string;
   try {
-    await setPrivateKey(await unlockVault(vault, passphrase));
+    privateKey = await unlockVault(vault, passphrase);
   } catch (error) {
     if (error instanceof CryptoError) throw new SwapdeckError('BAD_PASSPHRASE');
     throw error;
   }
+  // The two halves of the vault must belong together, or nothing saved could be restored.
+  if (!(await keysMatch(vault.publicKey, privateKey))) throw new SwapdeckError('CORRUPT', 'vault');
+  await setPrivateKey(privateKey);
   await scheduleAutoLock();
 }
 
@@ -352,6 +380,12 @@ export async function vaultLock(): Promise<void> {
   await chrome.alarms.clear(AUTO_LOCK_ALARM);
 }
 
+/**
+ * Changes the passphrase with a new key pair: every saved session (current and previous) is opened
+ * with the old private key and sealed again with the new public key, in one queued step, so a copy of
+ * the old vault and the old passphrase open nothing saved from now on. A session the old key can't
+ * open could never be used again: it is dropped.
+ */
 export async function vaultChange(current: string, next: string): Promise<void> {
   checkPassphrase(next);
   const vault = await requireVault();
@@ -361,11 +395,33 @@ export async function vaultChange(current: string, next: string): Promise<void> 
   } catch {
     throw new SwapdeckError('BAD_PASSPHRASE');
   }
-  const meta = await rekeyVault(vault, privateKey, next);
-  await update((draft) => {
-    draft.vault = meta;
+  if (!(await keysMatch(vault.publicKey, privateKey))) throw new SwapdeckError('CORRUPT', 'vault');
+  const { meta, privateKey: nextKey } = await createVault(next);
+  const dropped = await exclusive(async () => {
+    // Turned off, reset or changed meanwhile: the sessions are no longer sealed with the key opened above.
+    const now = await storedVault();
+    if (!now) throw new SwapdeckError('NO_VAULT');
+    if (now.publicKey !== vault.publicKey) throw new SwapdeckError('BAD_PASSPHRASE');
+    const keys = await allSnapshotKeys();
+    const stored = await chrome.storage.local.get(keys);
+    const changes: Record<string, unknown> = { [KEYS.vault]: meta };
+    const unreadable: string[] = [];
+    for (const key of keys) {
+      const value = sanitizeStoredSnapshot(stored[key]);
+      if (!value) continue;
+      const plain =
+        'plain' in value
+          ? value.plain
+          : sanitizeSnapshot(await unseal<unknown>(value.sealed, privateKey).catch(() => null));
+      if (plain) changes[key] = { v: 1, sealed: await seal(plain, meta.publicKey) };
+      else unreadable.push(key);
+    }
+    await chrome.storage.local.set(changes);
+    if (unreadable.length) await chrome.storage.local.remove(unreadable);
+    await setPrivateKey(nextKey);
+    return accountIdsOf(unreadable);
   });
-  await setPrivateKey(privateKey);
+  await forgetSessions(dropped);
   await scheduleAutoLock();
 }
 
@@ -393,19 +449,11 @@ export async function vaultDisable(passphrase: string): Promise<void> {
     }
     await chrome.storage.local.set(changes);
     await chrome.storage.local.remove([KEYS.vault, ...unreadable]);
-    return new Set(unreadable.filter((key) => key.startsWith('sd:snap:')).map((key) => key.slice('sd:snap:'.length)));
+    return accountIdsOf(unreadable);
   });
   await vaultLock();
   // Accounts whose session was dropped have nothing saved any more (as after "Forgot passphrase").
-  if (dropped.size) {
-    await update((draft) => {
-      for (const account of draft.accounts) {
-        if (!dropped.has(account.id)) continue;
-        delete account.capturedAt;
-        delete account.stats;
-      }
-    });
-  }
+  await forgetSessions(dropped);
 }
 
 /** "Forgot passphrase": deletes the vault and the sessions sealed with it. Accounts stay. */
@@ -415,16 +463,10 @@ export async function vaultReset(): Promise<void> {
     const stored = await chrome.storage.local.get(keys);
     const sealed = keys.filter((key) => isSealedBox((stored[key] as { sealed?: unknown } | undefined)?.sealed));
     await chrome.storage.local.remove([...sealed, KEYS.vault]);
-    return new Set(sealed.filter((key) => key.startsWith('sd:snap:')).map((key) => key.slice('sd:snap:'.length)));
+    return accountIdsOf(sealed);
   });
   await vaultLock();
-  await update((draft) => {
-    for (const account of draft.accounts) {
-      if (!removed.has(account.id)) continue;
-      delete account.capturedAt;
-      delete account.stats;
-    }
-  });
+  await forgetSessions(removed);
 }
 
 // --- Backups -----------------------------------------------------------------
@@ -587,11 +629,9 @@ export async function importBackup(
       if (session) sessionTargets.push([copy.id, session]);
       accounts++;
     }
-    for (const [appId, accountId] of Object.entries(payload.active)) {
-      const mappedApp = appIdMap.get(appId);
-      if (!mappedApp || draft.active[mappedApp] !== undefined) continue;
-      draft.active[mappedApp] = accountId === null ? null : (accountIdMap.get(accountId) ?? null);
-    }
+    // Which account was in use (`payload.active`) described the browser the backup came from, not this
+    // one: taken over, the first switch would save whatever is signed in here into that account, and a
+    // workspace switch would skip it as already in use. The next switch or page load tells who it is.
     if (mode === 'replace') {
       // Preferences come along; what belongs to this computer stays. Sync of the list is
       // turned off: turned on again, it would bring back what this replace removed.
@@ -601,7 +641,7 @@ export async function importBackup(
     let workspaces = 0;
     for (const workspace of payload.workspaces) {
       if (draft.workspaces.some((item) => item.name.toLowerCase() === workspace.name.toLowerCase())) continue;
-      const members: Record<string, string> = {};
+      const members = record<string>();
       for (const [appId, accountId] of Object.entries(workspace.members)) {
         const mappedApp = appIdMap.get(appId);
         const mappedAccount = accountIdMap.get(accountId);

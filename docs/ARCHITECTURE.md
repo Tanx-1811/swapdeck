@@ -23,7 +23,7 @@ does. Product scope and decisions are in [PLAN.md](PLAN.md); privacy in [PRIVACY
 
 | Module            | Responsibility                                                                                                                                                 |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `router.ts`       | Answers `chrome.runtime` messages from the extension's own pages only (refuses senders in http(s) tabs and other extensions).                                  |
+| `router.ts`       | Answers `chrome.runtime` messages from the extension's own pages only (`fromOwnPage`: the sender's own `url`/`origin`, never its tab's address).               |
 | `engine.ts`       | `switchTo`, `saveLive`, `cycle`, `probe`, `capture`, `persist`, `restorePrevious`, per-app locks, staging tab helper.                                          |
 | `workspaces.ts`   | `switchWorkspace` (every app of a workspace, background where possible, progress), `openWorkspace` (then its pages in a tab group).                            |
 | `watcher.ts`      | Reacts to app page loads: detects who is signed in, auto-sync, auto-capture, mismatch flag, confirmation toasts, important-account strip, last page & recents. |
@@ -54,21 +54,22 @@ are left alone), `links` (pages for "Open workspace", ≤ 30) and usage counters
 
 `chrome.storage.local` (persistent, this device only, `unlimitedStorage`):
 
-| Key                 | Contents                                                                                                          |
-| ------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `sd:apps`           | `AppDef[]`                                                                                                        |
-| `sd:accounts`       | `Account[]` (metadata only, no session data)                                                                      |
-| `sd:active`         | `{ [appId]: accountId \| null }` — which saved account the browser is signed in as, per app                       |
-| `sd:settings`       | `Settings` (language, theme, after-switch page, auto-capture, auto-sync, toasts, accent, lock reminder snooze, …) |
-| `sd:history`        | Last 200 `HistoryEntry` items (switch, fresh, save, auto-save; ok or error code)                                  |
-| `sd:vault`          | `VaultMeta` when the passphrase lock is on                                                                        |
-| `sd:workspaces`     | `Workspace[]`                                                                                                     |
-| `sd:meta`           | `{ schema: 1 }`                                                                                                   |
-| `sd:snap:<account>` | `StoredSnapshot`: `{ v: 1, plain: Snapshot }` or, with the vault on, `{ v: 1, sealed: … }`                        |
-| `sd:prev:<account>` | The snapshot the current one replaced (safety net, "Restore the session saved before")                            |
-| `sd:syncMemo`       | Per sync key: the last write made or applied here (`t`, `by`), the value's hash, the local thing it maps to       |
-| `sd:install`        | This installation's random id, written into each sync item it sends                                               |
-| `sd:syncRemoved`    | Sync keys of things the user removed → when (180 days, ≤ 3,000), noted even while sync is off                     |
+| Key                 | Contents                                                                                                             |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `sd:apps`           | `AppDef[]`                                                                                                           |
+| `sd:accounts`       | `Account[]` (metadata only, no session data)                                                                         |
+| `sd:active`         | `{ [appId]: accountId \| null }` — which saved account the browser is signed in as, per app                          |
+| `sd:settings`       | `Settings` (language, theme, after-switch page, auto-capture, auto-sync, toasts, accent, lock reminder snooze, …)    |
+| `sd:history`        | Last 200 `HistoryEntry` items (switch, fresh, save, auto-save; ok or error code)                                     |
+| `sd:vault`          | `VaultMeta` when the passphrase lock is on                                                                           |
+| `sd:workspaces`     | `Workspace[]`                                                                                                        |
+| `sd:meta`           | `{ schema: 1 }`                                                                                                      |
+| `sd:snap:<account>` | `StoredSnapshot`: `{ v: 1, plain: Snapshot }` or, with the vault on, `{ v: 1, sealed: … }`                           |
+| `sd:prev:<account>` | The snapshot the current one replaced (safety net, "Restore the session saved before")                               |
+| `sd:syncMemo`       | Per sync key: the last write made or applied here (`t`, `by`), the value then (`base`) and its hash, the local thing |
+| `sd:install`        | This installation's random id, written into each sync item it sends                                                  |
+| `sd:syncRemoved`    | Sync keys of things the user removed → when (180 days, ≤ 3,000), noted even while sync is off                        |
+| `sd:syncGoneSeen`   | Tombstone sync key → when this computer first saw it (its own clock): tombstones expire 45 days after that           |
 
 `chrome.storage.session` (memory only, cleared when Chrome closes; extension pages and the worker only):
 
@@ -82,7 +83,10 @@ are left alone), `links` (pages for "Open workspace", ≤ 30) and usage counters
 | `sd:linksDeclined` | Links the user said "not now" to (app, account and what matched; ≤ 200)                     |
 
 Everything read from storage, backups or pages is untrusted and goes through `src/core/validate.ts`
-(`sanitizeApp`, `sanitizeAccount`, `sanitizeSnapshot`, …) or `parseSettings`.
+(`sanitizeApp`, `sanitizeAccount`, `sanitizeSnapshot`, …) or `parseSettings`. Ids pass `isId` (letters, digits, `_`,
+`-`, ≤ 64, never `__proto__`/`constructor`/`prototype`), and records keyed by ids or by a site's own names (active
+accounts, workspace members, backup sessions, web storage, sync memo) are built without a prototype (`record()` in
+`core/util.ts`).
 
 **Single writer.** Only the service worker writes. `state.ts` serialises every change through one promise queue:
 `update(draft => …)` reads the state, applies the change and writes back only the keys that changed;
@@ -308,9 +312,14 @@ The side panel opens from the popup's header, the toolbar button's right-click m
   (switching away, auto-sync, auto-capture) works while locked; **restoring** needs the private key.
 - Unlocking decrypts the private key into `chrome.storage.session` (`sd:key`, memory only). Auto-lock is an alarm
   (default 30 minutes, renewed on each switch from the popup, manager, menu or shortcut; 0 = until Chrome closes).
-- Turning the lock on seals every saved snapshot (current and previous) in one queued step; turning it off unseals
-  them; changing the passphrase re-encrypts only the private key; "forgot passphrase" deletes the vault and every
-  sealed snapshot (accounts stay, without sessions).
+  Unlocking (and changing the passphrase) first checks that the private key opens what the public key seals
+  (`keysMatch`); a vault whose halves don't belong together is refused with `CORRUPT`.
+- Turning the lock on seals every saved snapshot (current and previous) in one queued step — the "is there a vault
+  already?" check is repeated inside that step, so two requests at once never make two vaults; turning it off
+  unseals them; changing the passphrase makes a **new key pair** and seals every snapshot (current and previous)
+  again with it in one queued step (a copy of the old vault plus the old passphrase opens nothing saved afterwards;
+  a snapshot the old key can't open is dropped and its account marked as having nothing saved); "forgot passphrase"
+  deletes the vault and every sealed snapshot (accounts stay, without sessions).
 
 ## 10. Backups, moving and sync of the list (`core/backup.ts`, `core/sync.ts`, `admin.ts`, `sync.ts`)
 
@@ -321,7 +330,9 @@ password (≥ 8 characters) and, when the passphrase lock is on, an unlocked vau
 origin and accounts by identity (or label), and replaces a saved session only with a newer one; **replace** wipes the
 current data first (keeping the vault). Imported workspaces are mapped to the imported apps and accounts; in merge mode
 a workspace whose name already exists (case-insensitive) is skipped. Imported sessions are re-sealed with this
-computer's vault. Host access is never granted by an import: the user allows each app afterwards. A replace keeps what
+computer's vault. Which account was in use (`active`) is exported but never imported: it describes the browser the
+backup came from (taken over, the first switch would save whatever is signed in here into that account, and a
+workspace switch would skip it as already in use). Host access is never granted by an import: the user allows each app afterwards. A replace keeps what
 belongs to this computer (`lastBackupAt`, reminder snoozes) and turns sync of the list off (turned on again, it would
 bring back what the replace removed); the response says so (`syncOff`).
 
@@ -336,7 +347,8 @@ session under the matching account).
 
 Off unless `settings.syncList`. Never synced: snapshots, cookies, tokens, the vault, history, recents, last pages,
 stats, settings. One `chrome.storage.sync` item per thing — `sd1:a:<appId>`, `sd1:c:<accountId>`, `sd1:w:<workspaceId>`
-— holding `{ v, t, by }` (value, time, installation id); a preset app nobody changed travels as
+— holding `{ v, t, by, f }` (value, time, installation id, and the fields the writer's version sends: `SYNC_FIELDS`);
+a preset app nobody changed travels as
 `{ presetId, name, color, order, createdAt, preset: true }` and is rebuilt from the local preset (keeps items small:
 `chrome.storage.sync` allows 100 KB and 512 items, 8 KB each — larger things stay local and are counted in the status).
 
@@ -347,26 +359,54 @@ stats, settings. One `chrome.storage.sync` item per thing — `sd1:a:<appId>`, `
   preset, origin or domain; the same signed-in user (`sameIdentity`); the same name or label once — is applied to it
   (an alias stored in the memo) instead of copied — but two things written by the same computer never fold into one
   here (`takenBy`): there they are two, and removing either would remove both here. Ids are translated (an account's app, a workspace's members); an
-  account whose app hasn't arrived waits, a workspace with missing members is applied again later (`again`). An
-  account keeps its local fields (session stats, recents, last page) and, when it has a session here, its identity;
-  it is never moved to another app; app rules (blocked domains, overlap) are enforced.
+  account whose app hasn't arrived waits. A workspace member whose app or account isn't here (too big to sync, a
+  preset this version lacks, not arrived yet) is kept as it came in `Workspace.foreignMembers` (never shown or
+  switched): it travels back with every write of the workspace, so a computer never sends fewer members than it
+  received, and becomes a real member once its account arrives (the workspace is also applied again, `again`);
+  members whose app or account was removed here on purpose are dropped. An account keeps its local fields (session
+  stats, recents, last page) and, when it has a session here, its identity; it is never moved to another app; app
+  rules (blocked domains, overlap) are enforced.
+- **Merging edits:** each memo entry keeps the value as last synced (`base`, as it travels from here). A write that
+  arrives for something changed here since is merged field by field (`mergeFields`): a field changed here and not in
+  the incoming write keeps its value here, anything else takes the incoming one (both changed: the incoming wins);
+  the merged thing is then sent. So an offline edit (a note, a pin, a workspace's links) survives another computer's
+  unrelated change of the same thing, a reorder included. Memo entries from before 1.7 have no `base`: the next push
+  fills it in for everything unchanged since it was synced (until then, the incoming write wins as before).
+- **Older versions:** a field the writer doesn't list in `f` keeps its value here (`withLocalUnknown`), so a computer
+  still on an older version can't erase a newer field (`linkRules`) by writing the whole item. Items without `f`
+  were written by 1.5/1.6: they count as knowing `LEGACY_SYNC_FIELDS` plus the fields they carry. Never change
+  `LEGACY_SYNC_FIELDS`; a new synced field goes into the current list (and gets a merge rule and a two-computer test).
 - **Removals:** removing an app/account/workspace notes it in `sd:syncRemoved` (`noteRemoved`, inside the removal's
   `update()`); the push writes a tombstone `{ gone, t, by }` for every key that maps to it, even over a concurrent
   edit. A tombstone removes the thing on the other computers (through `removeApp`/`removeAccount`/`removeWorkspace`,
-  sessions included) — unless another live key still maps to the same thing there (`stillStandsFor`): then only that
-  key is forgotten. A tombstone is never "already seen" (memo entries describe live writes only). Anything that disappears **without** a tombstone is forgotten, never removed: a key gone from
-  Chrome Sync (cleared, an old tombstone dropped after 45 days) is just dropped from the memo, and a thing missing here
-  that wasn't removed on purpose (lost data) is taken back from Chrome Sync by a second pull.
+  sessions included) — unless another live key still maps to the same thing there (`stillStandsFor`, settled with
+  `settleDeletes` against the memo **including the writes the same pull applied**): then only that key is forgotten.
+  Nothing new is ever matched to a thing a tombstone of the same pull removes (`applyPull`'s `removing`): something
+  removed and set up again on another computer while this one slept stays two things here, the old one removed and
+  the new one added (an app on the same site waits for a second round of the pull, `deferred`, since two apps can't
+  share a site). A tombstone is never "already seen" (memo entries describe live writes only). A tombstone is dropped
+  from Chrome Sync 45 days after the computer dropping it first saw it (`sd:syncGoneSeen`, its own clock: the writer's
+  `t` doesn't count, so a clock far ahead or behind can't cut a tombstone's life short). Anything that disappears
+  **without** a tombstone is forgotten, never removed: a key gone from Chrome Sync (cleared, an old tombstone dropped)
+  is just dropped from the memo, and a thing missing here that wasn't removed on purpose (lost data) is taken back
+  from Chrome Sync by a second pull. The removal journal still counts after the tombstone is gone: a write for
+  something removed here on purpose (within 180 days) is refused, and the push sends its tombstone again — a computer
+  that was offline longer than 45 days can bring a removed thing back to the others for a while, never to the
+  computer it was removed on, which removes it everywhere again.
 - **Push** (`planPush`): writes what changed since the memo (hash), skips keys another computer changed that the pull
   hasn't taken yet, writes tombstones, drops old ones. Status goes to `sd:sync`; a quota error is reported, not retried
   in a loop.
-- "Remove from Chrome Sync" (`sync.clear`) turns sync off here, removes every `sd1:` item and the memo. Wiping data or
+- "Remove from Chrome Sync" (`sync.clear`) turns sync off here, removes every `sd1:` item, the memo and the tombstone
+  sightings. Wiping data or
   a replace import clears the memo, the journal and the installation id.
 
 ## 11. Messaging (`shared/protocol.ts`)
 
 Pages call `send(type, payload)` → `chrome.runtime.sendMessage({ type, ...payload })` and get
-`{ ok: true, data }` or `{ ok: false, error, detail? }`. Requests: `probe`, `switch` (with `background`/`focus`),
+`{ ok: true, data }` or `{ ok: false, error, detail? }`. Only the extension's own pages send requests (popup, side
+panel, manager, the confirmation window); the router answers a sender only when its own `url` is under
+`chrome.runtime.getURL('')` (and its `origin`, when given, is the extension's) — scripts run in web pages answer
+through `executeScript`'s return value, never by message. Requests: `probe`, `switch` (with `background`/`focus`),
 `fresh`, `cycle`, `save`, `restorePrevious`, `app.*` (incl. `app.addMany`), `account.*`, `workspace.save`,
 `workspace.fromActive`, `workspace.remove`, `workspace.reorder`, `workspace.switch`, `workspace.open` (both return a
 `WorkspaceOutcome`: per-app results, `switched`, `failed`, `opened`), `settings.update`, `vault.*`, `backup.*`,

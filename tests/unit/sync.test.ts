@@ -13,6 +13,7 @@ import { readStoredSnapshot, storeSnapshot, update } from '../../src/background/
 import { clearSyncData, syncNow } from '../../src/background/sync';
 import { findPreset } from '../../src/core/presets';
 import {
+  ACCOUNT_SYNC_FIELDS,
   appFromSync,
   appSyncValue,
   applyPull,
@@ -162,7 +163,8 @@ describe('sending', () => {
   it('sends what changed, and nothing when nothing did', () => {
     const first = planPush(entries, {}, {}, new Set(), 100, 'me');
     expect(Object.keys(first.set).sort()).toEqual([appKey, accountKey]);
-    expect(first.set[accountKey]).toEqual({ v: entries[accountKey], t: 100, by: 'me' });
+    // Each item says which fields its writer's version sends (an older computer keeps the others).
+    expect(first.set[accountKey]).toEqual({ v: entries[accountKey], t: 100, by: 'me', f: [...ACCOUNT_SYNC_FIELDS] });
     const second = planPush(entries, first.written, first.set, new Set(), 200, 'me');
     expect(second.set).toEqual({});
     expect(second.gone).toEqual({});
@@ -195,7 +197,7 @@ describe('sending', () => {
     expect(lost.forget).toEqual([accountKey]);
   });
 
-  it('keeps too-big things here and drops old tombstones', () => {
+  it('keeps too-big things here and drops tombstones this computer has known for long', () => {
     const big = syncEntries({
       apps: [],
       accounts: [
@@ -210,17 +212,16 @@ describe('sending', () => {
       ],
       workspaces: [],
     });
-    const plan = planPush(
-      big,
-      {},
-      { 'sd1:c:old': { gone: true, t: 0, by: 'other' } },
-      new Set(),
-      TOMBSTONE_TTL_MS + 1,
-      'me',
-    );
+    const remote = { 'sd1:c:old': { gone: true as const, t: 0, by: 'other' } };
+    // First seen at 0 by this computer's clock: old enough.
+    const plan = planPush(big, {}, remote, new Set(), TOMBSTONE_TTL_MS + 1, 'me', { 'sd1:c:old': 0 });
     expect(plan.tooBig).toEqual([accountKey]);
     expect(plan.set).toEqual({});
     expect(plan.drop).toEqual(['sd1:c:old']);
+    // Never seen before: its age counts from now, whatever `t` says.
+    const fresh = planPush(big, {}, remote, new Set(), TOMBSTONE_TTL_MS + 1, 'me');
+    expect(fresh.drop).toEqual([]);
+    expect(fresh.goneSeen).toEqual({ 'sd1:c:old': TOMBSTONE_TTL_MS + 1 });
   });
 
   it('sends what fits in what is left of Chrome Sync, apps first, then accounts, then workspaces', () => {

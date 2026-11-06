@@ -86,6 +86,14 @@ export function isAccountIcon(value: unknown): value is AccountIcon {
   return typeof value === 'string' && (ACCOUNT_ICONS as readonly string[]).includes(value);
 }
 
+/**
+ * An empty record without a prototype, for maps keyed by ids or names that come from untrusted data
+ * (storage, backups, Chrome Sync, pages): a key such as "__proto__" stays an ordinary key.
+ */
+export function record<T>(): Record<string, T> {
+  return Object.create(null) as Record<string, T>;
+}
+
 export function newId(prefix: string): string {
   const bytes = globalThis.crypto.getRandomValues(new Uint8Array(8));
   return `${prefix}_${Array.from(bytes, (byte) => byte.toString(36).padStart(2, '0'))

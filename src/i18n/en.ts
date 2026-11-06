@@ -150,6 +150,8 @@ export const en = {
   'error.BLOCKED_DOMAIN':
     "Swapdeck does not manage {domain}: its sign-in is shared with Chrome itself. Use the site's own account switcher.",
   'error.CORRUPT': 'The saved session could not be read. Sign in again and save it.',
+  'error.CORRUPT.vault':
+    'The passphrase lock is damaged and cannot open your saved sessions. Use “Forgot passphrase?” to remove it, then sign in to each account again.',
   'error.VAULT_EXISTS': 'A passphrase is already set.',
   'error.NO_VAULT': 'No passphrase is set.',
   'error.UNKNOWN': 'Something went wrong: {detail}',

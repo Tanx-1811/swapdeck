@@ -168,10 +168,24 @@ export function isRequest(message: unknown): message is AnyRequest {
   return Boolean(message) && typeof (message as { type?: unknown }).type === 'string';
 }
 
+/**
+ * Whether a message comes from one of the extension's own pages (popup, side panel, manager, the
+ * confirmation window). Judged by the sending document itself, not by its tab: a script in a web page
+ * (or in a frame of one) has the page's address, whatever the tab shows. Only those pages send
+ * requests; scripts run in web pages answer through their return value.
+ */
+export function fromOwnPage(sender: chrome.runtime.MessageSender): boolean {
+  if (sender.id !== chrome.runtime.id) return false;
+  const base = chrome.runtime.getURL('');
+  const origin = base.replace(/\/$/, '');
+  if (sender.origin !== undefined && sender.origin !== origin) return false;
+  return typeof sender.url === 'string' && sender.url.startsWith(base);
+}
+
 /** Answers requests from the extension's own pages. Content scripts and other extensions are refused. */
 export function listen(): void {
   chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
-    if (sender.id !== chrome.runtime.id || sender.tab?.url?.startsWith('http') || !isRequest(message)) return false;
+    if (!fromOwnPage(sender) || !isRequest(message)) return false;
     handle(message).then(
       (data) => sendResponse({ ok: true, data } satisfies Result<unknown>),
       (error: unknown) => sendResponse(toError(error)),

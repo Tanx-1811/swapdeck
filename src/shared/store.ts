@@ -2,6 +2,7 @@ import { isSyncStatus, type SyncStatus } from '../core/sync';
 import { parseSettings } from '../core/settings';
 import type { Account, ActiveMap, AppDef, HistoryEntry, Identity, Settings, VaultMeta, Workspace } from '../core/types';
 import {
+  isId,
   sanitizeAccount,
   sanitizeActive,
   sanitizeApp,
@@ -10,13 +11,13 @@ import {
   sanitizeVault,
   sanitizeWorkspace,
 } from '../core/validate';
-import { byOrder } from '../core/util';
+import { byOrder, record } from '../core/util';
 
 /**
  * Storage layout. chrome.storage.local (persistent, this device only):
  *   sd:apps, sd:accounts, sd:active, sd:settings, sd:history, sd:vault, sd:workspaces,
  *   sd:snap:<accountId> (saved session), sd:prev:<accountId> (the one before it),
- *   sd:syncMemo, sd:install, sd:syncRemoved (sync of the list, background/sync.ts).
+ *   sd:syncMemo, sd:install, sd:syncRemoved, sd:syncGoneSeen (sync of the list, background/sync.ts).
  * chrome.storage.session (memory only, cleared when Chrome closes):
  *   sd:key (unlocked vault private key), sd:live (who is signed in, per app),
  *   sd:progress (a workspace switch under way), sd:ask (a switch waiting for an answer),
@@ -100,9 +101,9 @@ export async function readState(): Promise<State> {
 
 export function liveFromRaw(value: unknown): LiveMap {
   if (!value || typeof value !== 'object') return {};
-  const out: LiveMap = {};
+  const out: LiveMap = record();
   for (const [appId, item] of Object.entries(value as Record<string, unknown>)) {
-    if (!item || typeof item !== 'object') continue;
+    if (!isId(appId) || !item || typeof item !== 'object') continue;
     const info = item as Record<string, unknown>;
     out[appId] = {
       identity: sanitizeIdentity(info.identity) ?? null,

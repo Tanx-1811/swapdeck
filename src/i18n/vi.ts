@@ -152,6 +152,8 @@ export const vi: Record<MessageKey, string> = {
   'error.BLOCKED_DOMAIN':
     'Swapdeck không quản lý {domain}: đăng nhập của trang này dùng chung với chính Chrome. Hãy dùng tính năng chuyển tài khoản có sẵn của trang.',
   'error.CORRUPT': 'Không đọc được phiên đã lưu. Hãy đăng nhập lại rồi lưu.',
+  'error.CORRUPT.vault':
+    'Khóa bằng mật khẩu đã bị hỏng nên không mở được các phiên đã lưu. Hãy dùng “Quên mật khẩu?” để xóa khóa, rồi đăng nhập lại từng tài khoản.',
   'error.VAULT_EXISTS': 'Đã đặt mật khẩu rồi.',
   'error.NO_VAULT': 'Chưa đặt mật khẩu.',
   'error.UNKNOWN': 'Có lỗi xảy ra: {detail}',

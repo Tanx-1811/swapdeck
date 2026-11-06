@@ -2,6 +2,7 @@ import { KeyRound, Lock, LockOpen, ShieldAlert, ShieldCheck, Trash2 } from 'luci
 import { useState } from 'react';
 import { AUTO_LOCK_CHOICES } from '../../core/settings';
 import { Callout, Field, Spinner, useConfirm, useToast } from '../../ui/controls';
+import { errorText } from '../../ui/hooks';
 import { useI18n } from '../../ui/i18n';
 import { useManager } from '../context';
 import { Card, PageHeader } from '../Options';
@@ -197,7 +198,9 @@ function VaultOn() {
               setUnlockValue('');
               setUnlockError(null);
             } else {
-              setUnlockError(t('vault.wrong'));
+              setUnlockError(
+                result?.error && result.error !== 'BAD_PASSPHRASE' ? errorText(t, result) : t('vault.wrong'),
+              );
             }
           }}
         >

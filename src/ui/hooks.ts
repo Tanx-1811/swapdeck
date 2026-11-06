@@ -64,6 +64,9 @@ export function errorText(t: Translate, result: { error: ErrorCode; detail?: str
     if (isMessageKey(key)) return t(key, { app: value ?? '' });
   }
   if (error === 'BLOCKED_DOMAIN') return t('error.BLOCKED_DOMAIN', { domain: detail ?? '' });
+  // A more precise message for some details (e.g. CORRUPT "vault": the lock itself is damaged).
+  const precise = `error.${error}.${detail ?? ''}`;
+  if (detail && isMessageKey(precise)) return t(precise);
   const key = `error.${error}`;
   if (error === 'UNKNOWN' || !isMessageKey(key)) return t('error.UNKNOWN', { detail: detail ?? error });
   return t(key);

@@ -143,6 +143,7 @@ describe('accounts', () => {
 
 describe('saved sessions', () => {
   it('keeps the previous session when a new one is saved', async () => {
+    await addAccount('app_acme', 'acc_a');
     await storeSnapshot('acc_a', snapshot('one'));
     await storeSnapshot('acc_a', snapshot('two'));
     expect((await loadSnapshot('acc_a')).storage.localStorage).toEqual({ token: 'two' });
@@ -160,6 +161,7 @@ describe('saved sessions', () => {
 
 describe('vault', () => {
   it('seals existing and new sessions, and locks restoring', async () => {
+    await addAccount('app_acme', 'acc_a');
     await storeSnapshot('acc_a', snapshot('before'));
     await vaultCreate('correct horse battery');
     const raw = JSON.stringify(await chrome.storage.local.get(null));
@@ -181,6 +183,8 @@ describe('vault', () => {
     await expect(vaultCreate('short')).rejects.toMatchObject({ code: 'INVALID' });
     await vaultCreate('first passphrase');
     await expect(vaultCreate('second passphrase')).rejects.toMatchObject({ code: 'VAULT_EXISTS' });
+    const app = await addApp(input());
+    await addAccount(app.id, 'acc_a');
     await storeSnapshot('acc_a', snapshot('secret'));
 
     await vaultChange('first passphrase', 'second passphrase');
@@ -192,10 +196,11 @@ describe('vault', () => {
     expect((await readState()).vault).toBeNull();
 
     await vaultCreate('third passphrase');
-    const app = await addApp(input());
-    await addAccount(app.id, 'acc_a', {
-      capturedAt: 5,
-      stats: { cookies: 1, storageKeys: 1, databases: 0, bytes: 10 },
+    await update((draft) => {
+      Object.assign(draft.accounts[0]!, {
+        capturedAt: 5,
+        stats: { cookies: 1, storageKeys: 1, databases: 0, bytes: 10 },
+      });
     });
     await vaultReset();
     expect(await readStoredSnapshot('acc_a')).toBeNull();

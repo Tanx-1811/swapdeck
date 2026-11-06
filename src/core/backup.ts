@@ -1,6 +1,7 @@
 import { decryptWithPassword, isPasswordBox, type PasswordBox } from './crypto';
 import { parseSettings } from './settings';
 import type { Account, ActiveMap, AppDef, Settings, Snapshot, Workspace } from './types';
+import { record } from './util';
 import { sanitizeAccount, sanitizeActive, sanitizeApp, sanitizeSnapshot, sanitizeWorkspace } from './validate';
 import { pruneMembers } from './workspaces';
 
@@ -70,7 +71,7 @@ export function sanitizePayload(value: unknown): BackupPayload {
     .map(sanitizeAccount)
     .filter((account): account is Account => account !== null && appIds.has(account.appId));
   const accountIds = new Set(accounts.map((account) => account.id));
-  const sessions: Record<string, Snapshot> = {};
+  const sessions = record<Snapshot>();
   if (input.sessions && typeof input.sessions === 'object') {
     for (const [id, raw] of Object.entries(input.sessions as Record<string, unknown>)) {
       const snapshot = accountIds.has(id) ? sanitizeSnapshot(raw) : null;

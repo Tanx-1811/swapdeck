@@ -193,6 +193,12 @@ export type Workspace = {
   note?: string;
   /** appId → accountId. Apps not listed are left as they are. */
   members: Record<string, string>;
+  /**
+   * Members another computer set (through sync of the list) whose app or account isn't on this
+   * computer yet, in that computer's ids. Never shown or switched; kept so this computer always
+   * sends them back with the workspace, and turned into `members` once they arrive.
+   */
+  foreignMembers?: Record<string, string>;
   /** Pages opened together in a tab group with "Open workspace". */
   links: Pin[];
   order: number;

@@ -129,9 +129,10 @@ export async function storeSnapshot(
 ): Promise<void> {
   const keepPrevious = options.keepPrevious ?? true;
   await exclusive(async () => {
-    // Removed meanwhile (a save or switch was still running): leave no orphaned sign-in behind.
+    // Removed meanwhile (a save or switch was still running), or every account went with "Delete all
+    // data" (no list at all): leave no orphaned sign-in behind.
     const listed = (await chrome.storage.local.get(KEYS.accounts))[KEYS.accounts];
-    if (Array.isArray(listed) && !listed.some((item) => (item as { id?: unknown } | null)?.id === accountId)) return;
+    if (!Array.isArray(listed) || !listed.some((item) => (item as { id?: unknown } | null)?.id === accountId)) return;
     const packed = await packSnapshot(snapshot, await vaultPublicKey());
     const current = await chrome.storage.local.get(snapKey(accountId));
     const changes: Record<string, unknown> = { [snapKey(accountId)]: packed };

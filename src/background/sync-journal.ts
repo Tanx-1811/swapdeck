@@ -1,4 +1,5 @@
 import { syncKey, type SyncKind } from '../core/sync';
+import { record } from '../core/util';
 
 /**
  * What the user removed on purpose, by sync key → when. Only these are removed
@@ -13,7 +14,7 @@ const MAX_ENTRIES = 3000;
 
 export async function readRemoved(now = Date.now()): Promise<Record<string, number>> {
   const raw: unknown = (await chrome.storage.local.get(REMOVED_KEY))[REMOVED_KEY];
-  const out: Record<string, number> = {};
+  const out = record<number>();
   if (!raw || typeof raw !== 'object') return out;
   for (const [key, at] of Object.entries(raw as Record<string, unknown>)) {
     if (typeof at === 'number' && now - at < KEEP_MS) out[key] = at;

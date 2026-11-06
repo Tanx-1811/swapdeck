@@ -34,7 +34,8 @@ export function parseSettings(value: unknown): Settings {
   const input = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
   const bool = (key: keyof Settings) =>
     typeof input[key] === 'boolean' ? (input[key] as boolean) : (DEFAULT_SETTINGS[key] as boolean);
-  const lock = Number(input.autoLockMinutes);
+  // A number, never something Number() would turn into 0 (null, '', [], false): 0 means "never lock".
+  const lock = input.autoLockMinutes;
   return {
     language: input.language === 'en' || input.language === 'vi' ? input.language : 'auto',
     theme: input.theme === 'light' || input.theme === 'dark' ? input.theme : 'system',
@@ -44,7 +45,10 @@ export function parseSettings(value: unknown): Settings {
     pageToasts: bool('pageToasts'),
     confirmSwitch: bool('confirmSwitch'),
     badge: bool('badge'),
-    autoLockMinutes: Number.isInteger(lock) && lock >= 0 && lock <= 24 * 60 ? lock : DEFAULT_SETTINGS.autoLockMinutes,
+    autoLockMinutes:
+      typeof lock === 'number' && Number.isInteger(lock) && lock >= 0 && lock <= 24 * 60
+        ? lock
+        : DEFAULT_SETTINGS.autoLockMinutes,
     popupLayout: input.popupLayout === 'compact' || input.popupLayout === 'wide' ? input.popupLayout : 'auto',
     actionOpens: input.actionOpens === 'panel' ? 'panel' : 'popup',
     accent: ACCENTS.includes(input.accent as Accent) ? (input.accent as Accent) : 'son',

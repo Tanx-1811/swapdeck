@@ -1,7 +1,7 @@
 import { isSealedBox } from './crypto';
 import { normalizeDomain, parseHttpUrl } from './domains';
 import { cleanLinkRules } from './links';
-import { ACCOUNT_COLORS, isAccountIcon } from './util';
+import { ACCOUNT_COLORS, isAccountIcon, record } from './util';
 import type {
   Account,
   AppDef,
@@ -36,6 +36,13 @@ const num = (value: unknown): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 const HEX = /^#[0-9a-f]{6}$/i;
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
+/** Names that mean something to every JavaScript object: never accepted as ids. */
+const RESERVED_IDS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/** An id of an app, account, workspace…: letters, digits, `_` and `-` (≤ 64), never a reserved name. */
+export function isId(value: unknown): value is string {
+  return typeof value === 'string' && ID.test(value) && !RESERVED_IDS.has(value);
+}
 
 export const color = (value: unknown, fallback: string): string =>
   typeof value === 'string' && HEX.test(value) ? value.toLowerCase() : fallback;
@@ -111,7 +118,7 @@ export function sanitizeApp(value: unknown): AppDef | null {
     .map(normalizeDomain)
     .filter((domain): domain is string => Boolean(domain));
   const originUrl = parseHttpUrl(str(value.origin));
-  if (!id || !ID.test(id) || !name || domains.length === 0 || !originUrl) return null;
+  if (!isId(id) || !name || domains.length === 0 || !originUrl) return null;
   const origin = originUrl.origin;
   const stagingPath = str(value.stagingPath, 300);
   const recentPattern = str(value.recentPattern, 300);
@@ -165,7 +172,7 @@ export function sanitizeAccount(value: unknown): Account | null {
   const id = str(value.id, 64);
   const appId = str(value.appId, 64);
   const label = str(value.label, 120)?.trim();
-  if (!id || !ID.test(id) || !appId || !label) return null;
+  if (!isId(id) || !isId(appId) || !label) return null;
   const account: Account = {
     id,
     appId,
@@ -235,7 +242,8 @@ export function sanitizeCookie(value: unknown): CookieRecord | null {
 
 function stringRecord(value: unknown): Record<string, string> | undefined {
   if (!isObj(value)) return undefined;
-  const out: Record<string, string> = {};
+  // Keys are the site's own (any text, "__proto__" included): kept in a record without a prototype.
+  const out = record<string>();
   for (const [key, item] of Object.entries(value)) if (typeof item === 'string') out[key] = item;
   return out;
 }
@@ -325,17 +333,22 @@ export function sanitizeHistory(value: unknown): HistoryEntry | null {
   return entry;
 }
 
+/** appId → accountId (at most 1,000 — far more apps than anyone adds). */
+export function sanitizeMembers(value: unknown): Record<string, string> {
+  const members = record<string>();
+  if (!isObj(value)) return members;
+  for (const [appId, accountId] of Object.entries(value).slice(0, 1000)) {
+    if (isId(appId) && isId(accountId)) members[appId] = accountId;
+  }
+  return members;
+}
+
 export function sanitizeWorkspace(value: unknown): Workspace | null {
   if (!isObj(value)) return null;
   const id = str(value.id, 64);
   const name = str(value.name, 80)?.trim();
-  if (!id || !ID.test(id) || !name) return null;
-  const members: Record<string, string> = {};
-  if (isObj(value.members)) {
-    for (const [appId, accountId] of Object.entries(value.members)) {
-      if (ID.test(appId) && typeof accountId === 'string' && ID.test(accountId)) members[appId] = accountId;
-    }
-  }
+  if (!isId(id) || !name) return null;
+  const members = sanitizeMembers(value.members);
   const workspace: Workspace = {
     id,
     name,
@@ -346,6 +359,9 @@ export function sanitizeWorkspace(value: unknown): Workspace | null {
     createdAt: num(value.createdAt) ?? Date.now(),
     switchCount: num(value.switchCount) ?? 0,
   };
+  const foreign = sanitizeMembers(value.foreignMembers);
+  for (const appId of Object.keys(members)) delete foreign[appId];
+  if (Object.keys(foreign).length) workspace.foreignMembers = foreign;
   if (isAccountIcon(value.icon)) workspace.icon = value.icon;
   const emoji = str(value.emoji, 16);
   if (emoji) workspace.emoji = emoji;
@@ -369,9 +385,9 @@ export function sanitizeVault(value: unknown): VaultMeta | null {
 
 export function sanitizeActive(value: unknown): Record<string, string | null> {
   if (!isObj(value)) return {};
-  const out: Record<string, string | null> = {};
+  const out = record<string | null>();
   for (const [key, item] of Object.entries(value)) {
-    if (item === null || (typeof item === 'string' && ID.test(item))) out[key] = item;
+    if (isId(key) && (item === null || isId(item))) out[key] = item;
   }
   return out;
 }

@@ -2,6 +2,99 @@
 
 All notable changes to Swapdeck are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 1.7.0 — 2026-11-06
+
+A review of every part of Swapdeck — switching, sync, the lock, backups, every screen, and Swapdeck Desktop — found
+and fixed what could mix two accounts, lose data or confuse; Swapdeck Desktop 1.4.0 comes with it.
+
+- **The workspace in use is always shown** at the top of the Swapdeck window; click it to search and switch between all
+  your workspaces. Long lists of workspaces fold into "All N", and each account shows which workspaces use it.
+- **Show the account on its pages** (Settings): for important accounts only, as before, or for every account — a quiet
+  strip with the workspace (or app) and the account, so you always see which client you are acting as.
+- **Checked after every switch:** if the site still shows another person once the page loads, history says so.
+- Apps with many accounts get a **filter box**, and the account in use is brought into view.
+- Switching while saved sign-ins are locked asks for the passphrase right where you are, then carries on.
+- The manager works in narrow windows (nothing runs off the right edge), and the wide window falls back to the compact
+  one when the browser is zoomed in.
+- Link rules typed with accents or spaces ("acme.example/dự án") match, as in Swapdeck Desktop.
+- Updated dependencies (Playwright 1.65, Vite 8.3.6, Vitest 5.1, ESLint 10.14, lucide-react 1.70, jsdom 31).
+- **Swapdeck Desktop 1.4.0:** safer moves to another Mac, no lost workspaces, a window per workspace, links that only
+  follow the page you pinned, and terminal tokens behind a single-use pass or Touch ID (see below).
+
+**Switching — never between two accounts**
+
+- Re-opening the account in use after a site signed you out restores its saved sign-in instead of overwriting it with
+  the signed-out session.
+- A switch that fails halfway is undone; if it can't be, the site is signed out — never left half one account, half
+  the other. A switch interrupted by Swapdeck restarting is undone when it starts again.
+- Apps that keep data in IndexedDB: a switch that can't replace it (another tab holds it open) is undone instead of
+  reported as done.
+- Other windows' tabs of the app pause during a switch, so they can't write the old sign-in back; apps that swap
+  per-tab session storage get the new account's in every open tab.
+- The switching tab moving to another site can no longer touch that site's storage.
+- "Open link as" switches first, then opens the link, so one-time invite and sign-in links are never used by the
+  wrong account.
+- With "Links of another account: switch right away", a switch is no longer undone by the previous account's page.
+- Shortcuts, the address bar and menus ask about unsaved work when re-opening the account in use, and follow "Ask
+  before every switch" — as the manager now does too.
+- Being offline (a page Swapdeck can't read) no longer marks accounts as expired; auto-sync checks who is signed in
+  in the session it saves; pages that hang can no longer block an app's switches.
+- Workspace switches fix apps signed in as someone else, and a workspace switch where nothing could be switched says
+  so (one line per app) and doesn't count as used.
+
+**Sync of the list**
+
+- Removing something and setting it up again while another computer was asleep no longer deletes the new one
+  everywhere.
+- Edits made offline (notes, pins, workspace links) are kept when another computer changes the same item in another
+  way, a reorder included.
+- Computers still on an older version can no longer erase newer details such as link rules.
+- Workspace members whose account can't sync yet are kept rather than dropped.
+- When the list outgrows Chrome Sync, what fits is still sent (apps, then accounts, then workspaces) and Settings says
+  how many items wait; before, nothing was sent at all.
+- A removal stays removed even when a computer that was offline for months sends the item back, a wrong clock can no
+  longer cut a removal short, and a removal made during a sync is always passed on.
+
+**Lock, backups and data**
+
+- Changing the passphrase creates new keys and encrypts every saved session again, so the old passphrase opens
+  nothing; a damaged lock is reported clearly; turning the lock on twice at once can't make sessions unreadable.
+- Turning the lock off drops sessions that can't be decrypted and marks their accounts as having nothing saved.
+- A backup with sessions leaves out a session that can't be read and names it, instead of failing.
+- Importing a backup on a new computer no longer marks an imported account as the one in use (the first switch would
+  have overwritten its session).
+- "Delete all data" leaves no sign-in behind if a save finishes at the same moment; an invalid auto-lock value falls
+  back to 30 minutes instead of turning auto-lock off.
+- Stricter checks on who may send requests to Swapdeck and on ids read from files, storage and Chrome Sync.
+
+**Polish**
+
+- Pressing Enter twice no longer creates a workspace twice; menus close when you scroll; keyboard focus returns where
+  it was after a dialog, and danger confirmations start on Cancel; a "Skip to content" link and focus on each page's
+  heading.
+- Long account names stay readable next to their Important, Expired and In use labels; the apps list shortens the
+  accounts summary instead of the app's name; initials ignore punctuation; the link card keeps long names on one line.
+- "Restore previous session" only shows when there is one; an app with no accounts offers to open it to sign in.
+- Wording: "just now" / "vừa xong", "1 app" (singular forms in English), "Đưa lên/xuống", "Ứng dụng & tài khoản",
+  "Mật khẩu Swapdeck", and more natural Vietnamese across the manager.
+
+**Swapdeck Desktop 1.4.0**
+
+- Moving to another Mac is safer: a workspace whose old profile folder now holds someone else's profile is left
+  without a profile instead of opening the wrong account; "Match profiles again" finds it after you sign in to Chrome,
+  and matching by name ignores names Chrome chose itself and names two profiles share.
+- No more lost workspaces: a long or empty name no longer makes a workspace disappear at the next launch; long notes
+  are kept; the editor won't accept an empty name or one another workspace already has.
+- Each workspace has its own window: names are unique, a workspace moved to another profile gets a new window, and
+  opening several quickly no longer mixes up window names.
+- Links: a pinned page covers that page and what's under it, not its whole site; when two workspaces share the best
+  rule Swapdeck asks (and the editor warns); a link for a workspace without a profile opens the chooser.
+- Terminal tokens: "Open in Terminal" loads them with a single-use pass that lasts 60 seconds; any other use of
+  `--env`, including "Copy command", asks for Touch ID or your password. If they can't be loaded, the terminal says so
+  and stops instead of running your tools with your default account. Deleting a workspace removes all of its tokens.
+- Tokens and edits typed just before quitting or opening a terminal are saved first; "Check for updates" works when the
+  latest release only contains the extension.
+
 ## 1.6.0 — 2026-11-04
 
 Links open with the right account, expired sessions show up before they bite, and Swapdeck Desktop 1.3.0 gives each

@@ -61,13 +61,17 @@ function ExportCard() {
         onSubmit={async (event) => {
           event.preventDefault();
           if (!ready) return;
-          const text = await run('backup.export', {
+          const result = await run('backup.export', {
             password: includeSessions || password ? password : null,
             includeSessions,
           });
-          if (!text) return;
-          downloadText(text, backupFileName());
-          notify(t('backup.downloaded'));
+          if (!result) return;
+          downloadText(result.text, backupFileName());
+          if (result.unreadable.length) {
+            notify(t('backup.downloadedUnreadable', { names: result.unreadable.join(', ') }), 'error');
+          } else {
+            notify(t('backup.downloaded'));
+          }
           setPassword('');
           setRepeat('');
         }}

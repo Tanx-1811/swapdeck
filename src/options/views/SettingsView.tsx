@@ -249,6 +249,9 @@ function SyncCard() {
       {on && status && !status.ok && (
         <Callout tone="warning">{t(status.error === 'quota' ? 'sync.errorQuota' : 'sync.errorUnknown')}</Callout>
       )}
+      {on && status?.ok && (status.full ?? 0) > 0 && (
+        <Callout tone="warning">{t('sync.statusFull', { n: status.full ?? 0 })}</Callout>
+      )}
       {(on || inChromeSync) && (
         <div className="row">
           {on && (

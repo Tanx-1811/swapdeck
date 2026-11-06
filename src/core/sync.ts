@@ -284,6 +284,53 @@ export function planPush(
   return plan;
 }
 
+/** Room kept free in chrome.storage.sync, so Chrome's own count never tips a write over the quota. */
+export const SYNC_HEADROOM_BYTES = 1024;
+
+const KIND_ORDER: Record<SyncKind, number> = { app: 0, account: 1, workspace: 2 };
+
+/** Bytes an item takes against chrome.storage.sync's quota (key + JSON value, as UTF-8). */
+export function storedBytes(key: string, value: unknown): number {
+  return new TextEncoder().encode(key + (JSON.stringify(value) ?? '')).length;
+}
+
+/**
+ * The part of `set` that fits in chrome.storage.sync next to what is already
+ * there (`stored`: everything in the sync area), and the keys that don't fit.
+ * Apps go first, then accounts, then workspaces (each needs the one before it
+ * on the other computers), so a list that outgrows Chrome Sync still sends
+ * what fits — one `set()` over the quota would write nothing, every time.
+ */
+export function fitPush(
+  set: Record<string, SyncItem>,
+  stored: Record<string, unknown>,
+  limits: { quotaBytes: number; maxItems: number },
+): { fit: Record<string, SyncItem>; left: string[] } {
+  let bytes = 0;
+  let items = 0;
+  for (const [key, value] of Object.entries(stored)) {
+    if (key in set) continue;
+    bytes += storedBytes(key, value);
+    items++;
+  }
+  const order = (key: string) => KIND_ORDER[parseSyncKey(key)?.kind ?? 'workspace'];
+  const keys = Object.keys(set).sort((a, b) => order(a) - order(b) || (a < b ? -1 : a > b ? 1 : 0));
+  const fit: Record<string, SyncItem> = {};
+  const left: string[] = [];
+  for (const key of keys) {
+    const item = set[key]!;
+    const size = storedBytes(key, item);
+    if (items + 1 > limits.maxItems || bytes + size > limits.quotaBytes - SYNC_HEADROOM_BYTES) {
+      left.push(key);
+      continue;
+    }
+    fit[key] = item;
+    bytes += size;
+    items++;
+  }
+  return { fit, left };
+}
+
 // --- Receiving ---------------------------------------------------------------
 
 export type Upsert = {
@@ -581,6 +628,8 @@ export type SyncStatus = {
   items: number;
   /** Things too big for one sync item (kept here only). */
   tooBig: number;
+  /** Things that didn't fit in what is left of Chrome Sync's space (sent once there is room). */
+  full?: number;
   error?: 'quota' | 'unknown';
 };
 

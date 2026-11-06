@@ -378,7 +378,7 @@ export async function vaultDisable(passphrase: string): Promise<void> {
   } catch {
     throw new SwapdeckError('BAD_PASSPHRASE');
   }
-  await exclusive(async () => {
+  const dropped = await exclusive(async () => {
     const keys = await allSnapshotKeys();
     const stored = await chrome.storage.local.get(keys);
     const changes: Record<string, unknown> = {};
@@ -393,8 +393,19 @@ export async function vaultDisable(passphrase: string): Promise<void> {
     }
     await chrome.storage.local.set(changes);
     await chrome.storage.local.remove([KEYS.vault, ...unreadable]);
+    return new Set(unreadable.filter((key) => key.startsWith('sd:snap:')).map((key) => key.slice('sd:snap:'.length)));
   });
   await vaultLock();
+  // Accounts whose session was dropped have nothing saved any more (as after "Forgot passphrase").
+  if (dropped.size) {
+    await update((draft) => {
+      for (const account of draft.accounts) {
+        if (!dropped.has(account.id)) continue;
+        delete account.capturedAt;
+        delete account.stats;
+      }
+    });
+  }
 }
 
 /** "Forgot passphrase": deletes the vault and the sessions sealed with it. Accounts stay. */
@@ -418,16 +429,27 @@ export async function vaultReset(): Promise<void> {
 
 // --- Backups -----------------------------------------------------------------
 
-export async function exportBackup(password: string | null, includeSessions: boolean): Promise<string> {
+export async function exportBackup(
+  password: string | null,
+  includeSessions: boolean,
+): Promise<{ text: string; unreadable: string[] }> {
   if (includeSessions && (!password || password.length < MIN_PASSPHRASE)) {
     throw new SwapdeckError('INVALID', 'password');
   }
   const state = await readState();
   const sessions: Record<string, Snapshot> = {};
+  /** Labels of accounts whose saved session can't be read: left out instead of failing the whole backup. */
+  const unreadable: string[] = [];
   if (includeSessions) {
     for (const account of state.accounts) {
       const stored = await readStoredSnapshot(account.id);
-      if (stored) sessions[account.id] = await unpackSnapshot(stored);
+      if (!stored) continue;
+      try {
+        sessions[account.id] = await unpackSnapshot(stored);
+      } catch (error) {
+        if (!(error instanceof SwapdeckError) || error.code !== 'CORRUPT') throw error;
+        unreadable.push(account.label);
+      }
     }
   }
   const payload: BackupPayload = {
@@ -442,13 +464,14 @@ export async function exportBackup(password: string | null, includeSessions: boo
   await update((draft) => {
     draft.settings = { ...draft.settings, lastBackupAt: Date.now() };
   });
-  return serializeBackup({
+  const text = serializeBackup({
     format: BACKUP_FORMAT,
     version: 1,
     createdAt: Date.now(),
     encrypted,
     payload: encrypted ? await encryptWithPassword(JSON.stringify(payload), password!) : payload,
   });
+  return { text, unreadable };
 }
 
 async function readBackup(text: string, password?: string): Promise<{ payload: BackupPayload; createdAt: number }> {

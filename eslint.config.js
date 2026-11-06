@@ -16,6 +16,7 @@ export default tseslint.config(
       'brand/**/*.png',
       'desktop/.build',
       'desktop/build',
+      '.claude/worktrees',
     ],
   },
   {

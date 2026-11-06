@@ -1,5 +1,6 @@
 import {
   applyPull,
+  fitPush,
   isMemoEntry,
   isSyncItem,
   planPull,
@@ -12,7 +13,7 @@ import {
 } from '../core/sync';
 import { readState, SESSION_KEYS } from '../shared/store';
 import { removeAccount, removeApp, removeWorkspace } from './admin';
-import { update } from './state';
+import { exclusive, update } from './state';
 import { readRemoved } from './sync-journal';
 
 /**
@@ -102,12 +103,14 @@ export function syncNow(): Promise<void> {
 }
 
 async function pull(): Promise<void> {
-  const [remote, memo, removed] = await Promise.all([readRemote(), readMemo(), removedHere()]);
+  const [remote, memo] = await Promise.all([readRemote(), readMemo()]);
   const plan = planPull(remote, memo);
   const next: SyncMemo = { ...memo };
   for (const key of plan.forget) delete next[key];
   if (plan.upserts.length) {
-    const outcome = await update((draft) => applyPull(draft, plan.upserts, next, removed));
+    // Removals note themselves inside their own update(): reading the journal in this one sees
+    // exactly the removals made before it, so nothing removed meanwhile comes back.
+    const outcome = await update(async (draft) => applyPull(draft, plan.upserts, next, await removedHere()));
     Object.assign(next, outcome.applied);
   }
   // Removed on another computer: remove here too (workspaces, then accounts, then apps), sign-ins included.
@@ -121,13 +124,10 @@ async function pull(): Promise<void> {
 
 /** Sends what changed here. True when something lost here can be taken back from Chrome Sync. */
 async function push(): Promise<boolean> {
-  const [state, remote, memo, removed, by] = await Promise.all([
-    readState(),
-    readRemote(),
-    readMemo(),
-    removedHere(),
-    installId(),
-  ]);
+  // The list and the removal journal as one consistent view (read in the write queue): read apart,
+  // a removal in between would look like lost data, and the next pull would bring it back.
+  const [state, removed] = await exclusive(async () => [await readState(), await removedHere()] as const);
+  const [remote, memo, by] = await Promise.all([readRemote(), readMemo(), installId()]);
   const entries = syncEntries(state);
   const plan = planPush(entries, memo, remote, removed, Date.now(), by);
   const next: SyncMemo = { ...memo };
@@ -136,11 +136,22 @@ async function push(): Promise<boolean> {
   for (const key of plan.forget) delete next[key];
   await writeMemo(next);
   try {
-    if (Object.keys(plan.set).length) await chrome.storage.sync.set(plan.set);
-    Object.assign(next, plan.written);
+    // Send what fits; the rest waits for room (one set() over the quota would write nothing, every time).
+    const { fit, left } = fitPush(plan.set, await chrome.storage.sync.get(null), {
+      quotaBytes: chrome.storage.sync.QUOTA_BYTES ?? 102_400,
+      maxItems: chrome.storage.sync.MAX_ITEMS ?? 512,
+    });
+    if (Object.keys(fit).length) await chrome.storage.sync.set(fit);
+    for (const [key, entry] of Object.entries(plan.written)) if (key in fit) next[key] = entry;
     await writeMemo(next);
-    const items = Object.keys(entries).length - plan.tooBig.length;
-    await setStatus({ ok: true, at: Date.now(), items, tooBig: plan.tooBig.length });
+    const items = Object.keys(entries).length - plan.tooBig.length - left.length;
+    await setStatus({
+      ok: true,
+      at: Date.now(),
+      items,
+      tooBig: plan.tooBig.length,
+      ...(left.length ? { full: left.length, error: 'quota' as const } : {}),
+    });
   } catch (error) {
     await setStatus(failure(error, plan.tooBig.length));
   }

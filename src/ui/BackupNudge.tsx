@@ -39,7 +39,7 @@ export function BackupNudge({ settings, accounts }: { settings: Settings; accoun
                 notify(errorText(t, result), 'error');
                 return;
               }
-              downloadText(result.data, backupFileName());
+              downloadText(result.data.text, backupFileName());
               notify(t('backup.quickDone'));
             }}
           >

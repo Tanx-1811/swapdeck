@@ -296,6 +296,8 @@ export const en = {
   'backup.passwordMismatch': 'The passwords do not match.',
   'backup.download': 'Download backup',
   'backup.downloaded': 'Backup downloaded.',
+  'backup.downloadedUnreadable':
+    "Backup downloaded without the saved sign-in of {names}: it can't be read any more (sign in again to save it).",
   'backup.import': 'Import',
   'backup.importLead': 'Choose a Swapdeck backup file (.json).',
   'backup.choose': 'Choose file',
@@ -660,6 +662,8 @@ export const en = {
     "The list goes through your Google account's Chrome Sync; set a sync passphrase in Chrome if only you should be able to read it. Chrome Sync must be on for this profile, with Extensions included.",
   'sync.status': 'Synced {time} · {n} items',
   'sync.statusTooBig': '{n} items are too big to sync and stay on this computer.',
+  'sync.statusFull':
+    'Chrome Sync is full: {n} items wait on this computer. Remove apps, accounts or workspaces you no longer use to make room.',
   'sync.errorQuota': "Chrome Sync's space is full: the list is too big to sync.",
   'sync.errorUnknown': "Couldn't sync just now; Swapdeck tries again after the next change.",
   'sync.pending': 'Waiting for the first sync…',

@@ -7,6 +7,7 @@ import {
   workspaceFromActive,
   exportBackup,
   importBackup,
+  inspectBackup,
   removeAccount,
   removeApp,
   reorderAccounts,
@@ -202,6 +203,38 @@ describe('vault', () => {
     expect(state.vault).toBeNull();
     expect(state.accounts[0]).not.toHaveProperty('capturedAt');
   });
+
+  it('drops a session that can no longer be decrypted: off means nothing saved, and backups leave it out', async () => {
+    const app = await addApp(input());
+    await addAccount(app.id, 'acc_ok', { label: 'Fine', capturedAt: 5 });
+    await addAccount(app.id, 'acc_bad', {
+      label: 'Broken',
+      capturedAt: 5,
+      stats: { cookies: 1, storageKeys: 1, databases: 0, bytes: 10 },
+    });
+    await vaultCreate('first passphrase');
+    await storeSnapshot('acc_ok', snapshot('fine'));
+    await storeSnapshot('acc_bad', snapshot('broken'));
+    // Damage one sealed session (a bad disk write, a bug in an old version…).
+    const raw = (await chrome.storage.local.get('sd:snap:acc_bad'))['sd:snap:acc_bad'] as {
+      sealed: { data: string };
+    };
+    raw.sealed.data = raw.sealed.data.slice(0, -8) + 'AAAAAAAA';
+    await chrome.storage.local.set({ 'sd:snap:acc_bad': raw });
+
+    // A backup with sessions still comes out, without the broken one, and says whose is missing.
+    const backup = await exportBackup('backup password', true);
+    expect(backup.unreadable).toEqual(['Broken']);
+    expect((await inspectBackup(backup.text, 'backup password')).sessions).toBe(1);
+
+    await vaultDisable('first passphrase');
+    expect(await readStoredSnapshot('acc_bad')).toBeNull();
+    expect((await loadSnapshot('acc_ok')).storage.localStorage).toEqual({ token: 'fine' });
+    const accounts = (await readState()).accounts;
+    expect(accounts.find((item) => item.id === 'acc_bad')).not.toHaveProperty('capturedAt');
+    expect(accounts.find((item) => item.id === 'acc_bad')).not.toHaveProperty('stats');
+    expect(accounts.find((item) => item.id === 'acc_ok')?.capturedAt).toBe(5);
+  });
 });
 
 describe('backups', () => {
@@ -211,7 +244,7 @@ describe('backups', () => {
     await storeSnapshot('acc_a', snapshot('exported'));
     await expect(exportBackup(null, true)).rejects.toMatchObject({ code: 'INVALID' });
 
-    const text = await exportBackup('backup password', true);
+    const { text } = await exportBackup('backup password', true);
     expect(text).not.toContain('exported');
 
     await wipeData();
@@ -244,7 +277,7 @@ describe('backups', () => {
   it('replaces everything, keeping ids', async () => {
     const app = await addApp(input());
     await addAccount(app.id, 'acc_a');
-    const text = await exportBackup(null, false);
+    const { text } = await exportBackup(null, false);
     await addApp(
       input({ name: 'Other', domains: ['other.test'], origin: 'https://other.test', homeUrl: 'https://other.test/' }),
     );
@@ -265,7 +298,7 @@ describe('backups', () => {
     const there = await addApp(input({ origin: 'https://www.acme.test', homeUrl: 'https://www.acme.test/' }));
     await addAccount(there.id, 'acc_b', { email: 'b@acme.test', capturedAt: 1 });
     await storeSnapshot('acc_b', snapshot('from-www'));
-    const text = await exportBackup('backup password', true);
+    const { text } = await exportBackup('backup password', true);
     await wipeData();
     const here = await addApp(input({ origin: 'https://app.acme.test', homeUrl: 'https://app.acme.test/' }));
 
@@ -345,7 +378,7 @@ describe('workspaces', () => {
     const acme = await addApp(input());
     await addAccount(acme.id, 'acc_a', { email: 'a@acme.test' });
     await saveWorkspace(undefined, { name: 'Acme', color: '#123456', members: { [acme.id]: 'acc_a' }, links: [] });
-    const text = await exportBackup(null, false);
+    const { text } = await exportBackup(null, false);
     await wipeData();
     expect(await importBackup(text, undefined, 'merge')).toMatchObject({ workspaces: 1 });
     const state = await readState();

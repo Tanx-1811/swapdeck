@@ -140,7 +140,10 @@ type Api = {
   'vault.change': { req: { current: string; next: string }; res: true };
   'vault.disable': { req: { passphrase: string }; res: true };
   'vault.reset': { req: Record<string, never>; res: true };
-  'backup.export': { req: { password: string | null; includeSessions: boolean }; res: string };
+  'backup.export': {
+    req: { password: string | null; includeSessions: boolean };
+    res: { text: string; unreadable: string[] };
+  };
   'backup.inspect': { req: { text: string; password?: string }; res: BackupSummary };
   'backup.import': {
     req: { text: string; password?: string; mode: 'merge' | 'replace' };

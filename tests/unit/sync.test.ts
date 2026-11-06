@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   addApp,
   exportBackup,
@@ -16,10 +16,13 @@ import {
   appFromSync,
   appSyncValue,
   applyPull,
+  fitPush,
   mergeAccount,
   planPull,
   planPush,
   stableJson,
+  storedBytes,
+  SYNC_HEADROOM_BYTES,
   syncEntries,
   syncHash,
   syncKey,
@@ -218,6 +221,33 @@ describe('sending', () => {
     expect(plan.tooBig).toEqual([accountKey]);
     expect(plan.set).toEqual({});
     expect(plan.drop).toEqual(['sd1:c:old']);
+  });
+
+  it('sends what fits in what is left of Chrome Sync, apps first, then accounts, then workspaces', () => {
+    const item = (v: unknown): SyncItem => ({ v, t: 1, by: 'me' });
+    const set = {
+      'sd1:w:ws': item({ name: 'Acme' }),
+      'sd1:c:acc_b': item({ label: 'B' }),
+      'sd1:a:app': item({ name: 'Acme' }),
+      'sd1:c:acc_a': item({ label: 'A' }),
+    };
+    const sizes = Object.entries(set).map(([key, value]) => storedBytes(key, value));
+    const room = sizes.reduce((sum, size) => sum + size, 0);
+    // Everything fits.
+    expect(fitPush(set, {}, { quotaBytes: room + SYNC_HEADROOM_BYTES, maxItems: 512 }).left).toEqual([]);
+    // One byte short: the workspace waits, the app and both accounts go.
+    const short = fitPush(set, {}, { quotaBytes: room + SYNC_HEADROOM_BYTES - 1, maxItems: 512 });
+    expect(Object.keys(short.fit)).toEqual(['sd1:a:app', 'sd1:c:acc_a', 'sd1:c:acc_b']);
+    expect(short.left).toEqual(['sd1:w:ws']);
+    // Items being replaced don't count, however big they are now.
+    const replaced = { 'sd1:c:acc_a': item({ label: 'x'.repeat(500) }) };
+    expect(fitPush(set, replaced, { quotaBytes: room + SYNC_HEADROOM_BYTES, maxItems: 512 }).left).toEqual([]);
+    // Other items already there do: a small one pushes out the workspace only.
+    const stored = { 'sd1:c:other': item(1) };
+    expect(storedBytes('sd1:c:other', stored['sd1:c:other'])).toBeLessThan(sizes[0]!);
+    expect(fitPush(set, stored, { quotaBytes: room + SYNC_HEADROOM_BYTES, maxItems: 512 }).left).toEqual(['sd1:w:ws']);
+    // The item limit holds too.
+    expect(fitPush(set, stored, { quotaBytes: 1e9, maxItems: 3 }).left).toEqual(['sd1:c:acc_b', 'sd1:w:ws']);
   });
 });
 
@@ -578,7 +608,7 @@ describe('two computers', () => {
       const created = await addApp(custom());
       await addAccount(created.id, 'acc_work');
       await syncOn();
-      const text = await exportBackup(null, false);
+      const { text } = await exportBackup(null, false);
       const lastBackupAt = (await readState()).settings.lastBackupAt;
       expect(lastBackupAt).toBeGreaterThan(0);
       expect(await importBackup(text, undefined, 'replace')).toMatchObject({ syncOff: true });
@@ -591,5 +621,58 @@ describe('two computers', () => {
     });
     // Chrome Sync still holds the list for the other computers.
     expect(syncStore().has('sd1:c:acc_work')).toBe(true);
+  });
+
+  it('sends what fits when the list outgrows Chrome Sync, and the rest once there is room', async () => {
+    const area = chrome.storage.sync as unknown as {
+      QUOTA_BYTES?: number;
+      set: ReturnType<typeof vi.fn>;
+    };
+    const quota = 4000;
+    const original = area.set.getMockImplementation();
+    // Like Chrome: a set() that would go over the quota writes nothing and fails.
+    area.set.mockImplementation(async (items: Record<string, unknown>) => {
+      const after = new Map(syncStore());
+      for (const [key, value] of Object.entries(items)) after.set(key, value);
+      const bytes = [...after].reduce((sum, [key, value]) => sum + storedBytes(key, value), 0);
+      if (bytes > quota) throw new Error('QUOTA_BYTES quota exceeded');
+      for (const [key, value] of Object.entries(items)) syncStore().set(key, structuredClone(value));
+    });
+    area.QUOTA_BYTES = quota;
+    try {
+      await on('A', async () => {
+        const created = await addApp(custom());
+        for (let index = 0; index < 20; index++) {
+          await addAccount(created.id, `acc_${String(index).padStart(2, '0')}`, { note: 'n'.repeat(80) });
+        }
+        await syncOn();
+        const status = (await chrome.storage.session.get('sd:sync'))['sd:sync'] as {
+          ok: boolean;
+          full?: number;
+          items: number;
+        };
+        expect(status.ok).toBe(true);
+        expect(status.full).toBeGreaterThan(0);
+        expect(status.items).toBe(21 - (status.full ?? 0));
+      });
+      // The app and the accounts that fit reached Chrome Sync instead of nothing at all.
+      expect(syncStore().has(syncKey('app', (await on('A', readState)).apps[0]!.id))).toBe(true);
+      const sent = [...syncStore().keys()].filter((key) => key.startsWith('sd1:c:')).length;
+      expect(sent).toBeGreaterThan(0);
+      expect(sent).toBeLessThan(20);
+
+      // Room again: the rest goes on the next sync.
+      area.QUOTA_BYTES = 1e9;
+      area.set.mockImplementation(original!);
+      await on('A', () => syncNow());
+      expect([...syncStore().keys()].filter((key) => key.startsWith('sd1:c:'))).toHaveLength(20);
+      await on('B', async () => {
+        await syncOn();
+        expect((await readState()).accounts).toHaveLength(20);
+      });
+    } finally {
+      area.set.mockImplementation(original!);
+      delete area.QUOTA_BYTES;
+    }
   });
 });

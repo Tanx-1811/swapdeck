@@ -297,6 +297,8 @@ export const vi: Record<MessageKey, string> = {
   'backup.passwordMismatch': 'Hai mật khẩu không khớp.',
   'backup.download': 'Tải bản sao lưu',
   'backup.downloaded': 'Đã tải bản sao lưu.',
+  'backup.downloadedUnreadable':
+    'Đã tải bản sao lưu nhưng thiếu phiên đăng nhập của {names}: phiên này không còn đọc được (hãy đăng nhập lại để lưu).',
   'backup.import': 'Nhập',
   'backup.importLead': 'Chọn tệp sao lưu Swapdeck (.json).',
   'backup.choose': 'Chọn tệp',
@@ -661,6 +663,8 @@ export const vi: Record<MessageKey, string> = {
     'Danh sách đi qua Chrome Sync của tài khoản Google bạn; muốn chỉ mình bạn đọc được thì đặt cụm mật khẩu đồng bộ trong Chrome. Cần bật Chrome Sync cho hồ sơ này, có mục Tiện ích.',
   'sync.status': 'Đã đồng bộ {time} · {n} mục',
   'sync.statusTooBig': '{n} mục quá lớn để đồng bộ, chỉ nằm trên máy này.',
+  'sync.statusFull':
+    'Chrome Sync đã đầy: {n} mục đang chờ trên máy này. Xóa bớt ứng dụng, tài khoản hay các bên không còn dùng để có chỗ.',
   'sync.errorQuota': 'Chrome Sync đã đầy: danh sách quá lớn để đồng bộ.',
   'sync.errorUnknown': 'Chưa đồng bộ được; Swapdeck sẽ thử lại sau lần thay đổi tới.',
   'sync.pending': 'Đang chờ lần đồng bộ đầu…',

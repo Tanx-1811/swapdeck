@@ -29,10 +29,28 @@ test.describe('safety', () => {
     // The page carries the warning strip while the important account is in use…
     await expect(site.locator('#swapdeck-ribbon')).toBeAttached();
 
-    // …and loses it with an ordinary account (no confirmation needed there).
+    // …and loses it with an ordinary account (no confirmation needed there). The popup ignores keys while a
+    // switch is still answering, so wait until it shows Alice in use.
+    await expect(popup.getByRole('listitem').filter({ hasText: 'Alice Nguyen' })).toContainText('In use');
     await popup.keyboard.press('2');
     await expect(site.locator('#server-user')).toHaveText('bob@acme.test');
     await expect(site.locator('#swapdeck-ribbon')).toHaveCount(0);
+  });
+
+  test('can show every account on its pages, important ones still in red', async ({ context, server, call }) => {
+    const acme = await addAcme(call, server);
+    expect((await call('settings.update', { patch: { pageRibbon: 'all' } })).ok).toBe(true);
+    const site = await context.newPage();
+    await signIn(site, acme.origin, 'alice@acme.test');
+    await expect.poll(() => storedAccounts(context, acme.id)).toHaveLength(1);
+    const alice = (await storedAccounts(context, acme.id))[0]!;
+
+    await site.reload();
+    await expect(site.locator('#swapdeck-ribbon')).toHaveAttribute('data-tone', 'calm');
+
+    expect((await call('account.update', { id: alice.id, patch: { important: true } })).ok).toBe(true);
+    await site.reload();
+    await expect(site.locator('#swapdeck-ribbon')).toHaveAttribute('data-tone', 'important');
   });
 
   test('reminds to lock saved sign-ins until "Later"', async ({ context, server, call, openPopup }) => {

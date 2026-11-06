@@ -1,8 +1,10 @@
+import { decideSave, isEmptySnapshot } from '../core/decide';
 import { appForUrl, originOf, parseHttpUrl } from '../core/domains';
 import { hasIdentity, identityLabel, isSpecificDetector, sameIdentity, signedOutIsReliable } from '../core/identity';
 import { recentFor, upsertRecent } from '../core/recents';
 import type { Account, AppDef, Identity } from '../core/types';
 import { initials, readableTextColor, WARNING_COLOR } from '../core/util';
+import { activeWorkspaces } from '../core/workspaces';
 import { readSessionInfo, readState, SESSION_KEYS, type LiveInfo, type State } from '../shared/store';
 import { refreshBadge } from './badge';
 import { ownerOfPage, routeLink } from './links';
@@ -11,15 +13,17 @@ import {
   capture,
   detectLive,
   hasAccess,
+  PAGE_SCRIPT_TIMEOUT_MS,
   pendingToasts,
   persist,
+  sessionTabs,
   stagingCandidates,
   stagingUrl,
   translatorFor,
   withAppLock,
   type ToastIntent,
 } from './engine';
-import { showRibbon, showToast, type ToastContent } from './page-scripts';
+import { showRibbon, showToast, type RibbonContent, type ToastContent } from './page-scripts';
 import { pushHistory, update } from './state';
 import { getTab, runInTab, tabUrl } from './tabs';
 
@@ -99,11 +103,19 @@ async function trackPage(app: AppDef, tab: chrome.tabs.Tab): Promise<void> {
   });
 }
 
+/** The account a finished switch aimed at, when the page shows someone else (a recognised, different person). */
+function wrongAccount(state: State, intent: ToastIntent | undefined, identity: Identity | null): Account | null {
+  if (!intent?.accountId || Date.now() - intent.at >= 60_000 || identity?.confidence !== 'strong') return null;
+  const target = state.accounts.find((account) => account.id === intent.accountId);
+  return target && hasIdentity(target) && !sameIdentity(target, identity) ? target : null;
+}
+
 function toastFor(
   state: State,
   app: AppDef,
   intent: ToastIntent,
   identity: Identity | null,
+  readable: boolean,
 ): Omit<ToastContent, 'theme' | 'closeLabel' | 'durationMs' | 'badgeText'> | null {
   const t = translatorFor(state.settings);
   const target = intent.accountId ? state.accounts.find((account) => account.id === intent.accountId) : undefined;
@@ -131,7 +143,11 @@ function toastFor(
       tone: 'warning',
     };
   }
-  if ((!strong && isSpecificDetector(app.detector)) || (!identity && signedOutIsReliable(app.detector, target))) {
+  // Nobody found means "expired" only when the page could be read.
+  if (
+    readable &&
+    ((!strong && isSpecificDetector(app.detector)) || (!identity && signedOutIsReliable(app.detector, target)))
+  ) {
     return {
       title: t('toast.expiredTitle', { label: target.label }),
       body: t('toast.expiredBody'),
@@ -152,13 +168,16 @@ function toastFor(
 }
 
 /**
- * Keeps the warning strip on an app's pages while the account signed in there
- * is marked important (apps without important accounts are left alone).
+ * Keeps the strip along the top of an app's pages: red while the account
+ * signed in there is important, and — with "show every account" — a quiet one
+ * naming the account (and its workspace) otherwise. Apps without important
+ * accounts are left alone unless every account is shown.
  */
-async function markImportant(app: AppDef, tabId: number, identity: Identity | null): Promise<void> {
+async function markAccount(app: AppDef, tabId: number, identity: Identity | null): Promise<void> {
   const state = await readState();
   const accounts = state.accounts.filter((account) => account.appId === app.id);
-  if (!accounts.some((account) => account.important)) return;
+  const every = state.settings.pageRibbon === 'all';
+  if (!every && !accounts.some((account) => account.important)) return;
   const strong = identity?.confidence === 'strong' ? identity : null;
   const active = accounts.find((account) => account.id === state.active[app.id]);
   // Who is really signed in: the recognised account, else the one in use (unless the page shows nobody).
@@ -167,10 +186,22 @@ async function markImportant(app: AppDef, tabId: number, identity: Identity | nu
     : identity || app.detector.kind === 'none'
       ? active
       : undefined;
+  await runInTab(tabId, showRibbon, [ribbonFor(state, app, owner, every)], 'ISOLATED', PAGE_SCRIPT_TIMEOUT_MS).catch(
+    () => undefined,
+  );
+}
+
+function ribbonFor(state: State, app: AppDef, owner: Account | undefined, every: boolean): RibbonContent | null {
+  if (!owner) return null;
   const t = translatorFor(state.settings);
-  await runInTab(tabId, showRibbon, [
-    owner?.important ? { tag: t('account.importantTag'), label: owner.label } : null,
-  ]).catch(() => undefined);
+  if (owner.important) return { tag: t('account.importantTag'), label: owner.label, tone: 'important' };
+  if (!every) return null;
+  // "Acme · Work", or the workspace in use that holds this account ("Client X · Work").
+  const workspaces = activeWorkspaces(state.workspaces, state.apps, state.accounts, state.active).filter(
+    (workspace) => workspace.members[app.id] === owner.id,
+  );
+  const tag = workspaces.length === 1 ? workspaces[0]!.name : app.name;
+  return { tag, label: owner.label, tone: 'calm', color: owner.color };
 }
 
 async function toast(
@@ -180,15 +211,21 @@ async function toast(
 ) {
   if (!state.settings.pageToasts) return;
   const t = translatorFor(state.settings);
-  await runInTab(tabId, showToast, [
-    {
-      ...content,
-      badgeText: readableTextColor(content.color),
-      theme: state.settings.theme,
-      closeLabel: t('common.close'),
-      durationMs: 5200,
-    },
-  ]).catch(() => undefined);
+  await runInTab(
+    tabId,
+    showToast,
+    [
+      {
+        ...content,
+        badgeText: readableTextColor(content.color),
+        theme: state.settings.theme,
+        closeLabel: t('common.close'),
+        durationMs: 5200,
+      },
+    ],
+    'ISOLATED',
+    PAGE_SCRIPT_TIMEOUT_MS,
+  ).catch(() => undefined);
 }
 
 /**
@@ -208,7 +245,7 @@ async function reconcile(app: AppDef, tab: chrome.tabs.Tab): Promise<Identity | 
     async () => {
       const state = await readState();
       const t = translatorFor(state.settings);
-      const identity = await detectLive(app, tab);
+      const { identity, readable } = await detectLive(app, tab);
       const strong = identity?.confidence === 'strong' ? identity : null;
       const accounts = state.accounts.filter((account) => account.appId === app.id);
       const activeId = state.active[app.id] ?? null;
@@ -217,6 +254,24 @@ async function reconcile(app: AppDef, tab: chrome.tabs.Tab): Promise<Identity | 
       let adopted: { account: Account | undefined; created: boolean } | null = null;
       let expired: Account | null = null;
       const watchKey = `${app.id}|${activeId ?? ''}`;
+      // sessionStorage is one per tab: only refresh it from a tab known to hold the active account's.
+      const sessionOk = !app.storage.sessionStorage || Boolean(sessionTabs.get(app.id)?.has(tabId));
+
+      // A switch that just finished, but the site shows someone else: say so in the history too.
+      const wrong = wrongAccount(state, intent, identity);
+      if (wrong) {
+        await update((draft) =>
+          pushHistory(draft, {
+            kind: intent!.kind,
+            appId: app.id,
+            appName: app.name,
+            toId: wrong.id,
+            toLabel: wrong.label,
+            ok: false,
+            error: 'WRONG_ACCOUNT',
+          }),
+        );
+      }
 
       if (strong) {
         signedOutSince.delete(watchKey);
@@ -227,41 +282,20 @@ async function reconcile(app: AppDef, tab: chrome.tabs.Tab): Promise<Identity | 
           if (active.expiredAt) await setExpired(active.id, false);
           // Signed in again after the session expired: save the new one now (the saved copy is dead).
           const due = Boolean(active.expiredAt) || Date.now() - (lastSync.get(app.id) ?? 0) > SYNC_INTERVAL_MS;
-          if (state.settings.autoSync && onOrigin && due) {
+          if (state.settings.autoSync && onOrigin && due && sessionOk) {
             lastSync.set(app.id, Date.now());
-            await persist(app, await capture(app, tabId), { kind: 'active', accountId: active.id }, t, true).catch(
-              (error: unknown) => console.warn('Swapdeck: auto-sync failed', error),
+            await autoSync(app, tabId, accounts, active, t).catch((error: unknown) =>
+              console.warn('Swapdeck: auto-sync failed', error),
             );
           }
         } else if (state.settings.autoCapture && onOrigin) {
-          // Signed in as someone else than the active account: keep that session.
-          const captured = await capture(app, tabId);
-          const saved = await persist(
-            app,
-            captured,
-            owner ? { kind: 'existing', accountId: owner.id } : { kind: 'new' },
-            t,
-          );
-          lastSync.set(app.id, Date.now());
-          await update((draft) => {
-            draft.active[app.id] = saved.accountId;
-            const account = draft.accounts.find((item) => item.id === saved.accountId);
-            pushHistory(draft, {
-              kind: 'auto-save',
-              appId: app.id,
-              appName: app.name,
-              fromId: activeId,
-              fromLabel: active?.label,
-              toId: saved.accountId,
-              toLabel: account?.label,
-              ok: true,
-            });
-            adopted = { account: account ? { ...account } : undefined, created: saved.created };
-          });
+          // Signed in as someone else than the active account: keep that session (null: the page
+          // changed hands again meanwhile; the next look at it decides).
+          adopted = await autoCapture(app, tabId, accounts, activeId, active, t);
         } else {
           info.mismatch = true;
         }
-      } else if (!identity && active?.capturedAt && signedOutIsReliable(app.detector, active) && onOrigin) {
+      } else if (!identity && readable && active?.capturedAt && signedOutIsReliable(app.detector, active) && onOrigin) {
         // Nobody is signed in while this account is in use: its saved session no longer works.
         const since = signedOutSince.get(watchKey);
         if (since === undefined) {
@@ -287,7 +321,7 @@ async function reconcile(app: AppDef, tab: chrome.tabs.Tab): Promise<Identity | 
           tone: 'success',
         });
       } else if (intent && Date.now() - intent.at < 60_000) {
-        const content = toastFor(latest, app, intent, identity);
+        const content = toastFor(latest, app, intent, identity, readable);
         if (content) await toast(tabId, latest, content);
       } else if (expired) {
         const account = expired as Account;
@@ -305,6 +339,74 @@ async function reconcile(app: AppDef, tab: chrome.tabs.Tab): Promise<Identity | 
   );
   await trackPage(app, tab);
   return identity;
+}
+
+/**
+ * Refreshes the active account's saved session. Who is signed in is checked
+ * again in the session actually saved (the page may have changed hands since
+ * it was first looked at); an account learning who it is keeps its previous copy.
+ */
+async function autoSync(
+  app: AppDef,
+  tabId: number,
+  accounts: Account[],
+  active: Account,
+  t: ReturnType<typeof translatorFor>,
+): Promise<void> {
+  const captured = await capture(app, tabId);
+  if (captured.identity?.confidence !== 'strong') return;
+  const decision = decideSave({
+    accounts,
+    activeId: active.id,
+    detector: app.detector,
+    identity: captured.identity,
+    empty: isEmptySnapshot(captured.snapshot),
+  });
+  if (decision.kind !== 'active') return;
+  const learning = !hasIdentity(active);
+  await persist(app, captured, decision, t, !learning);
+}
+
+/** Saves a session signed in by hand into the account it belongs to (or a new one) and makes it active. */
+async function autoCapture(
+  app: AppDef,
+  tabId: number,
+  accounts: Account[],
+  activeId: string | null,
+  active: Account | undefined,
+  t: ReturnType<typeof translatorFor>,
+): Promise<{ account: Account | undefined; created: boolean } | null> {
+  const captured = await capture(app, tabId);
+  // Decided on the session being saved, not on the earlier look at the page.
+  if (captured.identity?.confidence !== 'strong') return null;
+  const decision = decideSave({
+    accounts,
+    activeId,
+    detector: app.detector,
+    identity: captured.identity,
+    empty: isEmptySnapshot(captured.snapshot),
+  });
+  if (decision.kind === 'skip' || decision.kind === 'active') return null;
+  const saved = await persist(app, captured, decision, t);
+  lastSync.set(app.id, Date.now());
+  if (app.storage.sessionStorage) sessionTabs.set(app.id, new Set([tabId]));
+  let adopted: { account: Account | undefined; created: boolean } | null = null;
+  await update((draft) => {
+    draft.active[app.id] = saved.accountId;
+    const account = draft.accounts.find((item) => item.id === saved.accountId);
+    pushHistory(draft, {
+      kind: 'auto-save',
+      appId: app.id,
+      appName: app.name,
+      fromId: activeId,
+      fromLabel: active?.label,
+      toId: saved.accountId,
+      toLabel: account?.label,
+      ok: true,
+    });
+    adopted = { account: account ? { ...account } : undefined, created: saved.created };
+  });
+  return adopted;
 }
 
 const followUps = new Map<number, ReturnType<typeof setTimeout>>();
@@ -327,7 +429,7 @@ function checkLater(appId: string, tabId: number, delayMs: number): void {
         const app = appForUrl(state.apps, tabUrl(tab));
         if (app?.id !== appId || isStagingUrl(app, tabUrl(tab))) return;
         const identity = await reconcile(app, tab);
-        await markImportant(app, tabId, identity);
+        await markAccount(app, tabId, identity);
         void refreshBadge(tab);
       })().catch((error: unknown) => console.warn('Swapdeck: page check failed', error));
     }, delayMs),
@@ -347,7 +449,7 @@ export async function onTabUpdated(tabId: number, info: chrome.tabs.OnUpdatedInf
     if (info.status === 'complete') {
       clearTimeout(followUps.get(tabId));
       const identity = await reconcile(app, { ...tab, id: tabId });
-      await markImportant(app, tabId, identity);
+      await markAccount(app, tabId, identity);
       if (!identity && app.detector.kind !== 'none') checkLater(app.id, tabId, 2500);
     } else {
       await trackPage(app, tab);

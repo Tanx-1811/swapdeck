@@ -174,6 +174,14 @@ export type ErrorCode =
   | 'CORRUPT'
   | 'VAULT_EXISTS'
   | 'NO_VAULT'
+  /** The site's databases (IndexedDB) are held open elsewhere: the switch was undone. */
+  | 'STORAGE_BLOCKED'
+  /** A failed switch couldn't put the previous session back: the site was signed out instead of mixed. */
+  | 'ROLLBACK_FAILED'
+  /** The switch stopped halfway (the extension restarted) and was undone when it started again. */
+  | 'INTERRUPTED'
+  /** History only: after the switch the site showed someone else than the chosen account. */
+  | 'WRONG_ACCOUNT'
   | 'UNKNOWN';
 
 export type Result<T> = { ok: true; data: T } | { ok: false; error: ErrorCode; detail?: string };

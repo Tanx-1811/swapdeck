@@ -154,6 +154,12 @@ export const en = {
     'The passphrase lock is damaged and cannot open your saved sessions. Use “Forgot passphrase?” to remove it, then sign in to each account again.',
   'error.VAULT_EXISTS': 'A passphrase is already set.',
   'error.NO_VAULT': 'No passphrase is set.',
+  'error.STORAGE_BLOCKED':
+    "The site's stored data is in use by another of its tabs, so it couldn't be replaced. The previous account was put back; close the site's other tabs and try again.",
+  'error.ROLLBACK_FAILED':
+    'The switch was interrupted and the previous session could not be put back, so the site was signed out rather than left between two accounts. Pick an account to continue.',
+  'error.INTERRUPTED': 'The switch stopped halfway (Swapdeck restarted). The previous session was put back.',
+  'error.WRONG_ACCOUNT': 'After the switch, the site showed another account than the one chosen.',
   'error.UNKNOWN': 'Something went wrong: {detail}',
 
   'nav.overview': 'Overview',
@@ -621,6 +627,11 @@ export const en = {
   'settings.linkAsk': 'Ask on the page (recommended)',
   'settings.linkAuto': 'Switch right away',
   'settings.linkOff': 'Do nothing',
+  'settings.pageRibbon': 'Show the account on its pages',
+  'settings.pageRibbonHint':
+    'A thin strip along the top of the page names the account signed in there (and its workspace). Important accounts always get the red strip.',
+  'settings.pageRibbonImportant': 'Important accounts only',
+  'settings.pageRibbonAll': 'Every account',
   'start.title': 'Get started with Swapdeck',
   'start.progress': '{done} of {total} done',
   'start.hide': 'Hide',

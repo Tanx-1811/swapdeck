@@ -65,6 +65,37 @@ describe('web storage', () => {
     expect(sessionStorage.length).toBe(0);
   });
 
+  it('touches nothing when the page is not on the expected origin (the tab moved mid-switch)', async () => {
+    localStorage.setItem('draft', 'keep me');
+    sessionStorage.setItem('tab', '1');
+    const result = await writePageStorage(
+      { local: { token: 'other-site' }, session: {} },
+      { local: true, session: true, idb: false, expectedOrigin: 'https://elsewhere.test' },
+    );
+    expect(result).toEqual({ origin: location.origin, errors: [] });
+    expect({ ...localStorage }).toEqual({ draft: 'keep me' });
+    expect(sessionStorage.getItem('tab')).toBe('1');
+
+    const read = await readPageStorage({
+      local: true,
+      session: true,
+      idb: false,
+      idbLimitBytes: 0,
+      expectedOrigin: 'https://elsewhere.test',
+    });
+    expect(read.local).toBeUndefined();
+    expect(read.session).toBeUndefined();
+    expect(
+      (
+        await writePageStorage(
+          { local: {} },
+          { local: true, session: false, idb: false, expectedOrigin: location.origin },
+        )
+      ).errors,
+    ).toEqual([]);
+    expect(localStorage.length).toBe(0);
+  });
+
   it('leaves storage kinds that are not part of the session alone', async () => {
     sessionStorage.setItem('keep', 'me');
     await writePageStorage({ local: {} }, { local: true, session: false, idb: false });
@@ -160,6 +191,16 @@ describe('IndexedDB', () => {
     db.close();
     expect(Object.prototype.toString.call(value)).toBe('[object Uint8Array]');
   });
+
+  it('reports a database another tab keeps open (it could not be replaced)', async () => {
+    const held = await open('held', 1, (handle) => handle.createObjectStore('s'));
+    // Like a tab of the site in another window: it never closes the database when asked to.
+    held.onversionchange = null;
+    const result = await writePageStorage({ idb: [] }, { local: false, session: false, idb: true });
+    expect(result.idbFailed).toBe(true);
+    expect(result.errors.join(' ')).toMatch(/held/);
+    held.close();
+  }, 10_000);
 });
 
 describe('page UI', () => {
@@ -200,5 +241,15 @@ describe('page UI', () => {
     expect((ribbon[0] as HTMLElement).style.pointerEvents).toBe('none');
     showRibbon(null);
     expect(document.getElementById('swapdeck-ribbon')).toBeNull();
+  });
+
+  it('shows other accounts in a quiet style, never with an unsafe color', () => {
+    showRibbon({ tag: 'Client X', label: 'Work', tone: 'calm', color: '#2f4e86' });
+    expect((document.getElementById('swapdeck-ribbon') as HTMLElement).dataset.tone).toBe('calm');
+    showRibbon({ tag: 'Client X', label: 'Work', tone: 'calm', color: 'red; background: url(x)' });
+    expect(document.querySelectorAll('#swapdeck-ribbon')).toHaveLength(1);
+    showRibbon({ tag: 'Important', label: 'Prod' });
+    expect((document.getElementById('swapdeck-ribbon') as HTMLElement).dataset.tone).toBe('important');
+    showRibbon(null);
   });
 });

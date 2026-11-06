@@ -59,7 +59,8 @@ tests, demo data and screenshots (use `*.example`/`*.test` addresses). Contribut
 
 - `Account.important` (production / a client's live account): red `.flag-important` label, confirmation before
   switching to it from every UI path (popup `switchAccount`/`switchWorkspace`, manager `AppDetail`/`useWorkspaceSwitch`,
-  via `importantTargets`), warning toast, and the `showRibbon` page strip kept by `markImportant` in `watcher.ts`.
+  via `importantTargets`), warning toast, and the `showRibbon` page strip kept by `markAccount` in `watcher.ts` (red;
+  with `settings.pageRibbon: 'all'` other accounts get a quiet strip too).
   Shortcut, omnibox and menu switches ask on the page or in a small window (`runGuarded`, below).
 - Every UI switch path asks through `useAskBeforeSwitch` (important accounts, unsaved work via the `unsaved` request,
   "ask before every switch"); non-UI paths (commands, omnibox, context menus) must call `runGuarded`/`cycleGuarded`
@@ -141,8 +142,11 @@ tests, demo data and screenshots (use `*.example`/`*.test` addresses). Contribut
 
 ## Pitfalls
 
-- A switch leaves a declarativeNetRequest session rule (script-blocking CSP) on its tab until it finishes; rules from an
-  interrupted switch are cleared whenever the worker starts (`clearStaleRules`).
+- A switch leaves a declarativeNetRequest session rule (script-blocking CSP) on its tab until it finishes, parks the
+  app's other running tabs on `about:blank`, and keeps a journal in `sd:swap` (session storage). When the worker starts,
+  rules from an interrupted switch are cleared (`clearStaleRules`) and a swap left halfway is undone
+  (`recoverInterruptedSwaps`). A failed swap is rolled back, or the site signed out — never left mixed. Page scripts that
+  touch storage take `expectedOrigin`, and every `runInTab` from the engine has a timeout.
 - Supabase's dashboard stores the session in `supabase.dashboard.auth.token` and the user separately in
   `supabase.dashboard.auth.token-user` — the preset detector reads both.
 - `storeSnapshot` moves the current snapshot to `sd:prev:*` unless `keepPrevious: false` (auto-sync refreshes); auto-sync

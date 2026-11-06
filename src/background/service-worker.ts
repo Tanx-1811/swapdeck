@@ -2,11 +2,11 @@ import { appForUrl } from '../core/domains';
 import { KEYS, readState } from '../shared/store';
 import { AUTO_LOCK_ALARM, scheduleAutoLock, vaultLock } from './admin';
 import { refreshAllBadges, refreshBadge } from './badge';
-import { saveLive } from './engine';
+import { recoverInterruptedSwaps, saveLive } from './engine';
 import { cycleGuarded, runGuarded } from './guarded';
 import { openLinkAs } from './links';
 import { clearStaleRules } from './guard';
-import { parseMenuId, scheduleMenuRebuild } from './menus';
+import { parseMenuId, refreshMenus, scheduleMenuRebuild } from './menus';
 import { setupOmnibox } from './omnibox';
 import { listen } from './router';
 import { activeTab, getTab, tabUrl } from './tabs';
@@ -16,8 +16,11 @@ import { workspaceStatus } from '../core/workspaces';
 
 listen();
 setupOmnibox();
-// No switch can be running while the worker starts: rules left by an interrupted one go.
-void clearStaleRules();
+// No switch can be running while the worker starts: rules left by an interrupted one go, and a
+// swap it left halfway (journal in session storage) is undone.
+void clearStaleRules()
+  .then(recoverInterruptedSwaps)
+  .catch((error: unknown) => console.warn('Swapdeck: start-up recovery failed', error));
 
 function openManager(path = ''): void {
   void chrome.tabs.create({ url: chrome.runtime.getURL(`options/options.html${path}`) });
@@ -126,8 +129,16 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   }
   const tabId = tab?.id;
   const report = (error: unknown) => console.warn('Swapdeck: menu action failed', error);
+  // Chrome has already moved the radio check: put it back when the switch doesn't happen.
+  const settle = (result: 'done' | 'cancelled' | 'asked') => {
+    if (result !== 'done') refreshMenus();
+  };
+  const failed = (error: unknown) => {
+    refreshMenus();
+    report(error);
+  };
   if (action.kind === 'switch') {
-    void runGuarded({ kind: 'account', appId: action.appId, accountId: action.accountId, tabId }).catch(report);
+    void runGuarded({ kind: 'account', appId: action.appId, accountId: action.accountId, tabId }).then(settle, failed);
   } else if (action.kind === 'linkAs') {
     if (info.linkUrl) void openLinkAs(action.appId, action.accountId, info.linkUrl, tabId).catch(report);
   } else if (action.kind === 'fresh') {
@@ -135,7 +146,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   } else if (action.kind === 'save') {
     void saveLive(action.appId, tabId).catch(report);
   } else if (action.kind === 'workspace') {
-    void runGuarded({ kind: 'workspace', workspaceId: action.workspaceId, tabId }).catch(report);
+    void runGuarded({ kind: 'workspace', workspaceId: action.workspaceId, tabId }).then(settle, failed);
   } else {
     openManager(action.appId ? `#/apps/${action.appId}` : '');
   }

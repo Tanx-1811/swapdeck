@@ -102,6 +102,18 @@ export function SettingsView() {
             <option value="off">{t('settings.linkOff')}</option>
           </select>
         </Field>
+        <Field label={t('settings.pageRibbon')} hint={t('settings.pageRibbonHint')} htmlFor="setting-ribbon">
+          <select
+            id="setting-ribbon"
+            className="select"
+            style={{ maxWidth: 420 }}
+            value={settings.pageRibbon}
+            onChange={(event) => set({ pageRibbon: event.target.value as Settings['pageRibbon'] })}
+          >
+            <option value="important">{t('settings.pageRibbonImportant')}</option>
+            <option value="all">{t('settings.pageRibbonAll')}</option>
+          </select>
+        </Field>
       </Card>
 
       <Card title={t('settings.layoutTitle')} id="layout">

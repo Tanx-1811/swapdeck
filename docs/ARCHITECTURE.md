@@ -24,12 +24,13 @@ does. Product scope and decisions are in [PLAN.md](PLAN.md); privacy in [PRIVACY
 | Module            | Responsibility                                                                                                                                                 |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `router.ts`       | Answers `chrome.runtime` messages from the extension's own pages only (`fromOwnPage`: the sender's own `url`/`origin`, never its tab's address).               |
-| `engine.ts`       | `switchTo`, `saveLive`, `cycle`, `probe`, `capture`, `persist`, `restorePrevious`, per-app locks, staging tab helper.                                          |
+| `engine.ts`       | `switchTo` (with parking, rollback, `recoverInterruptedSwaps`), `saveLive`, `probe`, `capture`, `persist`, `restorePrevious`, per-app locks, staging tab.      |
+| `swap-journal.ts` | The journal of a running switch in session storage (`sd:swap`), read at worker start to undo a swap left halfway.                                              |
 | `workspaces.ts`   | `switchWorkspace` (every app of a workspace, background where possible, progress), `openWorkspace` (then its pages in a tab group).                            |
-| `watcher.ts`      | Reacts to app page loads: detects who is signed in, auto-sync, auto-capture, mismatch flag, confirmation toasts, important-account strip, last page & recents. |
+| `watcher.ts`      | Reacts to app page loads: detects who is signed in, auto-sync, auto-capture, mismatch flag, confirmation toasts, account strip, last page & recents.           |
 | `state.ts`        | Single write queue (`exclusive`, `update`), history, snapshot packing/sealing, vault key in session storage.                                                   |
 | `admin.ts`        | Apps (incl. `addApps` in one step)/accounts/workspaces CRUD and cascades, settings, vault, backups (export/inspect/import), wipe.                              |
-| `guard.ts`        | The declarativeNetRequest session rule that blocks page scripts in the tab doing a swap.                                                                       |
+| `guard.ts`        | The declarativeNetRequest session rule that blocks page scripts and frames in the tabs of a swap; clears rules left by a stopped worker.                       |
 | `cookie-jar.ts`   | Read/clear/write cookies of an app's domains through `chrome.cookies`.                                                                                         |
 | `tabs.ts`         | Tab queries for an app, `navigateAndWait`, `waitForComplete`, `runInTab`.                                                                                      |
 | `badge.ts`        | Per-tab toolbar badge (active account's initials and colour) and tooltip.                                                                                      |
@@ -81,6 +82,7 @@ are left alone), `links` (pages for "Open workspace", ≤ 30) and usage counters
 | `sd:ask`           | A switch waiting for the user's answer in the confirmation window                           |
 | `sd:sync`          | How the last sync of the list went (`SyncStatus`, shown in Settings)                        |
 | `sd:linksDeclined` | Links the user said "not now" to (app, account and what matched; ≤ 200)                     |
+| `sd:swap`          | Per app, while a switch runs: its journal (tabs moved, where the live session was saved)    |
 
 Everything read from storage, backups or pages is untrusted and goes through `src/core/validate.ts`
 (`sanitizeApp`, `sanitizeAccount`, `sanitizeSnapshot`, …) or `parseSettings`. Ids pass `isId` (letters, digits, `_`,
@@ -105,15 +107,22 @@ for the lock and are reconciled afterwards.
 1. **Fail early.** Under the app lock: read state, require host access for the app's domains, and load the target
    snapshot (unsealing it needs the vault key → `LOCKED`; missing → `NO_SESSION`; unreadable → `CORRUPT`). Nothing
    has changed yet.
-2. **Pick the work tab:** the requested tab, else the focused tab if it shows the app, else any active tab of the
-   app, else any of its tabs. With none open: a **hidden** tab when `background` is set (the caller's `hiddenTabId` if
-   given, e.g. the one a workspace switch shares between apps; else a new inactive `about:blank`), otherwise a new
-   foreground tab.
+2. **Pick the work tab:** a blank tab the caller opened for this switch (`adoptTab`, "Open link as"), else the
+   requested tab, else the focused tab if it shows the app, else any active tab of the app, else any of its tabs.
+   With none open: a **hidden** tab when `background` is set (the caller's `hiddenTabId` if given, e.g. the one a
+   workspace switch shares between apps; else a new inactive `about:blank`), otherwise a new foreground tab.
 3. **Park the other tabs** of the app: inactive ones are discarded (they reload with the new session when
-   activated); active ones (in other windows) and undiscardable ones are reloaded at the end.
-4. **Block page scripts** in the work tab: a declarativeNetRequest session rule (`guard.ts`) sets
-   `Content-Security-Policy: script-src 'none'; object-src 'none'; worker-src 'none'` on main-frame responses of the
-   app's domains, for that tab only, until the swap ends.
+   activated); active ones (in other windows) and undiscardable ones are **parked** on `about:blank` while the swap
+   runs — their scripts, timers, open databases and requests stop, so nothing writes the old session back or holds
+   IndexedDB open — and sent back to their pages at the end (`park`/`unpark`). The unsaved-work question
+   (`findUnsaved`) covers them beforehand. Apps that swap **sessionStorage** (one per tab) park every other tab on the
+   switching page instead (discarded ones too) and, after the swap, write the target's sessionStorage into each of
+   them; only tabs written so (or where the session was saved) are trusted for auto-sync (`sessionTabs`).
+4. **Block page scripts** in the work tab (and the tabs parked on the switching page): a declarativeNetRequest session
+   rule (`guard.ts`) sets a `Content-Security-Policy` that allows no scripts, plug-ins, workers or frames (`SWAP_CSP`:
+   `script-src`, `object-src`, `worker-src`, `frame-src` and `child-src` all `'none'`) on main-frame and sub-frame
+   responses of the app's domains, for those tabs only, until the swap ends. A **journal** of the switch (`sd:swap` in session storage, `swap-journal.ts`: work
+   tab, parked tabs and their pages, where the live session was saved, whether the swap began) is kept until it ends.
 5. **Staging page.** The work tab navigates to `origin + stagingPath` (default `/robots.txt`; DigitalOcean uses
    `/manifest.json`). The app's own scripts unload, so nothing can write the old session back mid-swap; even if the
    site answers that path with its app shell, the CSP keeps its scripts from running. The page's origin is verified
@@ -123,25 +132,40 @@ for the lock and are reconciled afterwards.
    (`stagingCandidates`/`openStaging` in `engine.ts`); the watcher ignores those fallback loads while the app is busy.
 6. **Capture the live session** (`capture`): localStorage (always read, for detection), sessionStorage and
    IndexedDB when the app swaps them (IndexedDB over 40 MB fails the switch), and the cookies of every app domain;
-   then detect the identity.
+   then detect the identity. Page scripts get `expectedOrigin` and read or write nothing on another origin, and every
+   page script has a timeout (10 s; 60 s for a capture with IndexedDB; 5 s for detection), so a stuck page can't hold
+   the app lock.
 7. **Save it where it belongs** (`decideSave`, section 5) and `persist` it: into the active account, into the saved
-   account it really belongs to, or into a new account — or skip it when it is empty or signed out.
+   account it really belongs to, or into a new account — or skip it when it is empty or signed out. **Re-opening the
+   account in use** (`restore`) without proof that the live session is that person (a strong identity matching it)
+   never saves the live session into it: someone recognised becomes a new account, anything else is set aside as the
+   account's "previous" copy (`storeAsPrevious`), and the saved session is put back.
 8. **Swap** (`applySnapshot`): clear the app domains' cookies, set the target's cookies (expired ones skipped,
    host-only and `__Host-`/`__Secure-` rules respected), then replace localStorage/sessionStorage/IndexedDB on the
-   staging page. If the live session _is_ the target (re-opening the active account), nothing is swapped: the live
-   session is newer than the saved copy.
-9. **On any error** after the swap began, the captured live session is put back; then the rule is removed, the
-   work tab returns to its page (or a tab Swapdeck created is closed), parked tabs reload, and a failed history entry
-   is recorded.
+   staging page. A database that can't be removed or rewritten (held open elsewhere: `idbFailed`) fails the swap with
+   `STORAGE_BLOCKED` rather than leave the previous account's data under the new cookies. Only when the live session
+   provably _is_ the target (re-opening the active account, same person recognised) is nothing swapped: it is newer
+   than the saved copy.
+9. **On any error** after the swap began, the captured live session is put back (`rollBack`): in the work tab, else —
+   closed, or moved to another site — in a fresh switching tab under its own rule; if neither works the site is
+   **signed out** (cookies and storage cleared, no account in use, history error `ROLLBACK_FAILED`), never left half
+   one account and half the other. Then the rule is removed, the work tab returns to its page (or a tab opened for the
+   switch is closed), parked tabs go back, and a failed history entry is recorded.
 10. **Finish:** remove the rule, record `active`, `lastUsedAt`, `switchCount` and history (tagged `via` the workspace
-    name when part of a workspace switch), register a pending toast for the work tab, open the destination and reload
-    parked tabs. Destination: an explicit URL, else the account's fixed start page, else per setting the account's last
+    name when part of a workspace switch), register a pending toast for the work tab, open the destination, send
+    parked tabs back and drop the journal. Destination: an explicit URL, else the account's fixed start page, else per setting the account's last
     page (`last`, default), the same page (`same`) or the app's home page; "sign in with another account" opens
     `loginUrl` (or home). **Background switch of an app with no open tab:** no destination and no toast — the hidden
     tab is closed (or left to its owner when borrowed).
 
 "Sign in with another account" is the same flow with no target (`kind: 'fresh'`): the live session is saved, the
 app's cookies and storage are cleared, and the sign-in page opens.
+
+**Interrupted swaps.** If the worker stops in the middle of a switch, the journal is still in session storage when it
+starts again: `clearStaleRules` removes rules left behind (not those of a switch the new worker runs), then
+`recoverInterruptedSwaps` puts back the session saved just before the swap (history `INTERRUPTED`) — or signs the site
+out when it can't (`ROLLBACK_FAILED`) — unless the end of the swap was already recorded, and sends the moved tabs back.
+Session storage survives the worker stopping, not Chrome closing or the extension being reloaded.
 
 `saveLive` ("Save this session") captures from a tab on the main origin, or from a hidden staging tab when there is
 none, and saves into a new account, a chosen account (refused with `INVALID: identity` if the detected identity is a
@@ -187,30 +211,38 @@ into an account it provably doesn't belong to, and a signed-in session nobody sa
 
 On `tabs.onUpdated` for tabs of an added app (with access, not incognito, not the staging page):
 
-- **On load complete** (`reconcile`, under the app lock): detect the identity (cookies, plus local storage when the
-  tab is on the main origin).
+- **On load complete** (`reconcile`, under the app lock): detect the identity (`detectLive`: cookies, plus local
+  storage when the tab is on the main origin). `readable` is false when detection needs local storage and it couldn't
+  be read (another address of the site, Chrome's error page while offline): then finding nobody means "can't tell" —
+  never "signed out" (`probe`) nor expired.
   - Strong identity of the active account → **auto-sync**: re-capture and save it, at most once a minute per app and
-    only on the main origin. This keeps saved sessions fresh as sites rotate refresh tokens.
+    only on the main origin. This keeps saved sessions fresh as sites rotate refresh tokens. Who is signed in is
+    decided again on the captured session (`decideSave`), not on the earlier look; an account learning who it is
+    keeps its previous copy. Apps that swap sessionStorage only refresh from tabs in `sessionTabs`.
   - Strong identity of someone else, with auto-capture on and the tab on the main origin → **auto-capture**: save it
-    into the matching saved account or a new one, make it active, record `auto-save`, toast "Saved new account …" /
-    "Now using …".
+    (decided on the captured session too) into the matching saved account or a new one, make it active, record
+    `auto-save`, toast "Saved new account …" / "Now using …".
   - Otherwise mark a **mismatch** in `sd:live` (badge shows `!`, popup explains).
-  - A pending switch toast for this tab (≤ 60 s old) is shown: success, "still signed in as …" (wrong account) or
-    "session expired" (signed out with a specific detector), or the "signed out — sign in with another account"
-    note after a fresh sign-in.
+  - A pending switch toast for this tab (≤ 60 s old) is shown: success, "still signed in as …" (wrong account — also a
+    failed history entry `WRONG_ACCOUNT`) or "session expired" (signed out with a specific detector, page readable),
+    or the "signed out — sign in with another account" note after a fresh sign-in.
 - **Unsaved work** (`guarded.ts`, `settings.guardUnsaved`): before a switch that reloads an app's tabs, `findUnsaved`
   runs `unsavedWork` in each open tab of the app, in the page's **own (MAIN) world** so it can see the page's
   `beforeunload` handlers (a synthetic, cancelable `beforeunload`; an old-style `onbeforeunload` returning text), edited
   form fields (not search boxes) and a focused editor holding text. It returns yes/no only, 800 ms at most per tab.
   The popup, side panel and manager merge it into one confirmation (`askText` in `core/ask.ts`, `useAskBeforeSwitch`).
-- **Shortcut, address-bar and menu switches** go through `runGuarded`: the same checks, then `askOnPage` (a closed
-  shadow-root dialog; only trusted clicks confirm; Escape or 25 s answers no) on the current tab, or — when that tab
-  can't be scripted — a small window (`popup.html?ask=<id>`) reading the pending plan from `sd:ask` (session storage)
-  and answering with `ask.answer`. The `cycle` request is the guarded "next account".
-- **Important accounts** (`Account.important`): after each reconcile of an app that has any, `markImportant` injects
+- **Shortcut, address-bar and menu switches** go through `runGuarded`: the same checks (important accounts, unsaved
+  work — also when re-opening the account in use, which reloads the tabs too — and "ask before switching"), then
+  `askOnPage` (a closed shadow-root dialog; only trusted clicks confirm; Escape or 25 s answers no) on the current tab,
+  or — when that tab can't be scripted — a small window (`popup.html?ask=<id>`) reading the pending plan from `sd:ask`
+  (session storage) and answering with `ask.answer`. The `cycle` request is the guarded "next account". A cancelled
+  (or failed) menu switch rebuilds the menus (`refreshMenus`): Chrome has already moved the radio check.
+- **Important accounts** (`Account.important`): after each reconcile of an app that has any, `markAccount` injects
   `showRibbon` — a red strip and tag along the top of the page (closed shadow root, no pointer events) — when the
   account really signed in there (the recognised identity, else the active account unless the page shows nobody) is
-  important, and removes it otherwise. The switch toast turns to a warning; the popup, side panel, manager and
+  important, and removes it otherwise. With `settings.pageRibbon: 'all'` ("Show the account on its pages: every
+  account") other accounts get a quiet strip in their color naming the workspace in use that holds them, else the
+  app, and the account ("Client X · Work"). The switch toast turns to a warning; the popup, side panel, manager and
   workspace switches confirm first (`importantTargets` in `core/workspaces.ts` lists them for a workspace).
 - **Single-page apps** sign in without reloading (the Supabase dashboard does), so a tab is checked again 0.9 s after
   an address change on a loaded page, and once 2.5 s after a load that found nobody signed in (sessions written just
@@ -232,14 +264,18 @@ On `tabs.onUpdated` for tabs of an added app (with access, not incognito, not th
 `linkOwner` says which account a page belongs to, when it isn't the one in use: by the accounts' `linkRules` (host,
 optionally with a path, normalised like Swapdeck Desktop's `LinkRouter`; the most specific wins, ties mean "can't
 tell"), else by the only account whose recent items (`recentKey`) or pinned pages cover it (never a home or sign-in
-page). `routeLink` (called by `trackPage`, only for owners with a saved session, never while the app is busy, and not
-again in a tab for 20 s after a switch for a link) follows `settings.linkRouting`: `ask` shows `askLinkOnPage` (a
+page). `routeLink` (called by `trackPage`, only for owners with a saved session, never while the app is busy, not again
+in a tab for 20 s after a switch for a link, and not for 20 s in a tab a switch just moved or reloaded while it still
+shows the page — same owner — the switch sent it to: `switchedTabs`/`justSwitched`, so a switch isn't undone by the
+previous account's page reloading) follows `settings.linkRouting`: `ask` shows `askLinkOnPage` (a
 closed shadow-root card in the corner that doesn't block the page; only trusted clicks switch; 30 s without an answer
 leaves it for that tab), `auto` switches at once, `off` does nothing. A switch goes through `runGuarded` with the page
 as `url` (`switchTo` follows a requested page only when it belongs to the app). "Not now" is remembered for the Chrome
 session (`sd:linksDeclined`) and, for a recent item, records it for the account in use too (shared, no more asking).
 The right-click menu on links to an added app (`targetUrlPatterns`) offers "Open link as" each account with a session
-(`openLinkAs`: a new tab next to the page, then the guarded switch).
+(`openLinkAs`): a **blank** tab next to the page, the guarded switch (asked on the page the link was on) in that tab,
+and only then the link — it is never requested with the account in use (invites and sign-in links work once). A
+cancelled switch closes the blank tab.
 
 ### Getting started and updates
 
@@ -255,7 +291,8 @@ A workspace is the unit for people who work for several parties ("các bên"): w
 client, company or project.
 
 - **Status** (`workspaceStatus`): `liveMembers` keeps only members whose app and account still exist; a workspace is
-  `active` when every member's account is in use (`sd:active`), `partial`, `inactive` or `empty`. Deleting an account
+  `active` when every member's account is in use (`sd:active`), `partial`, `inactive` or `empty`. A switch still
+  switches members whose app shows someone else signed in (`pendingMembers`, `sd:live` mismatch). Deleting an account
   or app prunes it from every workspace (`pruneMembers`).
 - **Switching** (`switchWorkspace(id, tabId?)`): fails early with `NO_SESSION` for an empty workspace and with
   `LOCKED` if any member to switch has a sealed session while the vault is locked. Members already in use are reported
@@ -456,7 +493,9 @@ refuses to zip a build with install-time host permissions.
 - **Partitioned cookies** (CHIPS) are not captured or cleared.
 - A site whose **service worker** answers the staging path from its cache can still run scripts there (the CSP
   rule only modifies network responses).
-- **IndexedDB** is opt-in per app and limited to 40 MB.
+- **IndexedDB** is opt-in per app and limited to 40 MB. A database another tab keeps open (outside the app's own
+  tabs, which are parked) fails the switch with `STORAGE_BLOCKED`.
+- **sessionStorage** belongs to one tab: a tab opened after a switch starts without it.
 - A **workspace switch** is sequential (a few seconds per app); an app whose tab shows a "Leave site?" prompt times out
   and is reported as failed while the others go on. Apps sharing a sign-in provider (e.g. several sites signing in with
   the same GitHub account) only switch the sites themselves, not the provider.

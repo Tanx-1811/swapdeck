@@ -1,7 +1,7 @@
 import { appForUrl } from '../core/domains';
-import { liveMembers, tabGroupColor } from '../core/workspaces';
+import { liveMembers, pendingMembers, tabGroupColor } from '../core/workspaces';
 import { SwapdeckError, type ErrorCode, type WorkspaceOutcome } from '../shared/protocol';
-import { readState, SESSION_KEYS, type Progress } from '../shared/store';
+import { readSessionInfo, readState, SESSION_KEYS, type Progress } from '../shared/store';
 import { hasAccess, switchTo } from './engine';
 import { getPrivateKey, readStoredSnapshot, update } from './state';
 import { activeTab, getTab, queryAppTabs, tabUrl } from './tabs';
@@ -23,7 +23,10 @@ export async function switchWorkspace(id: string, tabId?: number): Promise<Works
   if (!workspace) throw new SwapdeckError('NOT_FOUND', id);
   const members = liveMembers(workspace, state.apps, state.accounts);
   if (members.length === 0) throw new SwapdeckError('NO_SESSION');
-  const pending = members.filter(([appId, accountId]) => state.active[appId] !== accountId);
+  // An app whose page shows someone else than its account in use is switched again, not "already".
+  const { live } = await readSessionInfo();
+  const pending = pendingMembers(workspace, state.apps, state.accounts, state.active, live);
+  const isPending = (appId: string) => pending.some(([pendingApp]) => pendingApp === appId);
 
   // Fail before changing anything when restoring would need the passphrase.
   if (state.vault && !(await getPrivateKey())) {
@@ -37,7 +40,7 @@ export async function switchWorkspace(id: string, tabId?: number): Promise<Works
   const currentApp = appForUrl(state.apps, tabUrl(tab));
   const ordered = [...pending].sort(([a], [b]) => Number(b === currentApp?.id) - Number(a === currentApp?.id));
   const results: WorkspaceOutcome['results'] = members
-    .filter(([appId, accountId]) => state.active[appId] === accountId)
+    .filter(([appId]) => !isPending(appId))
     .map(([appId, accountId]) => ({ appId, accountId, status: 'already' as const }));
 
   let done = 0;

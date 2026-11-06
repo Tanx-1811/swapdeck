@@ -1,11 +1,12 @@
 import { askText, type AskText, type GuardedPlan, type PendingAsk, type UnsavedTab } from '../core/ask';
 import { appForUrl } from '../core/domains';
 import { cycleAccount } from '../core/decide';
-import { importantTargets, liveMembers } from '../core/workspaces';
-import { readState, SESSION_KEYS, type State } from '../shared/store';
+import { importantTargets, pendingMembers } from '../core/workspaces';
+import { readSessionInfo, readState, SESSION_KEYS, type State } from '../shared/store';
 import { SwapdeckError } from '../shared/protocol';
 import { hasAccess, switchTo, translatorFor } from './engine';
 import { scheduleAutoLock } from './admin';
+import { refreshMenus } from './menus';
 import { askOnPage, unsavedWork } from './page-scripts';
 import { activeTab, getTab, queryAppTabs, runInTab, tabUrl } from './tabs';
 import { switchWorkspace } from './workspaces';
@@ -47,18 +48,18 @@ export async function findUnsaved(appIds: readonly string[], known?: State): Pro
 /** What a plan would need confirmed (null: go ahead). */
 async function planText(plan: GuardedPlan, state: State): Promise<AskText | null> {
   const t = translatorFor(state.settings);
+  const confirmAll = state.settings.confirmSwitch;
   if (plan.kind === 'workspace') {
     const workspace = state.workspaces.find((item) => item.id === plan.workspaceId);
     if (!workspace) throw new SwapdeckError('NOT_FOUND', plan.workspaceId);
-    const appIds = liveMembers(workspace, state.apps, state.accounts)
-      .filter(([appId, accountId]) => state.active[appId] !== accountId)
-      .map(([appId]) => appId);
+    const { live } = await readSessionInfo();
+    const appIds = pendingMembers(workspace, state.apps, state.accounts, state.active, live).map(([appId]) => appId);
     return askText(t, {
       kind: 'workspace',
       label: workspace.name,
       important: importantTargets(workspace, state.apps, state.accounts, state.active),
       unsaved: await findUnsaved(appIds, state),
-      confirmAll: false,
+      confirmAll,
     });
   }
   const app = state.apps.find((item) => item.id === plan.appId);
@@ -70,19 +71,20 @@ async function planText(plan: GuardedPlan, state: State): Promise<AskText | null
       app: app.name,
       important: [],
       unsaved: await findUnsaved([app.id], state),
-      confirmAll: false,
+      confirmAll,
     });
   }
   const account = state.accounts.find((item) => item.id === plan.accountId);
   if (!account) throw new SwapdeckError('NOT_FOUND', plan.accountId);
-  if (state.active[app.id] === account.id) return null;
+  // Re-opening the account in use still reloads the app's tabs: unsaved work is asked about too.
+  const inUse = state.active[app.id] === account.id;
   return askText(t, {
     kind: 'account',
     label: account.label,
     app: app.name,
-    important: account.important ? [`${app.name}: ${account.label}`] : [],
+    important: account.important && !inUse ? [`${app.name}: ${account.label}`] : [],
     unsaved: await findUnsaved([app.id], state),
-    confirmAll: false,
+    confirmAll,
   });
 }
 
@@ -99,15 +101,25 @@ async function execute(plan: GuardedPlan): Promise<void> {
       tabId: plan.tabId,
       ...(plan.focus ? { focus: true } : {}),
       ...(plan.url ? { url: plan.url } : {}),
+      ...(plan.blankTab ? { adoptTab: true } : {}),
     });
   }
   await scheduleAutoLock();
 }
 
+/** A plan that was turned down: its blank tab (if any) goes, and the menus show what is really in use again. */
+async function dropped(plan: GuardedPlan): Promise<void> {
+  if (plan.kind === 'account' && plan.blankTab && plan.tabId !== undefined) {
+    await chrome.tabs.remove(plan.tabId).catch(() => undefined);
+  }
+  refreshMenus();
+}
+
 /**
  * Runs a switch asked for without the popup, asking first when it would move to
- * an important account or reload tabs with unsaved work: on the current page
- * when Swapdeck may script it, else in a small Swapdeck window.
+ * an important account or reload tabs with unsaved work (or always, with "ask
+ * before switching"): on the current page when Swapdeck may script it, else in
+ * a small Swapdeck window.
  */
 export async function runGuarded(plan: GuardedPlan): Promise<'done' | 'cancelled' | 'asked'> {
   const state = await readState();
@@ -117,16 +129,24 @@ export async function runGuarded(plan: GuardedPlan): Promise<'done' | 'cancelled
     return 'done';
   }
   const t = translatorFor(state.settings);
-  const tab = plan.tabId !== undefined ? await getTab(plan.tabId) : await activeTab();
+  const askTabId = plan.kind === 'account' && plan.askTabId !== undefined ? plan.askTabId : plan.tabId;
+  const tab = askTabId !== undefined ? await getTab(askTabId) : await activeTab();
   if (tab?.id !== undefined) {
-    const answer = await runInTab(tab.id, askOnPage, [
-      { ...text, cancel: t('common.cancel'), theme: state.settings.theme, timeoutMs: ASK_TIMEOUT_MS },
-    ]).catch(() => null);
+    const answer = await runInTab(
+      tab.id,
+      askOnPage,
+      [{ ...text, cancel: t('common.cancel'), theme: state.settings.theme, timeoutMs: ASK_TIMEOUT_MS }],
+      'ISOLATED',
+      ASK_TIMEOUT_MS + 5000,
+    ).catch(() => null);
     if (answer === true) {
       await execute(plan);
       return 'done';
     }
-    if (answer === false) return 'cancelled';
+    if (answer === false) {
+      await dropped(plan);
+      return 'cancelled';
+    }
   }
   // The page can't show it (another site, a browser page): ask in a small window instead.
   const pending: PendingAsk = { id: crypto.randomUUID(), plan, text, at: Date.now() };
@@ -146,8 +166,14 @@ export async function answerAsk(id: string, ok: boolean): Promise<boolean> {
   const raw = (await chrome.storage.session.get(SESSION_KEYS.ask))[SESSION_KEYS.ask] as PendingAsk | undefined;
   if (!raw || raw.id !== id) return false;
   await chrome.storage.session.remove(SESSION_KEYS.ask);
-  if (!ok) return true;
-  if (Date.now() - raw.at > ASK_WINDOW_MAX_AGE_MS) throw new SwapdeckError('INVALID', 'expired');
+  if (!ok) {
+    await dropped(raw.plan);
+    return true;
+  }
+  if (Date.now() - raw.at > ASK_WINDOW_MAX_AGE_MS) {
+    await dropped(raw.plan);
+    throw new SwapdeckError('INVALID', 'expired');
+  }
   await execute(raw.plan);
   return true;
 }

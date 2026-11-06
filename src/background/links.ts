@@ -5,7 +5,7 @@ import type { AppDef } from '../core/types';
 import { initials, readableTextColor } from '../core/util';
 import { readState } from '../shared/store';
 import { updateSettings } from './admin';
-import { busyApps, translatorFor } from './engine';
+import { busyApps, justSwitched, translatorFor } from './engine';
 import { runGuarded } from './guarded';
 import { askLinkOnPage, type LinkAnswer } from './page-scripts';
 import { update } from './state';
@@ -20,7 +20,11 @@ import { getTab, runInTab } from './tabs';
  */
 
 const PROMPT_TIMEOUT_MS = 30_000;
-/** A tab just switched for a link isn't asked about again for a while. */
+/**
+ * A tab just switched for a link isn't asked about again for a while, nor is a
+ * tab any switch just moved or reloaded: it may still show the previous
+ * account's page, and switching straight back would undo the user's switch.
+ */
 const ROUTED_QUIET_MS = 20_000;
 /** Links the user said "not now" to (this Chrome session). */
 const DECLINED_KEY = 'sd:linksDeclined';
@@ -62,7 +66,7 @@ export async function routeLink(app: AppDef, tabId: number, url: string): Promis
   const state = await readState();
   if (state.settings.linkRouting === 'off') return;
   const owner = await ownerOfPage(app, url);
-  if (!owner) return;
+  if (!owner || justSwitched(tabId, owner, ROUTED_QUIET_MS)) return;
   const declineKey = `${app.id}|${owner.accountId}|${owner.match}`;
   if (ignored.get(tabId)?.has(declineKey) || (await declined()).includes(declineKey)) return;
   const account = state.accounts.find((item) => item.id === owner.accountId)!;
@@ -123,25 +127,43 @@ export async function routeLink(app: AppDef, tabId: number, url: string): Promis
   }
 }
 
-/** Right-click on a link → "Open link as …": switch that app to the account and open the link. */
+/**
+ * Right-click on a link → "Open link as …": switch that app to the account and
+ * open the link. The link is never requested with the account in use (invites
+ * and sign-in links work once): the switch happens in a blank tab next to the
+ * page, which then opens the link — or is closed if the switch is cancelled.
+ */
 export async function openLinkAs(appId: string, accountId: string, url: string, besideTabId?: number): Promise<void> {
   const state = await readState();
   const app = state.apps.find((item) => item.id === appId);
   const account = state.accounts.find((item) => item.id === accountId && item.appId === appId);
   if (!app || !account || appForUrl([app], url) !== app) return;
   const beside = besideTabId !== undefined ? await getTab(besideTabId) : null;
-  // A new tab for the link (the switch then reuses it), next to the page it was found on.
-  const tab = await chrome.tabs.create({
-    url,
-    active: true,
-    ...(beside ? { index: beside.index + 1, windowId: beside.windowId } : {}),
-  });
-  if (tab.id === undefined) return;
-  routedAt.set(tab.id, Date.now());
-  // The switch finds the app's tabs by their address: wait until the new tab has one.
-  for (let tries = 0; tries < 30 && !(await getTab(tab.id))?.url?.startsWith('http'); tries++) {
-    await new Promise((resolve) => setTimeout(resolve, 100));
+  const place = beside ? { index: beside.index + 1, windowId: beside.windowId } : {};
+  if (state.active[app.id] === account.id) {
+    await chrome.tabs.create({ url, active: true, ...place });
+    return;
   }
-  if (state.active[app.id] === account.id) return;
-  await runGuarded({ kind: 'account', appId, accountId, tabId: tab.id, url, focus: true });
+  const tab = await chrome.tabs.create({ url: 'about:blank', active: false, ...place });
+  const tabId = tab.id;
+  if (tabId === undefined) return;
+  routedAt.set(tabId, Date.now());
+  const close = () => chrome.tabs.remove(tabId).catch(() => undefined);
+  let result: Awaited<ReturnType<typeof runGuarded>>;
+  try {
+    result = await runGuarded({
+      kind: 'account',
+      appId,
+      accountId,
+      tabId,
+      url,
+      focus: true,
+      blankTab: true,
+      ...(beside?.id !== undefined ? { askTabId: beside.id } : {}),
+    });
+  } catch (error) {
+    await close();
+    throw error;
+  }
+  if (result === 'cancelled') await close();
 }

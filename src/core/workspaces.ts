@@ -24,6 +24,23 @@ export function liveMembers(
   });
 }
 
+/**
+ * Members a workspace switch still has to switch: those whose account isn't
+ * the one in use, and those whose app shows someone else signed in right now
+ * (`live` mismatch), even though the account is recorded as in use.
+ */
+export function pendingMembers(
+  workspace: Pick<Workspace, 'members'>,
+  apps: readonly Pick<AppDef, 'id'>[],
+  accounts: readonly Pick<Account, 'id' | 'appId'>[],
+  active: ActiveMap,
+  live: Readonly<Record<string, { mismatch: boolean } | undefined>> = {},
+): [string, string][] {
+  return liveMembers(workspace, apps, accounts).filter(
+    ([appId, accountId]) => active[appId] !== accountId || live[appId]?.mismatch === true,
+  );
+}
+
 /** The important accounts a workspace switch would move to ("app: account"), skipping those already in use. */
 export function importantTargets(
   workspace: Pick<Workspace, 'members'>,

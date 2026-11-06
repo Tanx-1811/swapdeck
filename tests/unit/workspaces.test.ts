@@ -5,6 +5,7 @@ import {
   activeWorkspaces,
   importantTargets,
   liveMembers,
+  pendingMembers,
   pruneMembers,
   suggestWorkspaces,
   tabGroupColor,
@@ -83,6 +84,21 @@ describe('important accounts', () => {
     expect(importantTargets(ws, apps, list, {})).toEqual(['Supabase: Prod', 'Vercel: Team']);
     expect(importantTargets(ws, apps, list, { vercel: 'v_prod' })).toEqual(['Supabase: Prod']);
     expect(importantTargets(workspace('none', { github: 'g_me' }), apps, list, {})).toEqual([]);
+  });
+});
+
+describe('members still to switch', () => {
+  it('skips accounts in use, but not when their app shows someone else signed in', () => {
+    const list = [account('s_a', 'supabase'), account('v_a', 'vercel'), account('g_a', 'github')];
+    const ws = workspace('ws', { supabase: 's_a', vercel: 'v_a', github: 'g_a' });
+    const active = { supabase: 's_a', vercel: 'v_a' };
+    expect(pendingMembers(ws, apps, list, active)).toEqual([['github', 'g_a']]);
+    expect(
+      pendingMembers(ws, apps, list, active, { vercel: { mismatch: true }, supabase: { mismatch: false } }),
+    ).toEqual([
+      ['vercel', 'v_a'],
+      ['github', 'g_a'],
+    ]);
   });
 });
 

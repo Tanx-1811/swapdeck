@@ -75,7 +75,18 @@ export function askText(t: Translate, input: AskInput): AskText | null {
 
 /** A switch asked for outside the popup and the manager: keyboard shortcut, address bar or menu. */
 export type GuardedPlan =
-  | { kind: 'account'; appId: string; accountId: string; tabId?: number; focus?: boolean; url?: string }
+  | {
+      kind: 'account';
+      appId: string;
+      accountId: string;
+      tabId?: number;
+      focus?: boolean;
+      url?: string;
+      /** `tabId` is a blank tab opened for this switch ("Open link as"): swapped in, or closed if cancelled. */
+      blankTab?: boolean;
+      /** Where to ask, when not in `tabId` (the page the link was found on). */
+      askTabId?: number;
+    }
   | { kind: 'fresh'; appId: string; tabId?: number }
   | { kind: 'workspace'; workspaceId: string; tabId?: number };
 

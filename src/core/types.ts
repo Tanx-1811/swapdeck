@@ -252,9 +252,12 @@ export type Settings = {
   linkRouting: LinkRouting;
   /** The "getting started" checklist was put away. */
   onboardingHidden: boolean;
+  /** Which accounts are shown by a strip along the top of their pages: important ones only, or every one. */
+  pageRibbon: PageRibbon;
 };
 
 export type LinkRouting = 'ask' | 'auto' | 'off';
+export type PageRibbon = 'important' | 'all';
 
 export type VaultMeta = {
   v: 1;

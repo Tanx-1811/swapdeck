@@ -1,4 +1,4 @@
-import type { Accent, LinkRouting, Settings } from './types';
+import type { Accent, LinkRouting, PageRibbon, Settings } from './types';
 
 export const DEFAULT_SETTINGS: Settings = {
   language: 'auto',
@@ -20,6 +20,7 @@ export const DEFAULT_SETTINGS: Settings = {
   syncList: false,
   linkRouting: 'ask',
   onboardingHidden: false,
+  pageRibbon: 'important',
 };
 
 export const AUTO_LOCK_CHOICES = [0, 5, 15, 30, 60, 240] as const;
@@ -61,6 +62,9 @@ export function parseSettings(value: unknown): Settings {
       ? (input.linkRouting as LinkRouting)
       : 'ask',
     onboardingHidden: bool('onboardingHidden'),
+    pageRibbon: (['important', 'all'] as const).includes(input.pageRibbon as PageRibbon)
+      ? (input.pageRibbon as PageRibbon)
+      : 'important',
   };
 }
 

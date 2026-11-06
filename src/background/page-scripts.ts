@@ -8,7 +8,14 @@
 
 import type { IdbDatabaseDump } from '../core/types';
 
-export type PageReadOptions = { local: boolean; session: boolean; idb: boolean; idbLimitBytes: number };
+export type PageReadOptions = {
+  local: boolean;
+  session: boolean;
+  idb: boolean;
+  idbLimitBytes: number;
+  /** Read nothing unless the page is on this origin (the tab may have moved meanwhile). */
+  expectedOrigin?: string;
+};
 
 export type PageReadResult = {
   origin: string;
@@ -148,6 +155,7 @@ export async function readPageStorage(options: PageReadOptions): Promise<PageRea
     title: document.title,
     contentType: document.contentType,
   };
+  if (options.expectedOrigin && location.origin !== options.expectedOrigin) return result;
   if (options.local) result.local = readWebStorage(localStorage);
   if (options.session) result.session = readWebStorage(sessionStorage);
   if (options.idb) {
@@ -165,12 +173,28 @@ export type PageWriteData = {
   session?: Record<string, string> | null;
   idb?: IdbDatabaseDump[] | null;
 };
-export type PageWriteOptions = { local: boolean; session: boolean; idb: boolean };
-export type PageWriteResult = { origin: string; errors: string[] };
+export type PageWriteOptions = {
+  local: boolean;
+  session: boolean;
+  idb: boolean;
+  /**
+   * Touch nothing unless the page is on this origin: a tab that moved to another
+   * site mid-switch must never have that site's storage cleared or filled.
+   */
+  expectedOrigin?: string;
+};
+export type PageWriteResult = {
+  origin: string;
+  errors: string[];
+  /** A database could not be removed or written (another tab holds it open): the swap is incomplete. */
+  idbFailed?: boolean;
+};
 
 /** Replaces the page origin's web storage (and IndexedDB when asked) with saved data. */
 export async function writePageStorage(data: PageWriteData, options: PageWriteOptions): Promise<PageWriteResult> {
   const errors: string[] = [];
+  let idbFailed = false;
+  if (options.expectedOrigin && location.origin !== options.expectedOrigin) return { origin: location.origin, errors };
   // Only these constructors may be rebuilt from saved data.
   const VIEWS: Record<string, new (buffer: ArrayBuffer) => ArrayBufferView> = {
     Int8Array,
@@ -241,27 +265,36 @@ export async function writePageStorage(data: PageWriteData, options: PageWriteOp
     }
   }
 
-  function settle(req: IDBRequest | IDBOpenDBRequest, timeoutMs: number): Promise<void> {
+  /** Resolves true once the request succeeded, false on an error or after the timeout. */
+  function settle(req: IDBRequest | IDBOpenDBRequest, timeoutMs: number): Promise<boolean> {
     return new Promise((resolve) => {
-      const timer = setTimeout(resolve, timeoutMs);
-      const done = () => {
+      const timer = setTimeout(() => resolve(false), timeoutMs);
+      req.onsuccess = () => {
         clearTimeout(timer);
-        resolve();
+        resolve(true);
       };
-      req.onsuccess = done;
-      req.onerror = done;
+      req.onerror = () => {
+        clearTimeout(timer);
+        resolve(false);
+      };
     });
   }
 
   async function restoreIndexedDb(dumps: IdbDatabaseDump[]) {
     for (const info of await indexedDB.databases()) {
-      if (info.name) await settle(indexedDB.deleteDatabase(info.name), 5000);
+      if (!info.name) continue;
+      // A database left behind would mix the previous account's data into the new one.
+      if (!(await settle(indexedDB.deleteDatabase(info.name), 5000))) {
+        idbFailed = true;
+        errors.push(`IndexedDB ${info.name}: could not be removed (open in another tab)`);
+      }
     }
     for (const dump of dumps) {
       await new Promise<void>((resolve) => {
         // Another tab holding the database open blocks the delete above and this open behind it:
         // give up on this database after a while instead of holding the switch forever.
         const timer = setTimeout(() => {
+          idbFailed = true;
           errors.push(`IndexedDB ${dump.name}: blocked by another open tab`);
           resolve();
         }, 8000);
@@ -304,6 +337,7 @@ export async function writePageStorage(data: PageWriteData, options: PageWriteOp
         };
         req.onerror = () => {
           clearTimeout(timer);
+          idbFailed = true;
           errors.push(`IndexedDB ${dump.name}: ${req.error?.message ?? 'open failed'}`);
           resolve();
         };
@@ -333,10 +367,11 @@ export async function writePageStorage(data: PageWriteData, options: PageWriteOp
     try {
       await restoreIndexedDb(data.idb ?? []);
     } catch (error) {
+      idbFailed = true;
       errors.push(`IndexedDB: ${error instanceof Error ? error.message : error}`);
     }
   }
-  return { origin: location.origin, errors };
+  return { origin: location.origin, errors, ...(idbFailed ? { idbFailed } : {}) };
 }
 
 /** Where the staging page really is (redirects may have moved it). */
@@ -486,29 +521,52 @@ export function showToast(content: ToastContent): void {
   setTimeout(() => host.remove(), content.durationMs);
 }
 
-export type RibbonContent = { tag: string; label: string };
+export type RibbonContent = {
+  tag: string;
+  label: string;
+  /** important: the red strip of a production / client live account; calm: just which account this is. */
+  tone?: 'important' | 'calm';
+  /** The account's color (calm tone). */
+  color?: string;
+};
 
 /**
- * A red strip along the top of the page, with a small tag, while an important
- * account is in use. It never takes clicks. `null` removes it.
+ * A strip along the top of the page, with a small tag: red while an important
+ * account is in use, or a quiet one in the account's color when every account
+ * is shown. It never takes clicks. `null` removes it.
  */
 export function showRibbon(content: RibbonContent | null): void {
   const id = 'swapdeck-ribbon';
   document.getElementById(id)?.remove();
   if (!content) return;
+  const calm = content.tone === 'calm';
+  const accent = calm && content.color && /^#[0-9a-f]{6}$/i.test(content.color) ? content.color : '#6f665b';
   const host = document.createElement('div');
   host.id = id;
+  host.dataset.tone = calm ? 'calm' : 'important';
   host.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;z-index:2147483646;pointer-events:none;';
   const root = host.attachShadow({ mode: 'closed' });
   const sheet = new CSSStyleSheet();
-  sheet.replaceSync(`
+  sheet.replaceSync(
+    calm
+      ? `
+    .bar { position: fixed; top: 0; left: 0; right: 0; height: 2px; background: ${accent}; opacity: .85; pointer-events: none; }
+    .tag { position: fixed; top: 0; left: 50%; transform: translateX(-50%); max-width: 60vw; padding: 1px 10px 3px 8px;
+      display: flex; align-items: center; gap: 6px; border-radius: 0 0 7px 7px; background: rgba(26, 23, 20, .82);
+      color: #f4f0e8; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      box-shadow: 0 2px 8px rgba(26, 23, 20, .22); font: 500 11px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .tag i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: ${accent}; box-shadow: 0 0 0 1px rgba(244, 240, 232, .5); }
+    .tag b { font-weight: 700; }
+  `
+      : `
     .bar { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: #b3261e; pointer-events: none; }
     .tag { position: fixed; top: 0; left: 50%; transform: translateX(-50%); max-width: 60vw; padding: 1px 10px 3px;
       border-radius: 0 0 7px 7px; background: #b3261e; color: #fff; pointer-events: none; white-space: nowrap;
       overflow: hidden; text-overflow: ellipsis; box-shadow: 0 2px 8px rgba(26, 23, 20, .28);
       font: 600 11px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
     .tag b { font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
-  `);
+  `,
+  );
   root.adoptedStyleSheets = [sheet];
   const bar = document.createElement('div');
   bar.className = 'bar';
@@ -517,6 +575,7 @@ export function showRibbon(content: RibbonContent | null): void {
   tag.setAttribute('role', 'note');
   const strong = document.createElement('b');
   strong.textContent = content.tag;
+  if (calm) tag.append(document.createElement('i'));
   tag.append(strong, ` · ${content.label}`);
   root.append(bar, tag);
   document.documentElement.append(host);

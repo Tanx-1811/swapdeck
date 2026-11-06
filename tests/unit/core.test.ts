@@ -284,6 +284,13 @@ describe('settings', () => {
     });
   });
 
+  it('shows important accounts on their pages by default, every account when asked', () => {
+    expect(parseSettings({}).pageRibbon).toBe('important');
+    expect(parseSettings({ pageRibbon: 'all' }).pageRibbon).toBe('all');
+    expect(parseSettings({ pageRibbon: 'everyone' }).pageRibbon).toBe('important');
+    expect(parseSettings({ pageRibbon: 1 }).pageRibbon).toBe('important');
+  });
+
   it('reminds to lock saved sessions until snoozed or locked', () => {
     expect(parseSettings({ vaultNudgeUntil: 99 }).vaultNudgeUntil).toBe(99);
     expect(parseSettings({ vaultNudgeUntil: -1 }).vaultNudgeUntil).toBe(0);

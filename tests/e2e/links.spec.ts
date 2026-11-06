@@ -175,3 +175,50 @@ test.describe('expired sessions', () => {
     await expect(popup.getByRole('listitem').filter({ hasText: 'Alice Nguyen' })).not.toContainText('Expired');
   });
 });
+
+test.describe('open link as', () => {
+  test('switches in a blank tab first, so the link is never requested with the account in use', async ({
+    context,
+    server,
+    call,
+    worker,
+  }) => {
+    const acme = await addAcme(call, server);
+    const site = await context.newPage();
+    await signIn(site, acme.origin, 'alice@acme.test');
+    await expect.poll(() => storedAccounts(context, acme.id)).toHaveLength(1);
+    expect((await call('fresh', { appId: acme.id })).ok).toBe(true);
+    await signIn(site, acme.origin, 'bob@acme.test');
+    await expect.poll(() => storedAccounts(context, acme.id)).toHaveLength(2);
+    const alice = (await storedAccounts(context, acme.id)).find((account) => account.email === 'alice@acme.test')!;
+
+    // What "Open link as → Alice" does once it has opened its blank tab next to the page.
+    const opened = context.waitForEvent('page');
+    const blankId = await worker.evaluate(
+      async () => (await chrome.tabs.create({ url: 'about:blank', active: false })).id!,
+    );
+    const blank = await opened;
+    const link = `${acme.origin}/project/invite`;
+    const sentWith: string[] = [];
+    blank.on('request', (request) => {
+      if (request.url() !== link) return;
+      void request.allHeaders().then((headers) => sentWith.push(decodeURIComponent(headers.cookie ?? '')));
+    });
+    const plan = {
+      kind: 'account',
+      appId: acme.id,
+      accountId: alice.id,
+      tabId: blankId,
+      url: link,
+      focus: true,
+      blankTab: true,
+    };
+    expect((await call('switch.guarded', { plan })).ok).toBe(true);
+
+    await expect(blank).toHaveURL(link);
+    await expect(blank.locator('#server-user')).toHaveText('alice@acme.test');
+    expect(sentWith.length).toBeGreaterThan(0);
+    for (const cookies of sentWith) expect(cookies).not.toContain('bob@acme.test');
+    expect(await activeAccount(context, acme.id)).toBe(alice.id);
+  });
+});

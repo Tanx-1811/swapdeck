@@ -156,6 +156,12 @@ export const vi: Record<MessageKey, string> = {
     'Khóa bằng mật khẩu đã bị hỏng nên không mở được các phiên đã lưu. Hãy dùng “Quên mật khẩu?” để xóa khóa, rồi đăng nhập lại từng tài khoản.',
   'error.VAULT_EXISTS': 'Đã đặt mật khẩu rồi.',
   'error.NO_VAULT': 'Chưa đặt mật khẩu.',
+  'error.STORAGE_BLOCKED':
+    'Dữ liệu lưu trên trang đang được một tab khác của trang dùng nên không thay được. Swapdeck đã trả lại tài khoản trước đó; hãy đóng các tab khác của trang rồi thử lại.',
+  'error.ROLLBACK_FAILED':
+    'Lần chuyển bị gián đoạn và không trả lại được phiên trước đó, nên trang đã được đăng xuất thay vì để lẫn hai tài khoản. Hãy chọn một tài khoản để tiếp tục.',
+  'error.INTERRUPTED': 'Lần chuyển dừng giữa chừng (Swapdeck khởi động lại). Phiên trước đó đã được trả lại.',
+  'error.WRONG_ACCOUNT': 'Sau khi chuyển, trang lại hiện một tài khoản khác với tài khoản đã chọn.',
   'error.UNKNOWN': 'Có lỗi xảy ra: {detail}',
 
   'nav.overview': 'Tổng quan',
@@ -622,6 +628,11 @@ export const vi: Record<MessageKey, string> = {
   'settings.linkAsk': 'Hỏi trên trang (khuyên dùng)',
   'settings.linkAuto': 'Tự chuyển luôn',
   'settings.linkOff': 'Không làm gì',
+  'settings.pageRibbon': 'Hiện tài khoản trên trang',
+  'settings.pageRibbonHint':
+    'Một dải mỏng ở mép trên trang cho biết tài khoản đang đăng nhập ở đó (và thuộc bên nào). Tài khoản quan trọng luôn có dải đỏ.',
+  'settings.pageRibbonImportant': 'Chỉ tài khoản quan trọng',
+  'settings.pageRibbonAll': 'Mọi tài khoản',
   'start.title': 'Bắt đầu với Swapdeck',
   'start.progress': 'Đã xong {done}/{total}',
   'start.hide': 'Ẩn',

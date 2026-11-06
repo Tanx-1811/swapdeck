@@ -153,6 +153,16 @@ async function build(): Promise<void> {
   }
 }
 
+/**
+ * Rebuilds the menus even though nothing changed: Chrome checks a radio item
+ * as soon as it is clicked, so a switch that was cancelled (or failed) must
+ * put the check back on the account or workspace really in use.
+ */
+export function refreshMenus(): void {
+  builtSignature = null;
+  scheduleMenuRebuild(0);
+}
+
 /** Rebuilds the menus shortly after the last change (changes often come in bursts). */
 export function scheduleMenuRebuild(delayMs = 250): void {
   clearTimeout(rebuildTimer);

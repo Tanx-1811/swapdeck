@@ -34,8 +34,13 @@ import {
   applyPull,
   mergeFields,
   planPush,
+  LEGACY_SYNC_FIELDS,
+  SCHEMA_FIELDS,
   settleDeletes,
+  SYNC_FIELDS,
+  SYNC_SCHEMA,
   TOMBSTONE_TTL_MS,
+  writerFields,
   type SyncItem,
 } from '../../src/core/sync';
 import type { Account, AppDef, Snapshot } from '../../src/core/types';
@@ -502,6 +507,26 @@ describe('sync: tombstones and the removal journal (R7, I3)', () => {
 });
 
 describe('sync: older versions (R8)', () => {
+  it('reads what a writer knows from its schema number, and keeps the schema table in step', () => {
+    // Bumping SYNC_SCHEMA without recording its fields would make this version misread its own items.
+    expect(SCHEMA_FIELDS[SYNC_SCHEMA]).toEqual(SYNC_FIELDS);
+    const item = (extra: Partial<SyncItem>): SyncItem => ({
+      v: { label: 'A', linkRules: [] },
+      t: 1,
+      by: 'x',
+      ...extra,
+    });
+    expect(writerFields('account', item({ s: SYNC_SCHEMA }))).toEqual(SYNC_FIELDS.account);
+    // A newer version knows at least every field this one does.
+    expect(writerFields('account', item({ s: SYNC_SCHEMA + 5 }))).toEqual(SYNC_FIELDS.account);
+    // 1.5/1.6 (no schema, or garbage): the legacy list plus what the item carries.
+    for (const s of [undefined, 1, 2.5, -1]) {
+      const fields = writerFields('account', item(s === undefined ? {} : { s }));
+      expect(fields).toEqual(expect.arrayContaining([...LEGACY_SYNC_FIELDS.account, 'linkRules']));
+    }
+    expect(writerFields('account', item({ v: { label: 'A' } }))).not.toContain('linkRules');
+  });
+
   it('R8: link rules set on a newer computer survive a reorder on a computer still on 1.5.0', async () => {
     await on('A', async () => {
       const created = await addApp(custom());
@@ -509,7 +534,7 @@ describe('sync: older versions (R8)', () => {
       await syncOn();
       expect((await readState()).accounts[0]?.linkRules).toEqual(['acme.test/billing']);
     });
-    expect((syncStore().get('sd1:c:acc_work') as SyncItem).f).toContain('linkRules');
+    expect((syncStore().get('sd1:c:acc_work') as SyncItem).s).toBe(SYNC_SCHEMA);
     // A 1.5.0 computer (no `linkRules` in its ACCOUNT_SYNC_FIELDS, dropped by its sanitizeAccount, no `f`)
     // reorders the app's accounts and writes the whole item back, as its planPush does.
     const item = syncStore().get('sd1:c:acc_work') as { v: Record<string, unknown>; t: number };

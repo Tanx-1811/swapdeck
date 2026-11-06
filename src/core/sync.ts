@@ -50,8 +50,11 @@ export type SyncItem = {
   by: string;
   v?: unknown;
   gone?: true;
-  /** The fields the writer's version sends for this kind; missing in items written by 1.5 and 1.6. */
-  f?: string[];
+  /**
+   * The writer's sync schema (`SYNC_SCHEMA`): which fields it knows (`SCHEMA_FIELDS`). Missing in items written
+   * by 1.5 and 1.6. A number rather than the list itself: Chrome Sync allows only 100 KB in all.
+   */
+  s?: number;
 };
 export type MemoEntry = {
   hash: string;
@@ -133,12 +136,18 @@ export const WORKSPACE_SYNC_FIELDS = [
   'createdAt',
 ] as const satisfies readonly (keyof Workspace)[];
 
-/** What this version sends, by kind (written into each item as `f`). */
+/** What this version sends, by kind. */
 export const SYNC_FIELDS: Record<SyncKind, readonly string[]> = {
   app: APP_SYNC_FIELDS,
   account: ACCOUNT_SYNC_FIELDS,
   workspace: WORKSPACE_SYNC_FIELDS,
 };
+
+/**
+ * This version's sync schema, written into each item as `s`. Adding a synced field: add it to the lists above,
+ * bump this number and add the new lists to `SCHEMA_FIELDS` under it (never edit an existing entry).
+ */
+export const SYNC_SCHEMA = 2;
 
 /**
  * The fields of items written without a field list (`f`): Swapdeck 1.5.0, the first version with sync.
@@ -211,11 +220,23 @@ const isObj = (value: unknown): value is Record<string, unknown> =>
 const text = (value: unknown): string | undefined => (typeof value === 'string' && value ? value : undefined);
 const fold = (value: unknown): string => (typeof value === 'string' ? value.trim().toLowerCase() : '');
 
-/** What an incoming item's writer knows: its own list, or (older versions) the legacy list and what it sent. */
+/** The fields each sync schema knows, by schema number. Never change an entry: items in Chrome Sync carry them. */
+export const SCHEMA_FIELDS: Readonly<Record<number, Record<SyncKind, readonly string[]>>> = {
+  2: {
+    app: [...APP_SYNC_FIELDS],
+    account: [...ACCOUNT_SYNC_FIELDS],
+    workspace: [...WORKSPACE_SYNC_FIELDS],
+  },
+};
+
+/**
+ * What an incoming item's writer knows: its schema's fields; a newer schema knows at least everything this
+ * version does; no schema (1.5/1.6) means the legacy list plus the fields the item carries.
+ */
 export function writerFields(kind: SyncKind, item: SyncItem): readonly string[] {
-  const listed = item.f;
-  if (Array.isArray(listed) && listed.length <= 100 && listed.every((field) => typeof field === 'string')) {
-    return listed;
+  const schema = item.s;
+  if (typeof schema === 'number' && Number.isInteger(schema) && schema >= 2) {
+    return schema > SYNC_SCHEMA ? SYNC_FIELDS[kind] : (SCHEMA_FIELDS[schema]?.[kind] ?? SYNC_FIELDS[kind]);
   }
   return [...new Set([...LEGACY_SYNC_FIELDS[kind], ...(isObj(item.v) ? Object.keys(item.v) : [])])];
 }
@@ -402,8 +423,7 @@ export function planPush(
       if (!known.base && isObj(value)) plan.based[key] = { ...known, base: value };
       continue;
     }
-    const kind = parseSyncKey(key)?.kind;
-    const item: SyncItem = { v: value, t: now, by, ...(kind ? { f: [...SYNC_FIELDS[kind]] } : {}) };
+    const item: SyncItem = { v: value, t: now, by, s: SYNC_SCHEMA };
     if (itemBytes(key, item) > SYNC_ITEM_MAX_BYTES) {
       plan.tooBig.push(key);
       continue;

@@ -372,10 +372,13 @@ a preset app nobody changed travels as
   the merged thing is then sent. So an offline edit (a note, a pin, a workspace's links) survives another computer's
   unrelated change of the same thing, a reorder included. Memo entries from before 1.7 have no `base`: the next push
   fills it in for everything unchanged since it was synced (until then, the incoming write wins as before).
-- **Older versions:** a field the writer doesn't list in `f` keeps its value here (`withLocalUnknown`), so a computer
-  still on an older version can't erase a newer field (`linkRules`) by writing the whole item. Items without `f`
-  were written by 1.5/1.6: they count as knowing `LEGACY_SYNC_FIELDS` plus the fields they carry. Never change
-  `LEGACY_SYNC_FIELDS`; a new synced field goes into the current list (and gets a merge rule and a two-computer test).
+- **Older versions:** each item carries its writer's sync schema `s` (`SYNC_SCHEMA`, a number — a field list would cost
+  ~50 % more of Chrome Sync's 100 KB). A field the writer's schema doesn't know (`writerFields`, `SCHEMA_FIELDS`) keeps
+  its value here (`withLocalUnknown`), so a computer still on an older version can't erase a newer field (`linkRules`)
+  by writing the whole item; a newer schema knows at least every field this version does. Items without `s` were
+  written by 1.5/1.6: they count as knowing `LEGACY_SYNC_FIELDS` plus the fields they carry. Never change
+  `LEGACY_SYNC_FIELDS` or an entry of `SCHEMA_FIELDS`; a new synced field goes into the current list, bumps
+  `SYNC_SCHEMA` with a new `SCHEMA_FIELDS` entry, and gets a merge rule and a two-computer test.
 - **Removals:** removing an app/account/workspace notes it in `sd:syncRemoved` (`noteRemoved`, inside the removal's
   `update()`); the push writes a tombstone `{ gone, t, by }` for every key that maps to it, even over a concurrent
   edit. A tombstone removes the thing on the other computers (through `removeApp`/`removeAccount`/`removeWorkspace`,

@@ -13,7 +13,6 @@ import { readStoredSnapshot, storeSnapshot, update } from '../../src/background/
 import { clearSyncData, syncNow } from '../../src/background/sync';
 import { findPreset } from '../../src/core/presets';
 import {
-  ACCOUNT_SYNC_FIELDS,
   appFromSync,
   appSyncValue,
   applyPull,
@@ -25,6 +24,7 @@ import {
   storedBytes,
   SYNC_HEADROOM_BYTES,
   syncEntries,
+  SYNC_SCHEMA,
   syncHash,
   syncKey,
   TOMBSTONE_TTL_MS,
@@ -164,7 +164,7 @@ describe('sending', () => {
     const first = planPush(entries, {}, {}, new Set(), 100, 'me');
     expect(Object.keys(first.set).sort()).toEqual([appKey, accountKey]);
     // Each item says which fields its writer's version sends (an older computer keeps the others).
-    expect(first.set[accountKey]).toEqual({ v: entries[accountKey], t: 100, by: 'me', f: [...ACCOUNT_SYNC_FIELDS] });
+    expect(first.set[accountKey]).toEqual({ v: entries[accountKey], t: 100, by: 'me', s: SYNC_SCHEMA });
     const second = planPush(entries, first.written, first.set, new Set(), 200, 'me');
     expect(second.set).toEqual({});
     expect(second.gone).toEqual({});

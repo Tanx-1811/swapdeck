@@ -4,6 +4,8 @@ import PackageDescription
 // Swapdeck Desktop: a menu bar app that keeps each workspace ("bên") in its own
 // Chrome profile and opens it in one click. SwapdeckCore holds the logic (no
 // AppKit), SwapdeckDesktop the app itself. Build the .app with scripts/build-app.sh.
+// SwapdeckDesktopTests drives the app's model (AppModel) against a fake Application
+// Support folder: no browser is launched and no AppleScript runs.
 let package = Package(
     name: "SwapdeckDesktop",
     platforms: [.macOS(.v14)],
@@ -18,5 +20,6 @@ let package = Package(
             dependencies: ["SwapdeckCore"],
             resources: [.copy("Fixtures/encrypted-backup.json")]
         ),
+        .testTarget(name: "SwapdeckDesktopTests", dependencies: ["SwapdeckDesktop", "SwapdeckCore"]),
     ]
 )

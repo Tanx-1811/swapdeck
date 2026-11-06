@@ -22,7 +22,7 @@ mới kèm các trang của bên.
 
 ## Cài đặt
 
-1. Lấy `release/swapdeck-desktop-1.3.0.zip` (hoặc tự build, xem dưới), giải nén, kéo **Swapdeck Desktop.app** vào thư
+1. Lấy `release/swapdeck-desktop-1.4.0.zip` (hoặc tự build, xem dưới), giải nén, kéo **Swapdeck Desktop.app** vào thư
    mục Ứng dụng.
 2. Mở app. App chưa ký bằng Apple Developer ID, nên lần đầu macOS có thể chặn: chuột phải vào app → **Mở** → **Mở**.
 3. Biểu tượng bộ thẻ xuất hiện trên thanh menu.
@@ -42,7 +42,9 @@ xuất_ → _Chọn tệp…_ (nhập mật khẩu nếu tệp có mật khẩu)
 
 **Chuyển sang máy Mac khác:** ở máy cũ, _Nhập & xuất_ → _Xuất các bên…_; ở máy mới, mở tệp đó bằng _Chọn tệp…_. Swapdeck
 tìm lại hồ sơ trình duyệt của từng bên theo tài khoản Google, rồi theo tên hồ sơ — kể cả khi thư mục hồ sơ khác — và
-báo những bên chưa có hồ sơ để bạn chọn hoặc tạo. Bấm _Ghép lại hồ sơ_ bất cứ lúc nào (ví dụ sau khi đăng nhập Chrome).
+báo những bên chưa có hồ sơ để bạn chọn hoặc tạo. Tên hồ sơ chỉ được dùng khi chỉ một hồ sơ mang tên đó và tên ấy không
+phải do trình duyệt tự đặt ("Person 1"); bên nào mà thư mục cũ ở máy mới là hồ sơ của người khác thì được để trống hồ sơ,
+chứ không mở nhầm tài khoản. Bấm _Ghép lại hồ sơ_ bất cứ lúc nào (ví dụ sau khi đăng nhập Chrome).
 Phiên đăng nhập nằm trong hồ sơ Chrome: bật Chrome Sync hoặc đăng nhập lại ở máy mới. Chuyển bằng Trợ lý Di chuyển của
 macOS thì mọi thứ giữ nguyên.
 
@@ -54,11 +56,14 @@ Trong _Cài đặt → Link mở từ ứng dụng khác_, bấm **Đặt Swapde
 Slack, Mail, Zalo, Notion… mở thẳng vào đúng hồ sơ của bên:
 
 - **Theo trang của bên:** mỗi trang đã ghim cho bên đó (ví dụ `supabase.com/dashboard/project/acme`) tự kéo các link
-  tương ứng về bên; tên miền chỉ một bên có (ví dụ `app.acme.example`) cũng vậy.
+  tới trang đó và các trang con của nó về bên — nhưng không kéo cả trang web (ghim một repo GitHub không biến mọi link
+  GitHub thành của bên), và trang chủ của một trang web không kéo gì.
 - **Theo quy tắc bạn thêm** trong trang sửa bên, mục _Link mở vào bên này_: `acme.example` (cả các tên miền con), hoặc
-  một đường dẫn cụ thể. Quy tắc cụ thể nhất được chọn.
+  một đường dẫn cụ thể. Quy tắc cụ thể nhất được chọn; nếu hai bên cùng có quy tắc cụ thể nhất thì link được xem như
+  không thuộc bên nào (trang sửa bên báo trước điều này).
 - **Link không thuộc bên nào:** hiện bảng chọn bên (mặc định), hoặc mở vào bên đang dùng, hoặc mở bình thường trong
   trình duyệt. Trong bảng chọn, đánh dấu _Luôn mở … trong bên mình chọn_ để Swapdeck nhớ luôn.
+- Bên chưa có hồ sơ trình duyệt không nhận link: Swapdeck báo và hỏi bạn mở link ở đâu, nên link không bị mất.
 - Giữ <kbd>⌥ Option</kbd> khi bấm link để lần nào cũng được chọn bên.
 
 **Hồ sơ mới mang sẵn tên và màu của bên:** khi bấm _Tạo hồ sơ mới_, Swapdeck tạo sẵn thư mục hồ sơ với tên và màu của
@@ -86,17 +91,25 @@ Mỗi bên có thể có **Terminal riêng**: các công cụ dòng lệnh dùng
   Cloudflare Wrangler, Fly.io, Railway, Heroku, DigitalOcean; hồ sơ AWS và Google Cloud) hoặc một biến bất kỳ, rồi dán
   token. Chọn thêm thư mục làm việc nếu muốn.
 - **Mở trong Terminal** (hoặc iTerm, chọn trong Cài đặt) mở một cửa sổ mang tên bên, đã nạp sẵn các biến, ở đúng thư mục.
-  Cũng có trong menu của bên ở thanh menu.
-- **Chép lệnh** cho một dòng `eval "$('/Applications/Swapdeck Desktop.app/Contents/MacOS/Swapdeck Desktop' --env ws_…)"`
-  để nạp token của bên vào bất kỳ Terminal nào (VS Code, Warp…). Lệnh `--env` nhận cả tên bên.
+  Cũng có trong menu của bên ở thanh menu. Nếu không nạp được token (Keychain từ chối, bạn không cho phép…), cửa sổ báo
+  rõ và dừng lại, không mở Terminal "trống" mang tên bên.
+- **Chép lệnh** cho một dòng (bash, zsh) nạp token của bên vào bất kỳ Terminal nào (VS Code, Warp…):
+  `if __swapdeck_env=$('/Applications/Swapdeck Desktop.app/Contents/MacOS/Swapdeck Desktop' --env ws_…); then eval …`.
+  Mỗi lần chạy, lệnh hỏi **Touch ID hoặc mật khẩu máy**. Lệnh `--env` nhận cả tên bên.
 - Token nằm trong **Keychain** của máy Mac: không bao giờ nằm trong tệp dữ liệu, tệp xuất, tệp lệnh trên ổ đĩa hay lịch sử
-  lệnh (tệp mà Terminal chạy không chứa token và tự xoá). Lần đầu sau khi cập nhật app, macOS có thể hỏi cho phép Swapdeck
+  lệnh (tệp mà Terminal chạy không chứa token và tự xóa). Lần đầu sau khi cập nhật app, macOS có thể hỏi cho phép Swapdeck
   Desktop đọc Keychain: chọn _Luôn cho phép_. Sang máy Mac khác, tên các biến đi theo tệp xuất, còn token thì nhập lại.
+  Xóa một bên thì xóa luôn mọi token của bên trong Keychain.
+- **Ai lấy được token:** Keychain tin app Swapdeck Desktop, nên `--env` chỉ trao token khi có **vé dùng một lần** (32 byte
+  ngẫu nhiên, hết hạn sau 60 giây, chỉ cho đúng bên đó) mà _Mở trong Terminal_ vừa tạo, hoặc sau khi bạn xác nhận bằng
+  Touch ID / mật khẩu máy. Một chương trình khác chạy dưới tài khoản của bạn vì thế không lặng lẽ lấy token qua Swapdeck
+  được (nó vẫn có thể giành một vé đang chờ trong 60 giây đó, hoặc xin bạn Touch ID — đừng chấp nhận khi bạn không vừa mở
+  Terminal).
 
 ## Quyền riêng tư
 
 - Chạy ngoại tuyến, không gửi gì đi đâu — trừ khi bạn bấm _Cài đặt → Kiểm tra bản mới_: một yêu cầu tới API công khai của
-  GitHub hỏi bản mới nhất, không mang gì của bạn.
+  GitHub lấy danh sách các bản phát hành gần đây, không mang gì của bạn.
 - Đọc danh sách hồ sơ từ tệp `Local State` của trình duyệt (tên hồ sơ, email Google đăng nhập trong Chrome, màu).
 - Lưu tên, màu, biểu tượng, thư mục hồ sơ (kèm tên và email Google của hồ sơ, để tìm lại khi chuyển máy) và địa chỉ các
   trang của bên, tên các biến Terminal và thư mục của bên tại
@@ -113,7 +126,7 @@ Cần Xcode 16 trở lên (Swift 6) trên macOS 14 trở lên.
 ```sh
 cd desktop
 swift test                    # kiểm thử phần lõi
-./scripts/build-app.sh        # build/Swapdeck Desktop.app + release/swapdeck-desktop-1.3.0.zip
+./scripts/build-app.sh        # build/Swapdeck Desktop.app + release/swapdeck-desktop-1.4.0.zip
 ```
 
 - `"build/Swapdeck Desktop.app/Contents/MacOS/Swapdeck Desktop" --render-previews <thư mục>` vẽ các màn hình bằng dữ
@@ -138,7 +151,7 @@ a new window with the workspace's pages.
 the Keychain; Swapdeck Desktop never reads, stores or moves a sign-in. Workspaces can sit side by side in named windows,
 "Sign in with Google" keeps working, and extensions, password managers and DevTools stay as they are.
 
-**Install:** unzip `release/swapdeck-desktop-1.3.0.zip`, move **Swapdeck Desktop.app** to Applications and open it (the
+**Install:** unzip `release/swapdeck-desktop-1.4.0.zip`, move **Swapdeck Desktop.app** to Applications and open it (the
 app isn't signed with a Developer ID yet: right-click → Open the first time).
 
 **First steps:** create workspaces from your browser profiles (or create one and pick or create a profile), sign in to
@@ -149,28 +162,40 @@ here: names, colors, symbols and pages come along; saved sign-ins are ignored.
 
 **Moving to another Mac:** on the old Mac, _Import & export → Export workspaces…_; on the new one, open that file with
 _Choose file…_. Swapdeck finds each workspace's browser profile again by its Google account, then by its name — even in
-another profile folder — and lists the workspaces still without a profile so you can pick or create one. _Match
-profiles again_ does it any time (say, after signing in to Chrome). Sign-ins live in the Chrome profile: turn on
-Chrome Sync or sign in again on the new Mac. Migration Assistant keeps everything as it is.
+another profile folder — and lists the workspaces still without a profile so you can pick or create one (a workspace
+whose folder holds someone else's profile on the new Mac is left without one rather than opening the wrong account). A
+name only counts when one profile has it and the browser didn't choose it ("Person 1"). _Match profiles again_ does it
+any time (say, after signing in to Chrome). Sign-ins live in the Chrome profile: turn on Chrome Sync or sign in again on
+the new Mac. Migration Assistant keeps everything as it is.
 
 **Links from other apps:** make Swapdeck the default web browser (Settings → Links from other apps) and links from
-Slack, Mail and other apps open in the workspace they belong to — by the workspace's pages, and by rules you add
-("acme.example" covers its subdomains; a path narrows it). Links that match nothing show a chooser (or go to the
-workspace in use, or open normally); hold ⌥ Option while clicking to always choose. Profiles Swapdeck creates for a
-workspace get its name and color from the start.
+Slack, Mail and other apps open in the workspace they belong to — by the workspace's pages (a page covers itself and
+what is under it, never its whole site), and by rules you add ("acme.example" covers its subdomains; a path narrows
+it). When two workspaces share the most specific rule, or for links that match nothing, Swapdeck shows a chooser (or
+goes to the workspace in use, or opens normally); hold ⌥ Option while clicking to always choose. A workspace without a
+browser profile never swallows a link: Swapdeck asks where to open it. Profiles Swapdeck creates for a workspace get its
+name and color from the start. Workspace names are unique, so each one leads to its own window.
 
 **A terminal per workspace:** in a workspace's editor, _Terminal & command line_ → **Add a tool** (Supabase CLI,
 Vercel CLI, GitHub CLI, Netlify, Cloudflare Wrangler, Fly.io, Railway, Heroku, DigitalOcean; AWS and Google Cloud
 profiles) or any variable, and paste its token; pick a folder if you like. **Open in Terminal** (or iTerm — Settings)
-opens a window named after the workspace with those variables, in that folder (also in the workspace's menu). **Copy
-command** gives `eval "$('/Applications/Swapdeck Desktop.app/Contents/MacOS/Swapdeck Desktop' --env ws_…)"` to load
-them into any terminal (VS Code, Warp…); `--env` takes the workspace's name too. Tokens stay in the **Keychain** — never
-in the data file, an exported file, a script on disk or the shell history (the script Terminal runs holds no token and
-removes itself). After an update macOS may ask to let Swapdeck Desktop use the Keychain: choose _Always Allow_. On
-another Mac the variable names come along with the export; enter the tokens again.
+opens a window named after the workspace with those variables, in that folder (also in the workspace's menu); if the
+tokens can't be loaded, the window says so and stops instead of opening a shell without them. **Copy command** gives a
+bash/zsh line (`if __swapdeck_env=$('…/Swapdeck Desktop' --env ws_…); then eval …`) that loads them into any terminal
+(VS Code, Warp…) after **Touch ID or your password**, each time; `--env` takes the workspace's name too. Tokens stay
+in the **Keychain** — never in the data file, an exported file, a script on disk or the shell history (the script
+Terminal runs holds no token and removes itself) — and deleting a workspace deletes all of its tokens. After an update
+macOS may ask to let Swapdeck Desktop use the Keychain: choose _Always Allow_. On another Mac the variable names come
+along with the export; enter the tokens again.
 
-**Privacy:** offline, except when you press _Settings → Check for updates_ (one request to GitHub's public API asking
-for the latest version; nothing of yours is sent). Reads the browser's `Local State` for profile names, the Google
+**Who can get the tokens:** the Keychain trusts Swapdeck Desktop, so `--env` only hands them over with a **single-use
+ticket** that _Open in Terminal_ just made (32 random bytes, valid 60 seconds, for that workspace only, kept in a 0600
+file under `~/Library/Application Support/Swapdeck Desktop/tickets/`), or after Touch ID / your password. Another
+program running as you therefore can't quietly read them through Swapdeck; it could still race a waiting ticket during
+those 60 seconds, or ask you for Touch ID — say no when you didn't just open a terminal.
+
+**Privacy:** offline, except when you press _Settings → Check for updates_ (one request to GitHub's public API listing
+the recent releases; nothing of yours is sent). Reads the browser's `Local State` for profile names, the Google
 account signed in to Chrome and colors; stores names, colors, symbols, profile folders (with the profile's name and
 Google account, to find it again on another Mac), page addresses, the names of terminal variables and folders in
 `~/Library/Application Support/Swapdeck Desktop/workspaces.json`, which is also what _Export workspaces…_ writes;

@@ -1,7 +1,8 @@
 import Foundation
 
 /// The data file: `{ "format": "swapdeck-desktop", "version": 1, "settings": …, "workspaces": […] }`.
-/// Reading is forgiving — anything unknown or invalid is dropped, never trusted.
+/// Reading is forgiving — anything unknown or invalid is dropped, never trusted — but a workspace
+/// is only dropped when it has no id: text that is too long is cut, a missing name is replaced.
 public enum DataFile {
     public static let format = "swapdeck-desktop"
     public static let version = 1
@@ -29,9 +30,13 @@ public enum DataFile {
               root["format"] as? String == format
         else { throw Failure.notSwapdeckData }
         let settings = sanitizeSettings(root["settings"])
+        let untitled = Translator(Language.resolve(settings.language))("workspace.untitled")
         var seen = Set<String>()
-        let workspaces = (root["workspaces"] as? [Any] ?? []).compactMap(sanitizeWorkspace).filter { seen.insert($0.id).inserted }
-        return DesktopData(settings: settings, workspaces: workspaces)
+        let workspaces = (root["workspaces"] as? [Any] ?? [])
+            .compactMap { sanitizeWorkspace($0, untitled: untitled) }
+            .filter { seen.insert($0.id).inserted }
+        // A window is found again by its workspace's name: names must not repeat.
+        return DesktopData(settings: settings, workspaces: WorkspaceLogic.withUniqueNames(workspaces))
     }
 
     public static func sanitizeSettings(_ value: Any?) -> DesktopSettings {
@@ -50,19 +55,21 @@ public enum DataFile {
         return settings
     }
 
-    public static func sanitizeWorkspace(_ value: Any) -> Workspace? {
+    /// A workspace from untrusted JSON, or nil without an id. `untitled` names a workspace that has no name.
+    public static func sanitizeWorkspace(_ value: Any, untitled: String = "Workspace") -> Workspace? {
         guard let input = value as? [String: Any],
-              let id = text(input["id"], max: 64), !id.isEmpty,
-              let name = text(input["name"], max: 80)?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty
+              let id = text(input["id"], max: 64), !id.isEmpty
         else { return nil }
+        let name = cleanName(input["name"] as? String ?? "")
+        let fallback = cleanName(untitled)
         let color = (input["color"] as? String).flatMap { Palette.isHex($0) ? $0.lowercased() : nil } ?? Palette.pigments[0].hex
         let symbol = (input["symbol"] as? String).flatMap { Symbols.isKnown($0) ? $0 : nil } ?? ""
         let browser = (input["browser"] as? String).flatMap(BrowserKind.init(rawValue:)) ?? .chrome
         let profile = (input["profileDirectory"] as? String).flatMap { ProfileReader.isProfileDirectory($0) ? $0 : nil } ?? ""
-        let links = (input["links"] as? [Any] ?? []).prefix(50).compactMap(sanitizeLink)
+        let links = (input["links"] as? [Any] ?? []).compactMap(sanitizeLink).prefix(Limits.links)
         var ruleSet = Set<String>()
         let rules = (input["linkRules"] as? [Any] ?? []).compactMap { ($0 as? String).flatMap(LinkRouter.normalize) }
-            .filter { ruleSet.insert($0).inserted }.prefix(50)
+            .filter { ruleSet.insert($0).inserted }.prefix(Limits.linkRules)
         var names = Set<String>()
         let variables = (input["cliVariables"] as? [Any] ?? []).compactMap { item -> CLIVariable? in
             guard let entry = item as? [String: Any], let name = entry["name"] as? String,
@@ -73,14 +80,14 @@ public enum DataFile {
         let folder = (input["terminalFolder"] as? String).flatMap { TerminalEnv.normalizedFolder($0) } ?? ""
         return Workspace(
             id: id,
-            name: name,
+            name: name.isEmpty ? (fallback.isEmpty ? "Workspace" : fallback) : name,
             color: color,
             symbol: symbol,
-            note: text(input["note"], max: 500) ?? "",
+            note: clip(input["note"] as? String ?? "", Limits.note),
             browser: browser,
             profileDirectory: profile,
-            profileName: text(input["profileName"], max: 120) ?? "",
-            profileEmail: text(input["profileEmail"], max: 320) ?? "",
+            profileName: clip(input["profileName"] as? String ?? "", Limits.profileName),
+            profileEmail: text(input["profileEmail"], max: Limits.profileEmail) ?? "",
             links: Array(links),
             openLinksInNewWindow: input["openLinksInNewWindow"] as? Bool ?? true,
             linkRules: Array(rules),
@@ -95,15 +102,27 @@ public enum DataFile {
 
     public static func sanitizeLink(_ value: Any) -> WorkspaceLink? {
         guard let input = value as? [String: Any],
-              let url = text(input["url"], max: 2048), Links.isOpenable(url)
+              let url = text(input["url"], max: Limits.url), Links.isOpenable(url)
         else { return nil }
-        let title = text(input["title"], max: 200)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let title = clip((input["title"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines), Limits.linkTitle)
         let id = text(input["id"], max: 64) ?? ""
         return WorkspaceLink(
             id: id.isEmpty ? WorkspaceLink(title: "", url: url).id : id,
             title: title.isEmpty ? Links.defaultTitle(for: url) : title,
             url: url
         )
+    }
+
+    /// A workspace name as it is kept: one line, no surrounding spaces, at most `Limits.name` characters.
+    public static func cleanName(_ raw: String) -> String {
+        let oneLine = String(raw.map { $0.isNewline || $0 == "\t" ? " " : $0 })
+        return clip(oneLine.trimmingCharacters(in: .whitespacesAndNewlines), Limits.name)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// At most `max` characters.
+    public static func clip(_ value: String, _ max: Int) -> String {
+        value.count <= max ? value : String(value.prefix(max))
     }
 
     private static func text(_ value: Any?, max: Int) -> String? {
@@ -132,16 +151,36 @@ public struct DataStore: Sendable {
         return DataStore(fileURL: support.appendingPathComponent("Swapdeck Desktop/workspaces.json"))
     }
 
+    /// How `loadReportingOutcome` found the file.
+    public enum LoadOutcome: Equatable, Sendable {
+        /// Read and understood.
+        case loaded
+        /// There is no file yet.
+        case noFile
+        /// The file couldn't be read or understood (set aside when possible).
+        case unreadable
+    }
+
     public func load() -> DesktopData {
-        guard let data = try? Data(contentsOf: fileURL) else { return DesktopData() }
+        loadReportingOutcome().data
+    }
+
+    public func loadReportingOutcome() -> (data: DesktopData, outcome: LoadOutcome) {
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return (DesktopData(), .noFile) }
+        guard let data = try? Data(contentsOf: fileURL) else { return (DesktopData(), .unreadable) }
         do {
-            return try DataFile.decode(data)
+            return (try DataFile.decode(data), .loaded)
         } catch {
             let stamp = Int(Date().timeIntervalSince1970)
             let aside = fileURL.deletingPathExtension().appendingPathExtension("unreadable-\(stamp).json")
             try? FileManager.default.moveItem(at: fileURL, to: aside)
-            return DesktopData()
+            return (DesktopData(), .unreadable)
         }
+    }
+
+    /// The data as it is, never setting the file aside (`--env` must not move the user's file).
+    public func peek() -> DesktopData {
+        (try? Data(contentsOf: fileURL)).flatMap { try? DataFile.decode($0) } ?? DesktopData()
     }
 
     public func save(_ data: DesktopData) throws {

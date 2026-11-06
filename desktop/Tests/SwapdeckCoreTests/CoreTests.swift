@@ -310,8 +310,9 @@ struct LinkRouterTests {
         #expect(route("https://www.acme.example") == "ws_acme")
         #expect(route("https://supabase.com/dashboard/project/acme/sql/new") == "ws_acme")
         #expect(route("https://supabase.com/dashboard/projects") == "ws_company")
-        #expect(route("https://docs.company.example/guide") == "ws_company")
-        // A host both workspaces have pages on belongs to neither by itself.
+        // A pinned home page covers nothing (like the extension's pinned pages), nor does a page
+        // cover the rest of its site.
+        #expect(route("https://docs.company.example/guide") == nil)
         #expect(route("https://supabase.com/dashboard/project/other") == nil)
         #expect(route("https://supabase.com/dashboard/project/acmeX") == nil)
         #expect(route("https://example.org/") == nil)
@@ -331,10 +332,8 @@ struct LinkRouterTests {
     }
 
     @Test func derivesRulesFromPages() {
-        #expect(LinkRouter.implicitRules(for: company, among: [company, acme]) == [
-            "supabase.com/dashboard/projects", "docs.company.example",
-        ])
-        #expect(LinkRouter.implicitRules(for: acme, among: [acme]) == ["supabase.com/dashboard/project/acme", "supabase.com"])
+        #expect(LinkRouter.implicitRules(for: company) == ["supabase.com/dashboard/projects"])
+        #expect(LinkRouter.implicitRules(for: acme) == ["supabase.com/dashboard/project/acme"])
     }
 
     @Test func normalizesWhatPeopleType() {

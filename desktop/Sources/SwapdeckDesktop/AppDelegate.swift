@@ -24,6 +24,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         model.load()
     }
 
+    /// Edits and tokens typed a moment ago are written before Swapdeck quits.
+    func applicationWillTerminate(_ notification: Notification) {
+        model.flushPendingWrites()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image = MenuBarIcon.image()

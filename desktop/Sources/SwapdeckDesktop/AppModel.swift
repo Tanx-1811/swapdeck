@@ -21,11 +21,31 @@ enum ProfileStatus: Equatable {
     case browserMissing
 }
 
+/// Why a new name wasn't taken.
+enum NameCheck: Equatable {
+    case ok
+    case empty
+    case taken(by: String)
+}
+
 struct Banner: Identifiable, Equatable {
     enum Tone { case info, error }
     let id = UUID()
     let tone: Tone
     let text: String
+}
+
+/// A name to take off a browser's windows: the workspace `id` moved to another profile.
+struct PendingUnname: Sendable {
+    let id: String
+    let browser: BrowserKind
+    let name: String
+}
+
+/// A secret typed in the editor, waiting to go to the Keychain.
+struct StagedSecret: Hashable {
+    let workspace: String
+    let name: String
 }
 
 /// The app's state and actions. Everything runs on the main actor; processes
@@ -54,10 +74,17 @@ final class AppModel {
     /// Previews run on sample data and never touch the system.
     @ObservationIgnored let offline: Bool
     @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private let browserInstalled: @MainActor (BrowserKind) -> Bool
     @ObservationIgnored private var saveTask: Task<Void, Never>?
     @ObservationIgnored private var bannerTask: Task<Void, Never>?
     /// Workspaces renamed since the last save → the name their window still has.
     @ObservationIgnored private var pendingRenames: [String: String] = [:]
+    /// Names to take off windows (of a workspace that moved to another profile or browser).
+    @ObservationIgnored private var pendingUnnames: [PendingUnname] = []
+    /// Workspaces whose profile changed: their next opening gets a new window.
+    @ObservationIgnored private(set) var profileChanged: Set<String> = []
+    /// One launch at a time per browser, so each new window is named after the right workspace.
+    @ObservationIgnored private var launchQueues: [BrowserKind: Task<Void, Never>] = [:]
     @ObservationIgnored var onShowManager: ((ManagerSelection?) -> Void)?
     @ObservationIgnored var onClosePopover: (() -> Void)?
     @ObservationIgnored var onHotkeyChange: (() -> Void)?
@@ -66,19 +93,30 @@ final class AppModel {
 
     /// Values of the workspaces' terminal variables (the Keychain; in memory for previews).
     @ObservationIgnored let secrets: SecretStore
+    /// Single-use passes that let "Open in Terminal" load the tokens without Touch ID.
+    @ObservationIgnored let tickets: TerminalTickets
+    /// Values typed in the editor, written to the Keychain a moment later (or at once by `flushPendingWrites`).
+    @ObservationIgnored var stagedSecrets: [StagedSecret: String] = [:]
+    @ObservationIgnored var secretTask: Task<Void, Never>?
 
     init(
         store: DataStore,
         applicationSupport: URL,
         defaults: UserDefaults = .standard,
         offline: Bool = false,
-        secrets: SecretStore = KeychainSecretStore()
+        secrets: SecretStore = KeychainSecretStore(),
+        tickets: TerminalTickets = .standard(),
+        browserInstalled: @escaping @MainActor (BrowserKind) -> Bool = {
+            NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0.bundleIdentifier) != nil
+        }
     ) {
         self.store = store
         self.applicationSupport = applicationSupport
         self.defaults = defaults
         self.offline = offline
         self.secrets = secrets
+        self.tickets = tickets
+        self.browserInstalled = browserInstalled
         self.data = DesktopData()
         self.automation = AutomationState(rawValue: defaults.string(forKey: "automation") ?? "") ?? .unknown
     }
@@ -99,16 +137,41 @@ final class AppModel {
     // MARK: - Loading and saving
 
     func load() {
-        data = store.load()
+        let (loaded, outcome) = store.loadReportingOutcome()
+        data = loaded
         refreshProfiles()
-        launchAtLogin = SMAppService.mainApp.status == .enabled
+        if Bundle.main.bundleURL.pathExtension == "app" {
+            launchAtLogin = SMAppService.mainApp.status == .enabled
+        }
+        guard !offline else { return }
+        tickets.purgeExpired()
+        // Tokens of workspaces that no longer exist — only when the data file was read: a
+        // file that couldn't be must never cost the user their tokens.
+        if outcome == .loaded {
+            do {
+                try secrets.sweep(keeping: Set(data.workspaces.map(\.id)))
+            } catch {
+                show(.error, t("terminal.sweepFailed", ["detail": "\(error)"]))
+            }
+        }
     }
 
+    /// Reads the browsers' profiles, and refreshes what each workspace remembers of its
+    /// profile — only while it is still the same profile (see `WorkspaceLogic.refreshedDetails`).
     func refreshProfiles() {
         guard !offline else { return }
-        installedBrowsers = BrowserKind.allCases.filter {
-            NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0.bundleIdentifier) != nil
+        reloadProfiles()
+        let refreshed = data.workspaces.map { WorkspaceLogic.refreshedDetails($0, profile: profile(of: $0)) }
+        if refreshed != data.workspaces {
+            data.workspaces = refreshed
+            save()
         }
+    }
+
+    /// The browsers' profiles from their Local State, without touching the workspaces.
+    private func reloadProfiles() {
+        guard !offline else { return }
+        installedBrowsers = BrowserKind.allCases.filter { browserInstalled($0) }
         var found: [BrowserKind: [BrowserProfile]] = [:]
         var unreadable = Set<BrowserKind>()
         for browser in installedBrowsers {
@@ -122,36 +185,55 @@ final class AppModel {
         }
         profiles = found
         unreadableBrowsers = unreadable
-        let refreshed = data.workspaces.map(withProfileDetails)
-        if refreshed != data.workspaces {
-            data.workspaces = refreshed
-            save()
-        }
+    }
+
+    private func profile(of workspace: Workspace) -> BrowserProfile? {
+        profiles[workspace.browser]?.first { $0.directory == workspace.profileDirectory }
     }
 
     /// Saves at once (structural changes).
     func save() {
         saveTask?.cancel()
+        saveTask = nil
         do {
             try store.save(data)
         } catch {
             show(.error, t("error.save", ["detail": error.localizedDescription]))
         }
         let renames = pendingRenames
+        let unnames = pendingUnnames
         pendingRenames = [:]
-        if !renames.isEmpty, !offline, automation == .allowed, data.settings.nameWindows {
-            Task { await renameWindows(renames) }
+        pendingUnnames = []
+        guard !offline, automation == .allowed, data.settings.nameWindows else { return }
+        // In each browser's launch queue, so a window being opened and named isn't touched halfway.
+        for item in unnames {
+            Task { await serialized(item.browser) { [self] in await unnameWindows([item]) } }
+        }
+        for (id, oldName) in renames {
+            guard let browser = workspace(id)?.browser else { continue }
+            Task { await serialized(browser) { [self] in await renameWindow(id, from: oldName) } }
         }
     }
 
+    /// Writes what is still waiting: the data file and the tokens typed in the editor.
+    func flushPendingWrites() {
+        flushSecrets()
+        if saveTask != nil { save() }
+    }
+
     /// Keeps a renamed workspace's window named after it, so it is still found.
-    private func renameWindows(_ renames: [String: String]) async {
-        for (id, oldName) in renames {
-            guard let workspace = workspace(id), workspace.name != oldName, isRunning(workspace.browser),
-                  let windows = await windows(of: workspace.browser),
-                  let window = windows.first(where: { !$0.incognito && $0.givenName == oldName })
-            else { continue }
-            _ = await Shell.appleScript(BrowserScript.nameWindow(workspace.browser, id: window.id, name: workspace.name))
+    private func renameWindow(_ id: String, from oldName: String) async {
+        guard let workspace = workspace(id), workspace.name != oldName, isRunning(workspace.browser),
+              let windows = await windows(of: workspace.browser),
+              let window = windows.first(where: { !$0.incognito && $0.givenName == oldName })
+        else { return }
+        _ = await Shell.appleScript(BrowserScript.nameWindow(workspace.browser, id: window.id, name: workspace.name))
+    }
+
+    /// Takes a workspace's name off the windows of the profile it no longer uses.
+    private func unnameWindows(_ unnames: [PendingUnname]) async {
+        for item in unnames where !item.name.isEmpty && isRunning(item.browser) {
+            _ = await Shell.appleScript(BrowserScript.clearName(item.browser, name: item.name))
         }
     }
 
@@ -177,26 +259,45 @@ final class AppModel {
 
     // MARK: - Workspaces
 
+    /// Saves a workspace's changes. Its name only changes through `rename`.
     func update(_ workspace: Workspace) {
         guard let index = data.workspaces.firstIndex(where: { $0.id == workspace.id }) else { return }
         let previous = data.workspaces[index]
-        if previous.name != workspace.name, pendingRenames[workspace.id] == nil { pendingRenames[workspace.id] = previous.name }
         var workspace = workspace
+        workspace.name = previous.name
         if previous.profileDirectory != workspace.profileDirectory || previous.browser != workspace.browser {
-            workspace = withProfileDetails(workspace)
+            workspace = withChosenProfileDetails(workspace)
+            // Its window belongs to the old profile now: never bring that one back for it.
+            profileChanged.insert(workspace.id)
+            pendingUnnames.append(PendingUnname(id: workspace.id, browser: previous.browser, name: previous.name))
         }
         data.workspaces[index] = workspace
         scheduleSave()
     }
 
-    /// Remembers the profile's name and Google account (to find it again on another Mac).
-    private func withProfileDetails(_ workspace: Workspace) -> Workspace {
-        guard let profile = profiles[workspace.browser]?.first(where: { $0.directory == workspace.profileDirectory }) else {
-            return workspace
-        }
+    /// Renames a workspace, unless the name is empty or another workspace has it (without
+    /// accents or case): a workspace's window is found again by its name.
+    @discardableResult
+    func rename(_ id: String, to proposed: String) -> NameCheck {
+        guard let index = data.workspaces.firstIndex(where: { $0.id == id }) else { return .ok }
+        let name = DataFile.cleanName(proposed)
+        if name.isEmpty { return .empty }
+        if let other = WorkspaceLogic.nameOwner(name, in: data.workspaces, except: id) { return .taken(by: other.name) }
+        let previous = data.workspaces[index].name
+        guard previous != name else { return .ok }
+        if pendingRenames[id] == nil { pendingRenames[id] = previous }
+        data.workspaces[index].name = name
+        scheduleSave()
+        return .ok
+    }
+
+    /// The profile the user just chose: remember its name and Google account (to find it again
+    /// on another Mac), or nothing yet when the browser hasn't listed it (filled at the next refresh).
+    private func withChosenProfileDetails(_ workspace: Workspace) -> Workspace {
         var copy = workspace
-        copy.profileName = profile.name
-        copy.profileEmail = profile.email ?? ""
+        let profile = profile(of: workspace)
+        copy.profileName = profile?.name ?? ""
+        copy.profileEmail = profile?.email ?? ""
         return copy
     }
 
@@ -204,11 +305,14 @@ final class AppModel {
     func createWorkspace() -> Workspace {
         let browser = data.settings.defaultBrowser
         let unused = WorkspaceLogic.unusedProfiles(profiles[browser] ?? [], workspaces: data.workspaces, browser: browser)
+        let profile = unused.first
         let workspace = Workspace(
             name: WorkspaceLogic.uniqueName(t("manager.newName"), existing: data.workspaces),
             color: Palette.next(after: data.workspaces.map(\.color)),
             browser: browser,
-            profileDirectory: unused.first?.directory ?? "",
+            profileDirectory: profile?.directory ?? "",
+            profileName: profile?.name ?? "",
+            profileEmail: profile?.email ?? "",
             order: (data.workspaces.map(\.order).max() ?? -1) + 1
         )
         data.workspaces.append(workspace)
@@ -218,10 +322,16 @@ final class AppModel {
 
     func delete(_ id: String) {
         if let workspace = workspace(id) {
-            try? secrets.removeAll(workspace: id, names: workspace.cliVariables.map(\.name))
+            discardStagedSecrets(of: id)
+            do {
+                try secrets.removeAll(workspace: id)
+            } catch {
+                show(.error, t("terminal.removeFailed", ["name": workspace.name, "detail": "\(error)"]))
+            }
         }
         data.workspaces.removeAll { $0.id == id }
         openIds.remove(id)
+        profileChanged.remove(id)
         if frontId == id { frontId = nil }
         save()
     }
@@ -243,7 +353,7 @@ final class AppModel {
     func profileStatus(_ workspace: Workspace) -> ProfileStatus {
         if workspace.profileDirectory.isEmpty { return .unassigned }
         if !offline, !installedBrowsers.contains(workspace.browser) { return .browserMissing }
-        if let profile = profiles[workspace.browser]?.first(where: { $0.directory == workspace.profileDirectory }) {
+        if let profile = profile(of: workspace) {
             return .ready(profile)
         }
         // A profile Chrome just created is on disk before it is listed in Local State.
@@ -253,6 +363,12 @@ final class AppModel {
             return .ready(BrowserProfile(directory: workspace.profileDirectory, name: workspace.profileDirectory))
         }
         return .missing
+    }
+
+    /// Whether a link can be opened in the workspace's profile right now.
+    func canOpenLinks(in workspace: Workspace) -> Bool {
+        if case .ready = profileStatus(workspace) { return true }
+        return false
     }
 
     /// Opens the browser on a brand-new profile for the workspace.
@@ -282,6 +398,17 @@ final class AppModel {
         !NSRunningApplication.runningApplications(withBundleIdentifier: browser.bundleIdentifier).isEmpty
     }
 
+    /// Runs launches of one browser one after another: each one names the window it opened.
+    private func serialized(_ browser: BrowserKind, _ work: @escaping @MainActor @Sendable () async -> Void) async {
+        let previous = launchQueues[browser]
+        let task = Task { @MainActor in
+            await previous?.value
+            await work()
+        }
+        launchQueues[browser] = task
+        await task.value
+    }
+
     /// Brings the workspace's window back, or opens its profile in a new window
     /// (with its pages) and names that window after the workspace.
     func open(_ workspace: Workspace, newWindow: Bool = false, creatingProfile: Bool = false) async {
@@ -303,12 +430,28 @@ final class AppModel {
             break
         }
         guard !offline else { return }
+        let id = workspace.id
+        await serialized(workspace.browser) { [self] in
+            await launch(id, newWindow: newWindow)
+        }
+    }
+
+    private func launch(_ id: String, newWindow requested: Bool) async {
+        // The workspace as it is now (it may have changed while waiting for its turn).
+        guard let workspace = workspace(id), !workspace.profileDirectory.isEmpty else { return }
         busyId = workspace.id
         defer { busyId = nil }
 
         let browser = workspace.browser
         let wasRunning = isRunning(browser)
         let naming = data.settings.nameWindows && automation != .denied
+        let newWindow = requested || profileChanged.contains(workspace.id)
+        // Moved to another profile and not saved yet: its old window loses the name first.
+        let stale = pendingUnnames.filter { $0.id == workspace.id }
+        if !stale.isEmpty {
+            pendingUnnames.removeAll { $0.id == workspace.id }
+            if naming { await unnameWindows(stale) }
+        }
         var before: [BrowserWindow] = []
         if wasRunning && naming, let windows = await windows(of: browser) {
             before = windows
@@ -327,6 +470,7 @@ final class AppModel {
             show(.error, t("error.launch", ["browser": browser.displayName, "detail": result.error]))
             return
         }
+        profileChanged.remove(workspace.id)
         recordOpened(workspace.id)
         if naming {
             await nameLaunchedWindow(workspace, before: Set(before.map(\.id)), wasRunning: wasRunning, urls: urls)
@@ -342,11 +486,15 @@ final class AppModel {
             await open(workspace)
             return
         }
-        let result = await Shell.run(command)
-        if result.status != 0 {
-            show(.error, t("error.launch", ["browser": workspace.browser.displayName, "detail": result.error]))
-        } else {
-            recordOpened(workspace.id)
+        let id = workspace.id
+        let browser = workspace.browser
+        await serialized(browser) { [self] in
+            let result = await Shell.run(command)
+            if result.status != 0 {
+                show(.error, t("error.launch", ["browser": browser.displayName, "detail": result.error]))
+            } else {
+                recordOpened(id)
+            }
         }
     }
 
@@ -359,7 +507,8 @@ final class AppModel {
         save()
     }
 
-    /// Waits for the window a launch opened (up to ~6 s) and names it.
+    /// Waits for the window a launch opened (up to ~6 s) and names it (taking the name off
+    /// any other window that still had it).
     private func nameLaunchedWindow(_ workspace: Workspace, before: Set<String>, wasRunning: Bool, urls: [String]) async {
         let hosts = urls.compactMap { URL(string: $0)?.host }
         var lastCount = -1
@@ -450,7 +599,7 @@ final class AppModel {
             return
         }
         if !choose, let route = LinkRouter.route(url, workspaces: all), let workspace = workspace(route.workspaceId) {
-            Task { await openLink(WorkspaceLink(title: "", url: url.absoluteString), in: workspace) }
+            deliver(url, to: workspace)
             return
         }
         if !choose {
@@ -459,9 +608,9 @@ final class AppModel {
                 openNormally(url)
                 return
             case .front:
-                let recent = all.filter { $0.lastOpenedAt != nil }.max { $0.lastOpenedAt! < $1.lastOpenedAt! }
+                let recent = all.compactMap { workspace in workspace.lastOpenedAt.map { (workspace, $0) } }.max { $0.1 < $1.1 }?.0
                 if let id = frontId ?? recent?.id, let workspace = workspace(id) {
-                    Task { await openLink(WorkspaceLink(title: "", url: url.absoluteString), in: workspace) }
+                    deliver(url, to: workspace)
                     return
                 }
             case .ask:
@@ -471,18 +620,30 @@ final class AppModel {
         onChooseLink?(url)
     }
 
+    /// Opens a link from another app in a workspace — or, when the workspace has no usable
+    /// profile, says so and asks where to open it instead: the link is never lost.
+    private func deliver(_ url: URL, to workspace: Workspace) {
+        guard canOpenLinks(in: workspace) else {
+            show(.error, t("error.linkNeedsProfile", ["name": workspace.name]))
+            onChooseLink?(url)
+            return
+        }
+        Task { await openLink(WorkspaceLink(title: "", url: url.absoluteString), in: workspace) }
+    }
+
     /// The chooser's answer: a workspace (and maybe a rule to remember), or nil to open the link normally.
     func openChosen(_ url: URL, in workspaceId: String?, remember: Bool) {
         guard let workspaceId, var workspace = workspace(workspaceId) else {
             openNormally(url)
             return
         }
-        if remember, let host = url.host.flatMap(LinkRouter.normalize), !workspace.linkRules.contains(host) {
+        if remember, let host = url.host.flatMap(LinkRouter.normalize), !workspace.linkRules.contains(host),
+           workspace.linkRules.count < Limits.linkRules {
             workspace.linkRules.append(host)
             update(workspace)
             save()
         }
-        Task { await openLink(WorkspaceLink(title: "", url: url.absoluteString), in: workspace) }
+        deliver(url, to: workspace)
     }
 
     /// Opens a link in the browser as if Swapdeck weren't there (its last-used profile).
@@ -540,27 +701,31 @@ final class AppModel {
 
     /// The workspaces as a file for another Mac (no sign-ins: names, looks, pages, link rules, profiles).
     func exportFile() throws -> Data {
-        try DataFile.encode(DesktopData(settings: data.settings, workspaces: data.workspaces))
+        flushPendingWrites()
+        return try DataFile.encode(DesktopData(settings: data.settings, workspaces: data.workspaces))
     }
 
     /// Adds the workspaces of a Swapdeck Desktop export and finds their profiles on this Mac.
     func importDesktopFile(_ file: Data) throws -> (added: Int, matched: Int, missing: Int) {
         let incoming = try DataFile.decode(file)
+        reloadProfiles()
         let added = WorkspaceLogic.merge(incoming.workspaces, into: data.workspaces)
+        let addedIds = Set(added.map(\.id))
         data.workspaces += added
-        let result = WorkspaceLogic.rematch(data.workspaces, profiles: profiles)
+        // The added workspaces come from another Mac: their profile folders mean nothing here.
+        let result = WorkspaceLogic.rematch(data.workspaces, profiles: profiles, imported: addedIds)
         data.workspaces = result.workspaces
         save()
-        let addedIds = Set(added.map(\.id))
         return (added.count, addedIds.subtracting(result.missing).count, addedIds.intersection(result.missing).count)
     }
 
     /// Finds each workspace's profile again by its Google account or name (after moving Macs).
+    /// Matches first, then refreshes: refreshing first would take a folder's new owner for the workspace.
     @discardableResult
     func rematchProfiles() -> Int {
-        refreshProfiles()
+        reloadProfiles()
         let result = WorkspaceLogic.rematch(data.workspaces, profiles: profiles)
-        data.workspaces = result.workspaces
+        data.workspaces = result.workspaces.map { WorkspaceLogic.refreshedDetails($0, profile: profile(of: $0)) }
         save()
         return result.changed.count
     }

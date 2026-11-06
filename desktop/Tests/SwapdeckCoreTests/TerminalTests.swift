@@ -47,16 +47,55 @@ struct TerminalTests {
 
     @Test func theTerminalScriptHoldsNoSecretAndRemovesItself() {
         let app = "/Applications/Swapdeck Desktop.app/Contents/MacOS/Swapdeck Desktop"
-        let script = TerminalEnv.commandFile(executable: app, workspaceId: "ws_acme", title: "Acme\n$(evil)", folder: "/Users/me/Acme Co")
+        let ticket = String(repeating: "ab", count: 32)
+        let script = TerminalEnv.commandFile(
+            executable: app, workspaceId: "ws_acme", ticket: ticket, title: "Acme\n$(evil)", folder: "/Users/me/Acme Co",
+            failure: "Not loaded: it's \"Acme\""
+        )
         #expect(script.hasPrefix("#!/bin/sh\n"))
         #expect(script.contains("rm -f -- \"$0\""))
-        #expect(script.contains("eval \"$('\(app)' --env 'ws_acme')\" || exit 1"))
+        #expect(script.contains(
+            "vars=$('\(app)' --env 'ws_acme' --ticket '\(ticket)') || { echo 'Not loaded: it'\\''s \"Acme\"' >&2; exit 1; }\n"
+                + "eval \"$vars\"\nunset vars\n"
+        ))
         #expect(script.contains("cd -- '/Users/me/Acme Co' 2>/dev/null"))
         // The title can't add a line or run anything.
         #expect(script.contains("printf '\\033]0;%s\\007' 'Acme$(evil)'"))
         #expect(script.hasSuffix("exec \"${SHELL:-/bin/zsh}\" -l\n"))
-        #expect(!TerminalEnv.commandFile(executable: app, workspaceId: "ws_acme", title: "A", folder: "").contains("cd --"))
-        #expect(TerminalEnv.evalLine(executable: "/A B/x", workspaceId: "ws_1") == "eval \"$('/A B/x' --env 'ws_1')\"")
+        let plain = TerminalEnv.commandFile(executable: app, workspaceId: "ws_acme", ticket: nil, title: "A", folder: "", failure: "x")
+        #expect(!plain.contains("cd --") && !plain.contains("--ticket"))
+        #expect(TerminalEnv.evalLine(executable: "/A B/x", workspaceId: "ws_1", failure: "Not loaded") ==
+            "if __swapdeck_env=$('/A B/x' --env 'ws_1'); then eval \"$__swapdeck_env\"; else echo 'Not loaded' >&2; fi; unset __swapdeck_env")
+    }
+
+    /// The copied command, in an interactive shell: it loads the variables, or says it didn't
+    /// (and never closes the user's shell).
+    @Test func theCopiedCommandLoadsTheVariablesOrSaysItDidNot() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent("swapdeck-test-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: base) }
+        func run(_ appBody: String) throws -> (out: String, err: String) {
+            let app = base.appendingPathComponent("app-\(UUID().uuidString)")
+            try Data(appBody.utf8).write(to: app)
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: app.path)
+            let line = TerminalEnv.evalLine(executable: app.path, workspaceId: "ws_1", failure: "NOT LOADED")
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/sh")
+            process.arguments = ["-c", line + "; printf '[%s]' \"$TOKEN\"; printf ' still here'"]
+            process.environment = ["PATH": "/usr/bin:/bin"]
+            let out = Pipe(), err = Pipe()
+            process.standardOutput = out
+            process.standardError = err
+            try process.run()
+            process.waitUntilExit()
+            return (String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self),
+                    String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self))
+        }
+        let loaded = try run("#!/bin/sh\nprintf \"export TOKEN='a b'\\n\"\n")
+        #expect(loaded.out == "[a b] still here" && loaded.err.isEmpty)
+        let refused = try run("#!/bin/sh\necho 'Swapdeck Desktop: not allowed' >&2\nexit 1\n")
+        #expect(refused.out == "[] still here")
+        #expect(refused.err.contains("NOT LOADED"))
     }
 
     @Test func theTerminalScriptLoadsTheVariablesAndOpensTheFolder() throws {
@@ -74,7 +113,7 @@ struct TerminalTests {
         let app = try script("Swapdeck Desktop", "#!/bin/sh\n[ \"$1 $2\" = \"--env ws_1\" ] && printf \"export TOKEN='a b'\\n\"\n")
         let shell = try script("fake-shell", "#!/bin/sh\nprintf '|%s|%s' \"$TOKEN\" \"$(pwd -P)\"\n")
         let command = try script("terminal.command", TerminalEnv.commandFile(
-            executable: app.path, workspaceId: "ws_1", title: "Acme", folder: folder.path
+            executable: app.path, workspaceId: "ws_1", ticket: nil, title: "Acme", folder: folder.path, failure: "Not loaded"
         ))
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
@@ -103,11 +142,35 @@ struct TerminalTests {
         try secrets.set("sbp_x", workspace: "ws_acme", name: "SUPABASE_ACCESS_TOKEN")
         try secrets.set("acme", workspace: "ws_acme", name: "AWS_PROFILE")
         let expected = "export SUPABASE_ACCESS_TOKEN='sbp_x'\nexport AWS_PROFILE='acme'\n"
-        #expect(TerminalEnv.environment(for: "ws_acme", in: data, secrets: secrets) == expected)
-        #expect(TerminalEnv.environment(for: "khach hang acme", in: data, secrets: secrets) == expected)
-        #expect(TerminalEnv.environment(for: "nobody", in: data, secrets: secrets) == nil)
-        try secrets.removeAll(workspace: "ws_acme", names: ["SUPABASE_ACCESS_TOKEN", "AWS_PROFILE"])
-        #expect(TerminalEnv.environment(for: "ws_acme", in: data, secrets: secrets) == "")
+        #expect(try TerminalEnv.environment(for: "ws_acme", in: data, secrets: secrets) == expected)
+        #expect(try TerminalEnv.environment(for: "khach hang acme", in: data, secrets: secrets) == expected)
+        #expect(try TerminalEnv.environment(for: "nobody", in: data, secrets: secrets) == nil)
+        try secrets.removeAll(workspace: "ws_acme")
+        #expect(try TerminalEnv.environment(for: "ws_acme", in: data, secrets: secrets) == "")
+    }
+
+    /// A value the Keychain won't hand over is never taken for "no value": nothing is printed.
+    @Test func printsNothingWhenAValueCannotBeRead() throws {
+        let workspace = Workspace(id: "ws_acme", name: "Acme", cliVariables: [CLIVariable(name: "GH_TOKEN"), CLIVariable(name: "VERCEL_TOKEN")])
+        let secrets = MemorySecretStore(["ws_acme/GH_TOKEN": "ghp_1"], unreadable: ["ws_acme/VERCEL_TOKEN"])
+        #expect(throws: UnreadableVariable.self) { try TerminalEnv.environment(of: workspace, secrets: secrets) }
+        do {
+            _ = try TerminalEnv.environment(of: workspace, secrets: secrets)
+        } catch let error as UnreadableVariable {
+            #expect(error.name == "VERCEL_TOKEN")
+        }
+    }
+
+    /// Removing a workspace's values takes every one of them, whatever its variables are called
+    /// now; values of workspaces that are gone are swept.
+    @Test func removesEveryValueOfAWorkspaceAndSweepsTheGoneOnes() throws {
+        let secrets = MemorySecretStore(["a/GH_TOKEN": "1", "a/RENAMED_LONG_AGO": "2", "b/GH_TOKEN": "3", "c/X": "4"])
+        try secrets.removeAll(workspace: "a")
+        #expect(try secrets.workspaceIds() == ["b", "c"])
+        #expect(try secrets.sweep(keeping: ["b"]) == ["c"])
+        #expect(try secrets.workspaceIds() == ["b"])
+        try secrets.set("", workspace: "b", name: "GH_TOKEN")
+        #expect(try secrets.workspaceIds().isEmpty)
     }
 
     @Test func keepsTheFolderAbsolute() {
@@ -177,5 +240,33 @@ struct UpdateTests {
         #expect(Releases.compare("v1.3.0", "1.3.0") == 0)
         #expect(Releases.compare("1.2.0", "1.3.0") < 0)
         #expect(Releases.compare("garbage", "0.0.1") < 0)
+    }
+
+    /// The latest release may carry only the extension: the newest Desktop zip among the recent
+    /// releases counts; drafts and pre-releases don't.
+    @Test func findsTheNewestDesktopAmongRecentReleases() throws {
+        let json = Data(#"""
+        [
+          {"tag_name":"v1.8.0-beta","prerelease":true,"html_url":"https://github.com/Tanx-1811/swapdeck/releases/tag/v1.8.0-beta",
+           "assets":[{"name":"swapdeck-desktop-1.9.0.zip"}]},
+          {"tag_name":"v1.7.1","draft":true,"assets":[{"name":"swapdeck-desktop-1.8.0.zip"}]},
+          {"tag_name":"v1.7.0","html_url":"https://github.com/Tanx-1811/swapdeck/releases/tag/v1.7.0",
+           "assets":[{"name":"swapdeck-1.7.0.zip"}]},
+          {"tag_name":"v1.6.1","html_url":"https://github.com/Tanx-1811/swapdeck/releases/tag/v1.6.1",
+           "assets":[{"name":"swapdeck-1.6.1.zip"},{"name":"swapdeck-desktop-1.10.0.zip"}]},
+          {"tag_name":"v1.6.0","html_url":"https://github.com/Tanx-1811/swapdeck/releases/tag/v1.6.0",
+           "assets":[{"name":"swapdeck-1.6.0.zip"},{"name":"swapdeck-desktop-1.9.0.zip"}]},
+          "junk"
+        ]
+        """#.utf8)
+        let latest = try #require(Releases.parseList(json))
+        #expect(latest.desktop == "1.10.0")
+        #expect(latest.extensionVersion == "1.7.0")
+        #expect(latest.url.absoluteString == "https://github.com/Tanx-1811/swapdeck/releases/tag/v1.6.1")
+        // Only extension releases: nothing newer for Desktop, and that isn't an error.
+        let extensionOnly = try #require(Releases.parseList(Data(#"[{"tag_name":"v1.7.0","assets":[{"name":"swapdeck-1.7.0.zip"}]}]"#.utf8)))
+        #expect(extensionOnly.desktop == nil && extensionOnly.url == Releases.page)
+        #expect(Releases.parseList(Data("[]".utf8))?.desktop == nil)
+        #expect(Releases.parseList(Data(#"{"message":"API rate limit exceeded"}"#.utf8)) == nil)
     }
 }

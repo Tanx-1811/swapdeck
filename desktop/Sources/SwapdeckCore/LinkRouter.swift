@@ -22,40 +22,44 @@ public struct LinkRoute: Equatable, Sendable {
 /// Sends links opened from other apps (Slack, Mail, …) to the right workspace.
 /// A rule is a host, optionally with a path prefix: "acme.example" also covers
 /// "app.acme.example"; "supabase.com/dashboard/project/acme" only that project.
-/// The most specific rule wins; rules added by hand beat those taken from pages.
+/// The same rules as the extension's `src/core/links.ts`: the most specific rule
+/// wins (a rule added by hand beats one taken from a page by a hair), and when
+/// several workspaces share the best one nobody wins — the link is "unmatched".
 public enum LinkRouter {
     public static func route(_ url: URL, workspaces: [Workspace]) -> LinkRoute? {
         guard let target = Target(url) else { return nil }
-        var best: (score: Int, route: LinkRoute)?
+        var best: (score: Int, route: LinkRoute, owners: Set<String>)?
         for workspace in workspaces {
-            let candidates = workspace.linkRules.map { ($0, true) }
-                + implicitRules(for: workspace, among: workspaces).map { ($0, false) }
+            let candidates = workspace.linkRules.map { ($0, true) } + implicitRules(for: workspace).map { ($0, false) }
             for (rule, explicit) in candidates {
                 guard let score = specificity(of: rule, for: target) else { continue }
                 let total = score * 2 + (explicit ? 1 : 0)
-                if best == nil || total > best!.score {
-                    best = (total, LinkRoute(workspaceId: workspace.id, rule: rule, explicit: explicit))
+                if let current = best, total < current.score { continue }
+                if let current = best, total == current.score {
+                    best = (total, current.route, current.owners.union([workspace.id]))
+                } else {
+                    best = (total, LinkRoute(workspaceId: workspace.id, rule: rule, explicit: explicit), [workspace.id])
                 }
             }
         }
-        return best?.route
+        guard let best, best.owners.count == 1 else { return nil }
+        return best.route
     }
 
-    /// Rules taken from a workspace's pages: each page's host and path, and the
-    /// host alone when no other workspace has a page there.
-    public static func implicitRules(for workspace: Workspace, among workspaces: [Workspace]) -> [String] {
-        var rules: [String] = []
-        let otherHosts = Set(workspaces.filter { $0.id != workspace.id }.flatMap { $0.openableLinks.compactMap { Target(urlString: $0.url)?.host } })
-        for link in workspace.openableLinks {
-            guard let target = Target(urlString: link.url) else { continue }
-            if target.path.count > 1 { rules.append(target.host + target.path) }
-            if !otherHosts.contains(target.host) { rules.append(target.host) }
-        }
+    /// Rules taken from a workspace's pages: each page's host and path. Like the
+    /// extension's pinned pages, a page covers its own address and what is under
+    /// it — never its whole site (a pinned GitHub repo doesn't make every GitHub
+    /// link this workspace's), and a site's home page covers nothing.
+    public static func implicitRules(for workspace: Workspace) -> [String] {
         var seen = Set<String>()
-        return rules.filter { seen.insert($0).inserted }
+        return workspace.openableLinks.compactMap { link -> String? in
+            guard let target = Target(urlString: link.url), target.path.count > 1 else { return nil }
+            return target.host + target.path
+        }.filter { seen.insert($0).inserted }
     }
 
     /// "https://www.Acme.example/Path/" → "acme.example/Path"; nil when it isn't a host.
+    /// The path is kept percent-encoded, as browsers show it in a link.
     public static func normalize(_ text: String) -> String? {
         var value = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if let range = value.range(of: "://") { value = String(value[range.upperBound...]) }
@@ -72,8 +76,13 @@ public enum LinkRouter {
         var path = parts.count > 1 ? "/" + parts[1] : ""
         if let cut = path.firstIndex(where: { $0 == "?" || $0 == "#" }) { path = String(path[..<cut]) }
         while path.hasSuffix("/") { path.removeLast() }
+        // "dự-án" or "a b" typed in a rule are encoded like the address of a link.
+        path = path.addingPercentEncoding(withAllowedCharacters: pathCharacters) ?? path
         return String((host + path).prefix(300))
     }
+
+    /// Characters a path keeps as they are ("%" too: what is already encoded stays so).
+    private static let pathCharacters = CharacterSet.urlPathAllowed.union(CharacterSet(charactersIn: "%"))
 
     /// How well a rule matches (higher is more specific), or nil.
     static func specificity(of rule: String, for target: Target) -> Int? {
@@ -90,7 +99,30 @@ public enum LinkRouter {
         return labels * 100 + (exactHost ? 50 : 0) + path.count * 1000
     }
 
-    /// A link's host (without "www.") and path (without a trailing slash).
+    /// A path without "." and ".." segments ("/a/../b" → "/b"), as browsers resolve it.
+    static func removingDotSegments(_ path: String) -> String {
+        func isDot(_ segment: Substring) -> Bool { segment == "." || segment.lowercased() == "%2e" }
+        func isDotDot(_ segment: Substring) -> Bool { ["..", ".%2e", "%2e.", "%2e%2e"].contains(segment.lowercased()) }
+        let segments = path.split(separator: "/", omittingEmptySubsequences: false)
+        guard segments.contains(where: { isDot($0) || isDotDot($0) }) else { return path }
+        var output: [Substring] = []
+        for (index, segment) in segments.enumerated() {
+            let last = index == segments.count - 1
+            if index == 0 && segment.isEmpty { continue }
+            if isDot(segment) {
+                if last { output.append("") }
+            } else if isDotDot(segment) {
+                if !output.isEmpty { output.removeLast() }
+                if last { output.append("") }
+            } else {
+                output.append(segment)
+            }
+        }
+        return "/" + output.joined(separator: "/")
+    }
+
+    /// A link's host (without "www.") and path (percent-encoded, without dot segments or a
+    /// trailing slash) — what a browser's `URL.pathname` gives the extension.
     struct Target {
         let host: String
         let path: String
@@ -100,7 +132,8 @@ public enum LinkRouter {
                   var host = url.host?.lowercased(), !host.isEmpty
             else { return nil }
             if host.hasPrefix("www.") { host.removeFirst(4) }
-            var path = url.path
+            let encoded = URLComponents(url: url, resolvingAgainstBaseURL: false)?.percentEncodedPath ?? url.path
+            var path = LinkRouter.removingDotSegments(encoded)
             while path.hasSuffix("/") { path.removeLast() }
             self.host = host
             self.path = path.isEmpty ? "/" : path

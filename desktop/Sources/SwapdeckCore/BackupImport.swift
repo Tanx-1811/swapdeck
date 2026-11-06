@@ -53,13 +53,12 @@ public enum BackupImport {
 
     private static func workspace(_ value: Any) -> ImportedWorkspace? {
         guard let input = value as? [String: Any],
-              let name = (input["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !name.isEmpty, name.count <= 80
+              let name = (input["name"] as? String).map(DataFile.cleanName), !name.isEmpty
         else { return nil }
         let color = (input["color"] as? String).flatMap { Palette.isHex($0) ? $0.lowercased() : nil } ?? Palette.pigments[0].hex
         let symbol = (input["icon"] as? String).flatMap { Symbols.isKnown($0) ? $0 : nil } ?? ""
-        let note = (input["note"] as? String).map { String($0.prefix(500)) } ?? ""
-        let links = (input["links"] as? [Any] ?? []).prefix(50).compactMap(DataFile.sanitizeLink)
+        let note = DataFile.clip(input["note"] as? String ?? "", Limits.note)
+        let links = (input["links"] as? [Any] ?? []).compactMap(DataFile.sanitizeLink).prefix(Limits.links)
         return ImportedWorkspace(name: name, color: color, symbol: symbol, note: note, links: Array(links))
     }
 

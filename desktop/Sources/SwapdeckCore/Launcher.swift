@@ -83,17 +83,39 @@ public enum BrowserScript {
         """
     }
 
-    /// Names a window (shown in Mission Control and the Window menu instead of the page title).
+    /// Names a window (shown in Mission Control and the Window menu instead of the page title)
+    /// and takes the name off any other window that had it: a workspace's name must lead
+    /// to one window only — the one of its own profile.
     public static func nameWindow(_ browser: BrowserKind, id: String, name: String) -> String {
         """
         tell application id "\(browser.bundleIdentifier)"
+            set found to "missing"
             repeat with w in windows
                 if (id of w as text) is \(literal(id)) then
                     set given name of w to \(literal(name))
-                    return "ok"
+                    set found to "ok"
+                else
+                    try
+                        if (given name of w) is \(literal(name)) then set given name of w to ""
+                    end try
                 end if
             end repeat
-            return "missing"
+            return found
+        end tell
+        """
+    }
+
+    /// Takes a name off every window that has it (a workspace moved to another profile:
+    /// its old window must not be brought back for it).
+    public static func clearName(_ browser: BrowserKind, name: String) -> String {
+        """
+        tell application id "\(browser.bundleIdentifier)"
+            repeat with w in windows
+                try
+                    if (given name of w) is \(literal(name)) then set given name of w to ""
+                end try
+            end repeat
+            return "ok"
         end tell
         """
     }

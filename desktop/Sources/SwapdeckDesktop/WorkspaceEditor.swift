@@ -12,6 +12,16 @@ struct WorkspaceEditor: View {
     @State private var ruleInvalid = false
     @State private var newVariable = ""
     @State private var variableInvalid = false
+    /// The name being typed: it is only kept once it is a name the workspace can have.
+    @State private var nameDraft: String
+    @State private var nameProblem: NameCheck = .ok
+
+    init(model: AppModel, id: String, selection: Binding<ManagerSelection?>) {
+        self.model = model
+        self.id = id
+        _selection = selection
+        _nameDraft = State(initialValue: model.workspace(id)?.name ?? "")
+    }
 
     private var t: Translator { model.t }
 
@@ -20,6 +30,23 @@ struct WorkspaceEditor: View {
             get: { model.workspace(id) ?? Workspace(id: id, name: "") },
             set: { model.update($0) }
         )
+    }
+
+    /// A text field's binding cut at `limit` characters (what the data file keeps).
+    private func limited(_ keyPath: WritableKeyPath<Workspace, String>, _ limit: Int) -> Binding<String> {
+        Binding(
+            get: { workspace.wrappedValue[keyPath: keyPath] },
+            set: { workspace.wrappedValue[keyPath: keyPath] = DataFile.clip($0, limit) }
+        )
+    }
+
+    private func commitName() {
+        let clipped = DataFile.clip(nameDraft, Limits.name)
+        if clipped != nameDraft {
+            nameDraft = clipped
+            return
+        }
+        nameProblem = model.rename(id, to: nameDraft)
     }
 
     var body: some View {
@@ -93,7 +120,18 @@ struct WorkspaceEditor: View {
 
     private var identityCard: some View {
         PaneCard(title: t("editor.name")) {
-            PaperField(placeholder: t("editor.namePlaceholder"), text: workspace.name)
+            VStack(alignment: .leading, spacing: 4) {
+                PaperField(placeholder: t("editor.namePlaceholder"), text: $nameDraft, invalid: nameProblem != .ok)
+                    .onChange(of: nameDraft) { commitName() }
+                switch nameProblem {
+                case .ok:
+                    EmptyView()
+                case .empty:
+                    Text(t("editor.nameEmpty")).font(Theme.text(11)).foregroundStyle(Theme.danger)
+                case .taken(let other):
+                    Text(t("editor.nameTaken", ["other": other])).font(Theme.text(11)).foregroundStyle(Theme.danger)
+                }
+            }
             VStack(alignment: .leading, spacing: 6) {
                 FieldLabel(text: t("editor.symbol"))
                 symbolGrid
@@ -104,7 +142,7 @@ struct WorkspaceEditor: View {
             }
             VStack(alignment: .leading, spacing: 6) {
                 FieldLabel(text: t("editor.note"))
-                PaperField(placeholder: t("editor.notePlaceholder"), text: workspace.note)
+                PaperField(placeholder: t("editor.notePlaceholder"), text: limited(\.note, Limits.note))
             }
         }
     }
@@ -254,8 +292,8 @@ struct WorkspaceEditor: View {
                     let invalid = !link.url.isEmpty && !Links.isOpenable(link.url)
                     VStack(alignment: .leading, spacing: 3) {
                         HStack(spacing: 8) {
-                            PaperField(placeholder: t("editor.pageTitle"), text: $link.title).frame(width: 170)
-                            PaperField(placeholder: "https://", text: $link.url, invalid: invalid) {
+                            PaperField(placeholder: t("editor.pageTitle"), text: limitedText($link.title, Limits.linkTitle)).frame(width: 170)
+                            PaperField(placeholder: "https://", text: limitedText($link.url, Limits.url), invalid: invalid) {
                                 if let normalized = Links.normalized(link.url) {
                                     link.url = normalized
                                     if link.title.isEmpty { link.title = Links.defaultTitle(for: normalized) }
@@ -283,6 +321,7 @@ struct WorkspaceEditor: View {
                     Label(t("editor.addPage"), systemImage: "plus")
                 }
                 .buttonStyle(PaperButtonStyle(small: true, dashed: true))
+                .disabled(workspace.wrappedValue.links.count >= Limits.links)
                 Spacer()
                 Toggle(t("editor.openLinks"), isOn: workspace.openLinksInNewWindow)
                     .toggleStyle(.switch)
@@ -298,7 +337,11 @@ struct WorkspaceEditor: View {
 
     private var linksCard: some View {
         let current = workspace.wrappedValue
-        let implied = LinkRouter.implicitRules(for: current, among: model.workspaces)
+        let implied = LinkRouter.implicitRules(for: current)
+        // A rule another workspace has too decides nothing: such links match no workspace.
+        let shared = current.linkRules.compactMap { rule -> (rule: String, other: String)? in
+            model.workspaces.first { $0.id != current.id && $0.linkRules.contains(rule) }.map { (rule, $0.name) }
+        }
         return PaneCard(title: t("editor.linksSection"), hint: t("editor.linksHint")) {
             if !current.linkRules.isEmpty {
                 WrapLayout(spacing: 6) {
@@ -323,12 +366,18 @@ struct WorkspaceEditor: View {
                     }
                 }
             }
+            ForEach(shared, id: \.rule) { item in
+                Text(t("editor.ruleShared", ["rule": item.rule, "other": item.other]))
+                    .font(Theme.text(11.5))
+                    .foregroundStyle(Theme.warning)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             HStack(spacing: 8) {
                 PaperField(placeholder: t("editor.rulePlaceholder"), text: $newRule, invalid: ruleInvalid) { addRule() }
                     .onChange(of: newRule) { ruleInvalid = false }
                 Button(t("editor.addRule")) { addRule() }
                     .buttonStyle(PaperButtonStyle(small: true))
-                    .disabled(newRule.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(newRule.trimmingCharacters(in: .whitespaces).isEmpty || current.linkRules.count >= Limits.linkRules)
             }
             if ruleInvalid {
                 Text(t("editor.invalidRule")).font(Theme.text(11)).foregroundStyle(Theme.danger)
@@ -347,7 +396,9 @@ struct WorkspaceEditor: View {
             ruleInvalid = true
             return
         }
-        if !workspace.wrappedValue.linkRules.contains(rule) { workspace.wrappedValue.linkRules.append(rule) }
+        if !workspace.wrappedValue.linkRules.contains(rule), workspace.wrappedValue.linkRules.count < Limits.linkRules {
+            workspace.wrappedValue.linkRules.append(rule)
+        }
         newRule = ""
     }
 
@@ -457,16 +508,16 @@ struct WorkspaceEditor: View {
     }
 }
 
-/// One terminal variable: its value (from and to the Keychain, saved a moment
-/// after typing stops) and a button to remove it.
+/// One terminal variable: its value (from and to the Keychain: the model writes it a moment
+/// after typing stops, and at once before a terminal opens or the app quits) and a button to remove it.
 private struct VariableRow: View {
     @Bindable var model: AppModel
     let workspaceId: String
     let variable: CLIVariable
     @State private var value = ""
-    @State private var loaded = false
-    @State private var dirty = false
-    @State private var saving: Task<Void, Never>?
+    /// What the field showed when it appeared (nil until then): only a change is written.
+    @State private var shown: String?
+    @State private var unreadable = false
 
     private var t: Translator { model.t }
     private var workspace: Workspace? { model.workspace(workspaceId) }
@@ -482,24 +533,22 @@ private struct VariableRow: View {
             }
             .frame(width: 220, alignment: .leading)
             PaperField(
-                placeholder: preset.map { t(variable.secret ? "terminal.pasteFrom" : "terminal.valueOf", ["source": $0.source]) }
+                placeholder: unreadable ? t("terminal.unreadablePlaceholder")
+                    : preset.map { t(variable.secret ? "terminal.pasteFrom" : "terminal.valueOf", ["source": $0.source]) }
                     ?? t("terminal.value"),
                 text: $value,
+                invalid: unreadable,
                 secure: variable.secret,
                 monospaced: !variable.secret
-            ) { save() }
+            ) { model.flushSecrets() }
             .onChange(of: value) {
-                guard loaded else { return }
-                dirty = true
-                saving?.cancel()
-                saving = Task {
-                    try? await Task.sleep(for: .milliseconds(700))
-                    if !Task.isCancelled { save() }
-                }
+                guard let shown, let workspace, value != shown || model.stagedSecrets.keys.contains(where: {
+                    $0.workspace == workspaceId && $0.name == variable.name
+                }) else { return }
+                unreadable = false
+                model.stageSecret(value, name: variable.name, in: workspace)
             }
             Button {
-                saving?.cancel()
-                dirty = false
                 if let workspace { model.removeVariable(variable.name, from: workspace) }
             } label: {
                 Image(systemName: "xmark")
@@ -509,20 +558,17 @@ private struct VariableRow: View {
             .accessibilityLabel(t("terminal.remove", ["name": variable.name]))
         }
         .onAppear {
-            guard !loaded, let workspace else { return }
-            value = model.secretValue(variable.name, in: workspace)
-            loaded = true
-        }
-        .onDisappear {
-            saving?.cancel()
-            save()
+            guard shown == nil, let workspace else { return }
+            let current = model.secretValue(variable.name, in: workspace)
+            unreadable = current == nil
+            value = current ?? ""
+            shown = value
         }
     }
+}
 
-    private func save() {
-        guard dirty, let workspace else { return }
-        dirty = false
-        model.setSecret(value, name: variable.name, in: workspace)
-    }
+/// A text field's binding cut at `limit` characters (what the data file keeps).
+private func limitedText(_ binding: Binding<String>, _ limit: Int) -> Binding<String> {
+    Binding(get: { binding.wrappedValue }, set: { binding.wrappedValue = DataFile.clip($0, limit) })
 }
 

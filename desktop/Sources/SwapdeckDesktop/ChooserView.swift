@@ -93,27 +93,36 @@ struct ChooserView: View {
     }
 
     private func row(_ workspace: Workspace, index: Int) -> some View {
-        Button {
+        // A workspace without a usable profile can't take the link (it would be lost).
+        let usable = model.canOpenLinks(in: workspace)
+        return Button {
             pick(workspace.id)
         } label: {
             HStack(spacing: 10) {
                 WorkspaceBadge(workspace: workspace, size: 28)
-                Text(workspace.name).font(Theme.text(13, .semibold)).foregroundStyle(Theme.ink).lineLimit(1)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(workspace.name).font(Theme.text(13, .semibold)).foregroundStyle(usable ? Theme.ink : Theme.ink3).lineLimit(1)
+                    if !usable {
+                        Text(t("switcher.noProfile")).font(Theme.text(11)).foregroundStyle(Theme.ink3).lineLimit(1)
+                    }
+                }
                 if model.frontId == workspace.id { Seal(text: t("switcher.inUse")) }
                 Spacer()
-                if index < 9 { Kbd(text: "\(index + 1)") }
+                if index < 9 && usable { Kbd(text: "\(index + 1)") }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 9).fill(index == highlighted ? Theme.hover : Theme.card))
+            .background(RoundedRectangle(cornerRadius: 9).fill(index == highlighted && usable ? Theme.hover : Theme.card))
             .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(index == highlighted ? Theme.lineStrong : Theme.line, lineWidth: 1))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(workspace.name)
+        .disabled(!usable)
+        .accessibilityLabel(usable ? workspace.name : "\(workspace.name), \(t("switcher.noProfile"))")
     }
 
     private func pick(_ workspaceId: String?) {
+        if let workspaceId, let workspace = model.workspace(workspaceId), !model.canOpenLinks(in: workspace) { return }
         model.openChosen(url, in: workspaceId, remember: remember && workspaceId != nil)
         onDone()
     }

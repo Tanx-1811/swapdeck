@@ -100,21 +100,37 @@ public enum TerminalEnv {
             .joined()
     }
 
-    /// The line to paste into another terminal (VS Code, Warp…) to load a workspace's variables.
-    public static func evalLine(executable: String, workspaceId: String) -> String {
-        "eval \"$(\(shellQuote(executable)) --env \(shellQuote(workspaceId)))\""
+    /// The line to paste into another terminal (VS Code, Warp…, bash or zsh) to load a
+    /// workspace's variables. `--env` asks for Touch ID or the Mac's password each time;
+    /// when it fails, the shell says so (`failure`) instead of going on without them.
+    public static func evalLine(executable: String, workspaceId: String, failure: String) -> String {
+        "if __swapdeck_env=$(\(shellQuote(executable)) --env \(shellQuote(workspaceId))); "
+            + "then eval \"$__swapdeck_env\"; else echo \(shellQuote(failure)) >&2; fi; unset __swapdeck_env"
     }
 
     /// The `.command` file Terminal runs for "Open Terminal": it removes itself,
-    /// takes the variables from the app (they are never written to disk), goes
-    /// to the workspace's folder, names the window and starts the user's shell.
-    public static func commandFile(executable: String, workspaceId: String, title: String, folder: String) -> String {
+    /// takes the variables from the app with a single-use `ticket` (they are never
+    /// written to disk), goes to the workspace's folder, names the window and starts
+    /// the user's shell. If the variables can't be loaded it stops with `failure`:
+    /// a window named after the workspace must never run its tools as someone else.
+    public static func commandFile(
+        executable: String,
+        workspaceId: String,
+        ticket: String?,
+        title: String,
+        folder: String,
+        failure: String
+    ) -> String {
+        let ticketArgument = ticket.map { " --ticket \(shellQuote($0))" } ?? ""
         var lines = [
             "#!/bin/sh",
             "# Swapdeck Desktop: a terminal for one workspace. This file removes itself.",
             "rm -f -- \"$0\"",
             "rmdir -- \"$(dirname -- \"$0\")\" 2>/dev/null",
-            evalLine(executable: executable, workspaceId: workspaceId) + " || exit 1",
+            "vars=$(\(shellQuote(executable)) --env \(shellQuote(workspaceId))\(ticketArgument)) || "
+                + "{ echo \(shellQuote(failure)) >&2; exit 1; }",
+            "eval \"$vars\"",
+            "unset vars",
         ]
         if !folder.isEmpty { lines.append("cd -- \(shellQuote(folder)) 2>/dev/null") }
         let name = title.filter { !$0.isNewline && $0.asciiValue.map { $0 >= 0x20 && $0 != 0x7f } ?? true }
@@ -134,48 +150,98 @@ public enum TerminalEnv {
     }
 }
 
-/// Where a workspace's secret values live. The app uses the Keychain; tests use `MemorySecretStore`.
+/// Where a workspace's secret values live, one per workspace and variable ("<workspace>/<NAME>").
+/// The app uses the Keychain; tests and previews use `MemorySecretStore`, which behaves the same.
 public protocol SecretStore: Sendable {
-    func value(workspace: String, name: String) -> String?
-    /// `nil` removes the value.
+    /// The value, or nil when there is none. Throws when it exists but can't be read
+    /// (the Keychain refused): never mistake that for "no value".
+    func value(workspace: String, name: String) throws -> String?
+    /// `nil` (or "") removes the value.
     func set(_ value: String?, workspace: String, name: String) throws
-    func removeAll(workspace: String, names: [String]) throws
+    /// Removes every value of a workspace, whatever its variables are called now.
+    func removeAll(workspace: String) throws
+    /// The workspaces that have at least one value.
+    func workspaceIds() throws -> Set<String>
 }
 
-/// In memory only (tests and previews).
+public extension SecretStore {
+    /// Removes the values of workspaces that aren't in `ids` any more; returns those workspaces.
+    @discardableResult
+    func sweep(keeping ids: Set<String>) throws -> Set<String> {
+        let gone = try workspaceIds().subtracting(ids)
+        for id in gone { try removeAll(workspace: id) }
+        return gone
+    }
+}
+
+/// In memory only (tests and previews). `unreadable` names ("<workspace>/<NAME>") fail to
+/// read, like a Keychain item macOS won't hand over.
 public final class MemorySecretStore: SecretStore, @unchecked Sendable {
+    public struct Unreadable: Error, Equatable {}
+
     private var values: [String: String] = [:]
+    private var unreadable: Set<String>
     private let lock = NSLock()
 
-    public init(_ values: [String: String] = [:]) {
+    public init(_ values: [String: String] = [:], unreadable: Set<String> = []) {
         self.values = values
+        self.unreadable = unreadable
     }
 
-    public func value(workspace: String, name: String) -> String? {
-        lock.withLock { values["\(workspace)/\(name)"] }
+    public func value(workspace: String, name: String) throws -> String? {
+        let key = "\(workspace)/\(name)"
+        return try lock.withLock {
+            if unreadable.contains(key) { throw Unreadable() }
+            return values[key]
+        }
     }
 
     public func set(_ value: String?, workspace: String, name: String) throws {
-        lock.withLock { values["\(workspace)/\(name)"] = value }
+        lock.withLock { values["\(workspace)/\(name)"] = (value?.isEmpty ?? true) ? nil : value }
     }
 
-    public func removeAll(workspace: String, names: [String]) throws {
+    public func removeAll(workspace: String) throws {
         lock.withLock { values = values.filter { !$0.key.hasPrefix("\(workspace)/") } }
+    }
+
+    public func workspaceIds() throws -> Set<String> {
+        lock.withLock { Set(values.keys.compactMap { $0.split(separator: "/", maxSplits: 1).first.map(String.init) }) }
     }
 }
 
+/// A variable whose value exists but couldn't be read.
+public struct UnreadableVariable: Error {
+    public let name: String
+    public let underlying: any Error
+}
+
 public extension TerminalEnv {
-    /// What `--env <workspace>` prints: the workspace (by id, else by name) and
-    /// its variables that have a value. Nil when there is no such workspace.
-    static func environment(for key: String, in data: DesktopData, secrets: SecretStore) -> String? {
+    /// The workspace `--env <key>` means: by id, else by name (without accents or case).
+    static func workspace(for key: String, in data: DesktopData) -> Workspace? {
         let folded = WorkspaceLogic.fold(key)
-        guard let workspace = data.workspaces.first(where: { $0.id == key })
+        return data.workspaces.first(where: { $0.id == key })
             ?? data.workspaces.first(where: { WorkspaceLogic.fold($0.name) == folded })
-        else { return nil }
-        let values = workspace.cliVariables.compactMap { variable -> (name: String, value: String)? in
-            guard let value = secrets.value(workspace: workspace.id, name: variable.name), !value.isEmpty else { return nil }
+    }
+
+    /// What `--env` prints for a workspace: its variables that have a value. Throws
+    /// `UnreadableVariable` when one can't be read, so nothing half-loaded is printed.
+    static func environment(of workspace: Workspace, secrets: SecretStore) throws -> String {
+        let values = try workspace.cliVariables.compactMap { variable -> (name: String, value: String)? in
+            let value: String?
+            do {
+                value = try secrets.value(workspace: workspace.id, name: variable.name)
+            } catch {
+                throw UnreadableVariable(name: variable.name, underlying: error)
+            }
+            guard let value, !value.isEmpty else { return nil }
             return (variable.name, value)
         }
         return exports(values)
+    }
+
+    /// `environment(of:)` for the workspace `key` means; nil when there is no such workspace.
+    static func environment(for key: String, in data: DesktopData, secrets: SecretStore) throws -> String? {
+        guard let workspace = workspace(for: key, in: data) else { return nil }
+        return try environment(of: workspace, secrets: secrets)
     }
 }

@@ -9,17 +9,10 @@ MainActor.assumeIsolated {
         PreviewRenderer.render(to: URL(fileURLWithPath: arguments[index + 1]))
         exit(0)
     }
-    // `--env <workspace>`: `export` lines for a workspace's terminal variables (values from
-    // the Keychain), for `eval "$(… --env acme)"` in any terminal; prints nothing else.
-    if let index = arguments.firstIndex(of: "--env"), index + 1 < arguments.count {
-        let store = DataStore.standard()
-        let data = (try? Data(contentsOf: store.fileURL)).flatMap { try? DataFile.decode($0) } ?? DesktopData()
-        guard let script = TerminalEnv.environment(for: arguments[index + 1], in: data, secrets: KeychainSecretStore()) else {
-            FileHandle.standardError.write(Data("Swapdeck Desktop: no workspace \"\(arguments[index + 1])\"\n".utf8))
-            exit(1)
-        }
-        FileHandle.standardOutput.write(Data(script.utf8))
-        exit(0)
+    // `--env <workspace> [--ticket <t>]`: `export` lines for a workspace's terminal variables
+    // (values from the Keychain, after a single-use ticket or Touch ID); prints nothing else.
+    if arguments.contains("--env") {
+        exit(EnvCommand.run(arguments: arguments))
     }
     // `--render-icon <file.png>`: the 1024 px app icon (used by scripts/build-app.sh).
     if let index = arguments.firstIndex(of: "--render-icon"), index + 1 < arguments.count {

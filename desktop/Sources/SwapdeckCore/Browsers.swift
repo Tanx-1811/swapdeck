@@ -59,13 +59,23 @@ public struct BrowserProfile: Identifiable, Hashable, Sendable {
     /// "#rrggbb" from the profile's theme or avatar.
     public let color: String?
     public let lastActive: Date?
+    /// The browser chose the name ("Person 1", "Your Chrome"…): it says nothing about whose profile it is.
+    public let usesDefaultName: Bool
 
-    public init(directory: String, name: String, email: String? = nil, color: String? = nil, lastActive: Date? = nil) {
+    public init(
+        directory: String,
+        name: String,
+        email: String? = nil,
+        color: String? = nil,
+        lastActive: Date? = nil,
+        usesDefaultName: Bool = false
+    ) {
         self.directory = directory
         self.name = name
         self.email = email
         self.color = color
         self.lastActive = lastActive
+        self.usesDefaultName = usesDefaultName
     }
 }
 
@@ -89,12 +99,14 @@ public enum ProfileReader {
             let color = (info["profile_highlight_color"] as? NSNumber ?? info["default_avatar_fill_color"] as? NSNumber)
                 .map { Palette.hex(fromARGB: $0.int64Value) }
             let active = (info["active_time"] as? NSNumber).map { Date(timeIntervalSince1970: $0.doubleValue) }
+            let named = name?.isEmpty == false
             profiles.append(BrowserProfile(
                 directory: directory,
-                name: (name?.isEmpty == false ? name : nil) ?? directory,
+                name: (named ? name : nil) ?? directory,
                 email: email,
                 color: color,
-                lastActive: active
+                lastActive: active,
+                usesDefaultName: !named || (info["is_using_default_name"] as? Bool) == true
             ))
         }
         let order = (profile["profiles_order"] as? [String]) ?? []

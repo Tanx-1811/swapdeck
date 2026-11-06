@@ -1,10 +1,13 @@
 import Foundation
 
-/// "Check for updates" (Settings; only when the user asks): the latest GitHub
-/// release, read from the public API — no sign-in, nothing of the user's sent.
+/// "Check for updates" (Settings; only when the user asks): the recent GitHub
+/// releases, read from the public API — no sign-in, nothing of the user's sent.
+/// The extension and Swapdeck Desktop share the repository, and a release may
+/// carry only one of them, so the newest Desktop zip among recent releases counts.
 public enum Releases {
     public static let repository = "Tanx-1811/swapdeck"
-    public static let latestAPI = URL(string: "https://api.github.com/repos/\(repository)/releases/latest")!
+    /// The latest 20 releases, newest first.
+    public static let listAPI = URL(string: "https://api.github.com/repos/\(repository)/releases?per_page=20")!
     public static let page = URL(string: "https://github.com/\(repository)/releases/latest")!
 
     public struct Latest: Equatable, Sendable {
@@ -16,16 +19,42 @@ public enum Releases {
         public let url: URL
     }
 
-    /// The parts of GitHub's release JSON that matter, validated (it comes from the network).
+    /// One release of GitHub's JSON, validated (it comes from the network).
     public static func parse(_ data: Data) -> Latest? {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return parse(release: root)
+    }
+
+    /// The newest Desktop version among a list of releases (drafts and pre-releases left
+    /// out), with the page of the release that has it. Nil only when the list can't be
+    /// read; `desktop` is nil when no release has a Desktop zip.
+    public static func parseList(_ data: Data) -> Latest? {
+        guard let list = try? JSONSerialization.jsonObject(with: data) as? [Any] else { return nil }
+        var desktop: (version: String, url: URL)?
+        var extensionVersion: String?
+        for item in list {
+            guard let release = item as? [String: Any],
+                  release["draft"] as? Bool != true, release["prerelease"] as? Bool != true,
+                  let latest = parse(release: release)
+            else { continue }
+            if let version = latest.desktop, desktop.map({ compare(version, $0.version) > 0 }) ?? true {
+                desktop = (version, latest.url)
+            }
+            if let version = latest.extensionVersion, extensionVersion.map({ compare(version, $0) > 0 }) ?? true {
+                extensionVersion = version
+            }
+        }
+        return Latest(desktop: desktop?.version, extensionVersion: extensionVersion, url: desktop?.url ?? page)
+    }
+
+    private static func parse(release root: [String: Any]) -> Latest? {
         let tag = root["tag_name"] as? String ?? ""
         var extensionVersion = isVersion(tag) ? String(tag.drop { $0 == "v" }) : nil
         var desktop: String?
         for asset in root["assets"] as? [Any] ?? [] {
             guard let name = (asset as? [String: Any])?["name"] as? String else { continue }
             if let version = version(in: name, prefix: "swapdeck-desktop-") {
-                desktop = version
+                if desktop.map({ compare(version, $0) > 0 }) ?? true { desktop = version }
             } else if let version = version(in: name, prefix: "swapdeck-") {
                 extensionVersion = version
             }
@@ -49,7 +78,7 @@ public enum Releases {
     }
 
     private static func isVersion(_ value: String) -> Bool {
-        value.range(of: #"^v?\d{1,4}\.\d{1,4}\.\d{1,4}$"#, options: .regularExpression) != nil
+        value.range(of: #"^v?[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,4}$"#, options: .regularExpression) != nil
     }
 
     private static func version(in name: String, prefix: String) -> String? {

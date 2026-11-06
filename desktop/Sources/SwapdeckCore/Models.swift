@@ -180,6 +180,19 @@ public struct DesktopData: Hashable, Sendable {
     }
 }
 
+/// How long the fields of a workspace may be: the editor stops there and the data file cuts
+/// longer values to these lengths when it is read (it never drops a workspace for them).
+public enum Limits {
+    public static let name = 80
+    public static let note = 500
+    public static let profileName = 120
+    public static let profileEmail = 320
+    public static let links = 50
+    public static let linkTitle = 200
+    public static let url = 2048
+    public static let linkRules = 50
+}
+
 public enum Links {
     /// Only plain web pages are handed to the browser: never flags, files or scripts.
     public static func isOpenable(_ text: String) -> Bool {

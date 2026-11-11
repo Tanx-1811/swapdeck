@@ -278,6 +278,17 @@ test.describe('a separate tab replaced by Chrome', () => {
     expect(discarded).toBeDefined();
     expect(discarded).not.toBe(lane.tabId);
     await expect.poll(async () => (await lanes(worker))[0]?.tabIds).toEqual([discarded]);
+    // Its rules follow it to the new id; a page shown before Chrome applied them would go out with
+    // the browser's cookies and load again (the prerendered case below), so wait for them.
+    await expect
+      .poll(() =>
+        worker.evaluate(
+          async (id) =>
+            (await chrome.declarativeNetRequest.getSessionRules()).some((rule) => rule.condition.tabIds?.includes(id)),
+          discarded!,
+        ),
+      )
+      .toBe(true);
     server.log.length = 0;
     await worker.evaluate((id) => chrome.tabs.update(id, { active: true }), discarded!);
     await expect.poll(() => server.log.filter((item) => item.path.includes('before=discard')).length).toBe(1);

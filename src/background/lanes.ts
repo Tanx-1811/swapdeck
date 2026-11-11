@@ -912,7 +912,12 @@ async function onTabReplaced(added: number, removed: number): Promise<void> {
   removeTabFromLane(removed);
   for (const map of [coveredAt, navTabs, topUrl, reloadedAt]) map.delete(removed);
   welcomed.delete(removed);
+  // Decided by what replaced it: a discarded tab loads by itself, with the lane's rules, when it is
+  // shown — even if that happens while it joins (asking afterwards would reload it a second time).
+  const replacing = await getTab(added);
   await joinTab(lane, added).catch(warn('separate tab'));
+  if (!replacing || replacing.discarded) return;
+  // A page that was already loaded there (prerendered) went out without the lane's cookies.
   const tab = await getTab(added);
   const url = tabUrl(tab);
   if (tab && !tab.discarded && url && /^https?:/i.test(url)) loadAgain(lane, added, url);

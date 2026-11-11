@@ -70,6 +70,8 @@ mẫu báo lỗ hổng riêng tư của repo; nếu muốn thêm email hỗ tr�
 
 ## GitHub Actions (CI)
 
-Repo công khai nên GitHub Actions chạy miễn phí: mỗi lần đẩy lên `main` và mỗi pull request đều chạy lint, kiểm tra
+CI **chỉ chạy khi bạn chủ động**: đẩy tag phiên bản (`git tag v1.7.0 && git push origin v1.7.0`) hoặc bấm
+GitHub → Actions → CI → **Run workflow** (`gh workflow run CI`). Đẩy nhánh hay mở pull request không chạy gì.
+Mỗi lần chạy gồm lint, kiểm tra
 kiểu, unit test, build, end-to-end + accessibility trên Chrome for Testing, và test của Swapdeck Desktop trên macOS.
 Gói tiện ích được tải lên thành artifact `swapdeck-extension` của mỗi lần chạy.

@@ -254,6 +254,30 @@ struct BackupTests {
         #expect(throws: BackupImport.Failure.notABackup) { try BackupImport.workspaces(from: Data("{}".utf8)) }
     }
 
+    /// A file sent to someone (extension 1.8): marked shared inside the payload too, its workspace
+    /// without note or use counts, accounts without notes or recent pages, and the sign-ins.
+    @Test func readsTheWorkspaceOfAFileSentToSomeone() throws {
+        let shared = Data("""
+        { "format": "swapdeck-backup", "version": 1, "createdAt": 1, "encrypted": false, "shared": true,
+          "payload": { "shared": true,
+            "apps": [{ "id": "app_1", "name": "Acme", "color": "#e8590c", "domains": ["acme.example"],
+                       "origin": "https://acme.example", "homeUrl": "https://acme.example/" }],
+            "accounts": [{ "id": "acc_1", "appId": "app_1", "label": "Client", "color": "#2f4e86", "pins": [],
+                           "recents": [], "order": 0, "createdAt": 1, "switchCount": 0 }],
+            "active": {}, "settings": {},
+            "sessions": { "acc_1": { "v": 1, "capturedAt": 2, "origin": "https://acme.example", "cookies": [],
+                                     "storage": { "localStorage": { "token": "x" } } } },
+            "workspaces": [{ "id": "ws_1", "name": "Khách hàng A", "color": "#2f4e86", "icon": "handshake",
+                             "members": { "app_1": "acc_1" },
+                             "links": [{ "id": "l", "title": "Board", "url": "https://acme.example/board" }],
+                             "order": 0, "createdAt": 1, "switchCount": 0 }] } }
+        """.utf8)
+        let list = try BackupImport.workspaces(from: shared)
+        #expect(list.map(\.name) == ["Khách hàng A"])
+        #expect(list[0].note == "" && list[0].symbol == "handshake")
+        #expect(list[0].links.map(\.url) == ["https://acme.example/board"])
+    }
+
     /// The fixture was written by the extension's own `encryptWithPassword` (see scripts/make-backup-fixture.mjs).
     @Test func decryptsABackupMadeByTheExtension() throws {
         let url = try #require(Bundle.module.url(forResource: "encrypted-backup", withExtension: "json"))

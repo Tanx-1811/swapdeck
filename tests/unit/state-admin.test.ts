@@ -22,6 +22,7 @@ import {
   wipeData,
 } from '../../src/background/admin';
 import { getPrivateKey, loadSnapshot, readStoredSnapshot, storeSnapshot, update } from '../../src/background/state';
+import { openBackup, parseBackupFile } from '../../src/core/backup';
 import type { Snapshot } from '../../src/core/types';
 import type { AppInput } from '../../src/shared/protocol';
 import { readState } from '../../src/shared/store';
@@ -367,6 +368,80 @@ describe('backups', () => {
     const state = await readState();
     expect(state.apps.map((item) => item.id)).toEqual([app.id]);
     expect(state.accounts.map((item) => item.id)).toEqual(['acc_a']);
+  });
+
+  it('sends an account without what the sender did with it, marked shared inside the encrypted part', async () => {
+    const app = await addApp(input());
+    await addAccount(app.id, 'acc_a', {
+      label: 'Client',
+      email: 'a@acme.test',
+      identityId: 'u-a',
+      icon: 'briefcase',
+      important: true,
+      note: 'billing contact: Lan',
+      homeUrl: 'https://acme.test/start',
+      lastUrl: 'https://acme.test/project/secret',
+      recents: [{ key: 'p1', title: 'Secret project', url: 'https://acme.test/project/p1', at: 5 }],
+      pins: [{ id: 'pin1', title: 'Board', url: 'https://acme.test/board' }],
+      linkRules: ['acme.test/client'],
+      lastUsedAt: 7,
+      switchCount: 12,
+      capturedAt: 9,
+      expiredAt: 3,
+      stats: { cookies: 1, storageKeys: 2, databases: 0, bytes: 30 },
+    });
+    await storeSnapshot('acc_a', snapshot('session-a'));
+    await saveWorkspace(undefined, {
+      name: 'Client A',
+      color: '#2f4e86',
+      note: 'invoices every month',
+      members: { [app.id]: 'acc_a' },
+      links: [{ id: 'l1', title: 'Board', url: 'https://acme.test/board' }],
+    });
+    const workspaceId = (await readState()).workspaces[0]!.id;
+
+    const { text } = await exportBackup('send password', true, { accountId: 'acc_a' });
+    const file = JSON.parse(text) as { shared?: boolean; payload: unknown };
+    expect(file.shared).toBe(true);
+    const payload = await openBackup(parseBackupFile(text), 'send password');
+    expect(payload.shared).toBe(true);
+    expect(payload.sessions.acc_a?.storage.localStorage).toEqual({ token: 'session-a' });
+    const [sent] = payload.accounts;
+    expect(sent).toMatchObject({
+      label: 'Client',
+      email: 'a@acme.test',
+      identityId: 'u-a',
+      icon: 'briefcase',
+      important: true,
+      homeUrl: 'https://acme.test/start',
+      pins: [{ id: 'pin1', title: 'Board', url: 'https://acme.test/board' }],
+      linkRules: ['acme.test/client'],
+      recents: [],
+      switchCount: 0,
+    });
+    for (const key of ['note', 'lastUrl', 'lastUsedAt', 'capturedAt', 'expiredAt', 'stats'])
+      expect(sent, key).not.toHaveProperty(key);
+
+    const sentWorkspace = await exportBackup('send password', true, { workspaceId });
+    const workspacePayload = await openBackup(parseBackupFile(sentWorkspace.text), 'send password');
+    expect(workspacePayload.workspaces[0]).toMatchObject({ name: 'Client A', switchCount: 0 });
+    expect(workspacePayload.workspaces[0]).not.toHaveProperty('note');
+    expect(workspacePayload.accounts[0]).not.toHaveProperty('note');
+
+    // Taking the outer flag off (or setting it to false) doesn't make it a backup that can replace.
+    for (const outer of [undefined, false]) {
+      const edited = JSON.stringify({ ...file, shared: outer });
+      expect(await inspectBackup(edited, 'send password')).toMatchObject({ shared: true });
+      await expect(importBackup(edited, 'send password', 'replace')).rejects.toMatchObject({
+        code: 'INVALID',
+        detail: 'shared',
+      });
+    }
+    expect((await readState()).accounts.map((item) => item.id)).toEqual(['acc_a']);
+    // An ordinary backup still replaces.
+    const backup = await exportBackup('backup password', true);
+    expect(JSON.parse(backup.text)).not.toHaveProperty('shared');
+    expect(await inspectBackup(backup.text, 'backup password')).toMatchObject({ shared: false });
   });
 
   it('files accounts of an app set up here with another main address under that app, without its sign-ins', async () => {

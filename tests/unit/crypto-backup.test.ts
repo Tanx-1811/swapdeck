@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { BackupError, openBackup, parseBackupFile, sanitizePayload, serializeBackup } from '../../src/core/backup';
+import {
+  BackupError,
+  isShared,
+  openBackup,
+  parseBackupFile,
+  sanitizePayload,
+  serializeBackup,
+} from '../../src/core/backup';
 import {
   createVault,
   CryptoError,
@@ -100,6 +107,23 @@ describe('backups', () => {
     expect(Object.keys(clean.sessions)).toEqual(['acc_1']);
     expect(clean.active).toEqual({ app_1: 'acc_1' });
     expect(clean.settings.language).toBe('vi');
+  });
+
+  it('keeps the shared mark of the payload, which the password authenticates, over the outer one', async () => {
+    expect(sanitizePayload(payload)).not.toHaveProperty('shared');
+    expect(sanitizePayload({ ...payload, shared: 'yes' })).not.toHaveProperty('shared');
+    const inner = sanitizePayload({ ...payload, shared: true });
+    expect(inner.shared).toBe(true);
+    expect(isShared({}, inner)).toBe(true);
+    expect(isShared({ shared: true }, sanitizePayload(payload))).toBe(true);
+    expect(isShared({}, sanitizePayload(payload))).toBe(false);
+    // Encrypted: the mark is read from what the password opens, whatever the outer file says.
+    const box = await encryptWithPassword(JSON.stringify({ ...payload, shared: true }), 'send-pass');
+    const file = parseBackupFile(
+      serializeBackup({ format: 'swapdeck-backup', version: 1, createdAt: 9, encrypted: true, payload: box }),
+    );
+    expect(file).not.toHaveProperty('shared');
+    expect(isShared(file, await openBackup(file, 'send-pass'))).toBe(true);
   });
 
   it('round-trips plain and encrypted files', async () => {

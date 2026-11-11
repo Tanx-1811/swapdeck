@@ -481,8 +481,12 @@ session under the matching account).
 
 **Sending an account** (`backup.export` with `only: { accountId | workspaceId }`): the same file, with only that
 account (or the workspace, its member accounts and their apps), their sessions, default settings and no `active`;
-always encrypted, marked `shared: true`, and it doesn't count as a backup (`lastBackupAt` unchanged). A shared file can
-only be merged: `importBackup` refuses `replace` (`INVALID: shared`) and the Backup page hides it.
+always encrypted, and it doesn't count as a backup (`lastBackupAt` unchanged). Accounts go through `shareableAccount`
+(no `note`, `recents`, `lastUrl`, use counts or times, `stats`; label, identity, colour, symbol, pins, start page, link
+rules and `important` stay) and the workspace through `shareableWorkspace` (no note, use counts or `foreignMembers`).
+It is marked `shared: true` inside the payload — the part AES-GCM authenticates — and, for a quick look before the
+password, on the file too. A shared file can only be merged: `importBackup` refuses `replace` (`INVALID: shared`) when
+either says so (`isShared`), so taking the outer flag off doesn't make it replaceable; the Backup page hides it.
 
 **Importing a sign-in** (`session.import`, `background/import-session.ts`): `parseSessionExport` reads Cookie-Editor /
 EditThisCookie JSON, Playwright storage state (cookies and the main origin's localStorage), Netscape `cookies.txt`

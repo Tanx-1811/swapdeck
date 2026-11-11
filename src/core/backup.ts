@@ -15,6 +15,11 @@ export type BackupPayload = {
   /** Saved sessions by account id; empty when exported without sessions. */
   sessions: Record<string, Snapshot>;
   workspaces: Workspace[];
+  /**
+   * Made to send to someone: only ever added to what is there (never "replace"). Inside the
+   * payload — the encrypted, authenticated part — so it can't be taken off without the password.
+   */
+  shared?: boolean;
 };
 
 export type BackupFile = {
@@ -22,7 +27,10 @@ export type BackupFile = {
   version: 1;
   createdAt: number;
   encrypted: boolean;
-  /** Made to send one account or workspace to someone: only ever added to what is there (never "replace"). */
+  /**
+   * Made to send one account or workspace to someone (also said inside the payload, which is what
+   * counts: this outer copy isn't authenticated and only lets a file be told apart before it is opened).
+   */
   shared?: boolean;
   payload: BackupPayload | PasswordBox;
 };
@@ -89,7 +97,57 @@ export function sanitizePayload(value: unknown): BackupPayload {
   for (const [appId, accountId] of Object.entries(active)) {
     if (!appIds.has(appId) || (accountId !== null && !accountIds.has(accountId))) delete active[appId];
   }
-  return { apps, accounts, active, settings: parseSettings(input.settings), sessions, workspaces };
+  return {
+    apps,
+    accounts,
+    active,
+    settings: parseSettings(input.settings),
+    sessions,
+    workspaces,
+    ...(input.shared === true ? { shared: true } : {}),
+  };
+}
+
+/**
+ * Whether a file was made to send to someone, and so may only be merged: said by the payload (the
+ * part the password authenticates) or by the outer flag. Taking the outer flag off a shared file,
+ * or changing it, never makes it replaceable.
+ */
+export function isShared(file: Pick<BackupFile, 'shared'>, payload: Pick<BackupPayload, 'shared'>): boolean {
+  return file.shared === true || payload.shared === true;
+}
+
+/**
+ * An account as a file sent to someone carries it: what it is and how it is set up (label, the
+ * person, colour and symbol, pins, start page, link rules, the important flag) — never what the
+ * sender did with it (note, recent pages, last page, use counts, when it was used, saved or found
+ * signed out, the size of the session). The session itself travels next to it.
+ */
+export function shareableAccount(account: Account): Account {
+  const {
+    note: _note,
+    recents: _recents,
+    lastUrl: _lastUrl,
+    lastUsedAt: _lastUsedAt,
+    switchCount: _switchCount,
+    capturedAt: _capturedAt,
+    expiredAt: _expiredAt,
+    stats: _stats,
+    ...kept
+  } = account;
+  return { ...kept, recents: [], switchCount: 0 };
+}
+
+/** A workspace as a file sent to someone carries it: without its note, use counts or other computers' members. */
+export function shareableWorkspace(workspace: Workspace): Workspace {
+  const {
+    note: _note,
+    lastUsedAt: _lastUsedAt,
+    switchCount: _switchCount,
+    foreignMembers: _foreignMembers,
+    ...kept
+  } = workspace;
+  return { ...kept, switchCount: 0 };
 }
 
 export async function openBackup(file: BackupFile, password?: string): Promise<BackupPayload> {

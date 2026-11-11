@@ -1,9 +1,12 @@
 import {
   BACKUP_FORMAT,
   BackupError,
+  isShared,
   openBackup,
   parseBackupFile,
   serializeBackup,
+  shareableAccount,
+  shareableWorkspace,
   type BackupPayload,
 } from '../core/backup';
 import { createVault, CryptoError, encryptWithPassword, isSealedBox, seal, unlockVault, unseal } from '../core/crypto';
@@ -486,7 +489,7 @@ function scoped(state: State, only: ShareScope): State {
   if (only.workspaceId) {
     const workspace = state.workspaces.find((item) => item.id === only.workspaceId);
     if (!workspace) throw new SwapdeckError('NOT_FOUND', only.workspaceId);
-    workspaces = [{ ...workspace, foreignMembers: undefined } as Workspace];
+    workspaces = [shareableWorkspace(workspace)];
     accountIds = new Set(Object.values(workspace.members));
   } else if (only.accountId) {
     findAccount(state, only.accountId);
@@ -494,7 +497,8 @@ function scoped(state: State, only: ShareScope): State {
   } else {
     throw new SwapdeckError('INVALID');
   }
-  const accounts = state.accounts.filter((account) => accountIds.has(account.id));
+  // What the sender did with the accounts (notes, recent pages, use) stays with the sender.
+  const accounts = state.accounts.filter((account) => accountIds.has(account.id)).map(shareableAccount);
   const appIds = new Set(accounts.map((account) => account.appId));
   return {
     ...state,
@@ -541,6 +545,8 @@ export async function exportBackup(
     settings: only ? parseSettings(undefined) : state.settings,
     sessions,
     workspaces: state.workspaces,
+    // Said inside the encrypted part too: the outer flag alone could be taken off.
+    ...(only ? { shared: true } : {}),
   };
   const encrypted = Boolean(password);
   // Sending one account to someone isn't a backup of this computer.
@@ -566,7 +572,8 @@ async function readBackup(
 ): Promise<{ payload: BackupPayload; createdAt: number; shared: boolean }> {
   try {
     const file = parseBackupFile(text);
-    return { payload: await openBackup(file, password), createdAt: file.createdAt, shared: file.shared === true };
+    const payload = await openBackup(file, password);
+    return { payload, createdAt: file.createdAt, shared: isShared(file, payload) };
   } catch (error) {
     if (error instanceof BackupError) {
       throw new SwapdeckError(error.code === 'INVALID' ? 'INVALID' : 'BAD_PASSPHRASE', error.code);

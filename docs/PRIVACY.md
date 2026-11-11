@@ -106,7 +106,9 @@ access to any site; you allow each app yourself.
 
 **Sending an account to someone** (an account's or a workspace's menu → Send to someone) makes the same kind of file
 with only that account or workspace and its sign-in, always encrypted with a password you choose; you send it yourself,
-and on their computer it can only be added (never replace what they have). **Importing a sign-in** exported by another
+and on their computer it can only be added (never replace what they have). It carries how the account is set up (name,
+email, colour, symbol, pinned pages, start page, link rules, the important flag) and its sign-in — not your notes, its
+recent items or last page, nor how often or when you used it (for a workspace: its pages, not its note). **Importing a sign-in** exported by another
 tool (cookie JSON, `cookies.txt`, Playwright storage state) reads what you paste or pick on your computer, keeps only the
 cookies of that app's sites, and saves them as an account.
 

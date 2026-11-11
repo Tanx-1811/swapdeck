@@ -25,7 +25,8 @@ Two accounts of the same site, side by side: **separate tabs**.
   where nobody is signed in, nor into an account of someone else).
 - **Send to someone** (⋯ of an account or a workspace): a file with just that account or workspace and its sign-ins,
   always locked with a password. Whoever receives it adds it with Backup → Import; such a file can never replace their
-  data, and a sign-in in any imported file only goes into an account it belongs to.
+  data (it says so inside the locked part, so editing the file can't change that), and a sign-in in any imported file
+  only goes into an account it belongs to. Your notes, recent items, last pages and use counts stay with you.
 - Closing a scratch tab where someone signed in and wasn't saved asks first; separate tabs wear their own indigo mark
   (never the red "in use" seal), and long names or emails no longer widen the popup.
 - **The manager lists your separate tabs** (Overview, and an app's page): each one's account or "Scratch n", the app,

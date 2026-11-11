@@ -843,6 +843,7 @@ export const vi: Record<MessageKey, string> = {
     'Một tệp chỉ chứa tài khoản này và phiên đăng nhập của nó, khóa bằng mật khẩu. Người nhận thêm vào Swapdeck của họ bằng Sao lưu → Nhập; tệp không bao giờ thay thế dữ liệu của họ.',
   'share.leadWorkspace':
     'Một tệp chỉ chứa bên này, các tài khoản và phiên đăng nhập của chúng, khóa bằng mật khẩu. Người nhận thêm vào Swapdeck của họ bằng Sao lưu → Nhập; tệp không bao giờ thay thế dữ liệu của họ.',
+  'share.staysWithYou': 'Ghi chú, mục gần đây và trang mở lần cuối vẫn ở lại với bạn: chúng không có trong tệp.',
   'share.warning': 'Ai có tệp và mật khẩu đều đăng nhập được bằng tài khoản này. Hãy gửi mật khẩu theo đường khác.',
   'share.warningWorkspace':
     'Ai có tệp và mật khẩu đều đăng nhập được bằng các tài khoản này. Hãy gửi mật khẩu theo đường khác.',

@@ -839,6 +839,7 @@ export const en = {
     'A file with only this account and its sign-in, locked with a password. They add it to their Swapdeck with Backup → Import; it never replaces what they have.',
   'share.leadWorkspace':
     'A file with only this workspace, its accounts and their sign-ins, locked with a password. They add it to their Swapdeck with Backup → Import; it never replaces what they have.',
+  'share.staysWithYou': 'Your notes, recent items and last pages stay with you: they are not in the file.',
   'share.warning': 'Whoever has the file and the password can sign in as this account. Send the password another way.',
   'share.warningWorkspace':
     'Whoever has the file and the password can sign in as these accounts. Send the password another way.',

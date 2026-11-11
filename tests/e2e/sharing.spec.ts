@@ -88,6 +88,13 @@ test.describe('importing and sending sign-ins', () => {
       mode: 'replace',
     });
     expect(replace).toMatchObject({ ok: false, error: 'INVALID', detail: 'shared' });
+    // The mark is inside the locked part too: taking it off the file changes nothing.
+    const unmarked = JSON.stringify({ ...JSON.parse(shared.data!.text), shared: undefined });
+    expect(await call('backup.import', { text: unmarked, password: 'correct horse', mode: 'replace' })).toMatchObject({
+      ok: false,
+      error: 'INVALID',
+      detail: 'shared',
+    });
     expect(await storedAccounts(context, acme.id)).toHaveLength(2);
 
     // Someone else's Swapdeck: here, the same one with Alice removed.

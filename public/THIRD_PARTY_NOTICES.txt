@@ -81,7 +81,7 @@ SOFTWARE.
 
 ==============================================================================
 
-lucide-react 1.70.0 — ISC
+lucide-react 1.72.0 — ISC
 https://lucide.dev
 
 ISC License

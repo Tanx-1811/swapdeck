@@ -1,6 +1,6 @@
 # Swapdeck Privacy Policy
 
-_Last updated: 8 November 2026 · Applies to Swapdeck 1.0.0 and later (workspaces, side panel: 1.1.0; important accounts: 1.3.0; unsaved-work check: 1.4.0; optional sync of the list: 1.5.0; links of another account, check for updates: 1.6.0; separate tabs, importing a sign-in, sending an account: 1.8.0)_ · [Tiếng Việt](#chính-sách-quyền-riêng-tư-swapdeck)
+_Last updated: 11 November 2026 · Applies to Swapdeck 1.0.0 and later (workspaces, side panel: 1.1.0; important accounts: 1.3.0; unsaved-work check: 1.4.0; optional sync of the list: 1.5.0; links of another account, check for updates: 1.6.0; separate tabs, importing a sign-in, sending an account: 1.8.0)_ · [Tiếng Việt](#chính-sách-quyền-riêng-tư-swapdeck)
 
 Swapdeck is a Chrome extension for switching between several accounts on the same website. It works entirely inside
 your browser.
@@ -65,8 +65,9 @@ Everything is removed when you uninstall the extension, or with **Security → D
 - **Expired sessions:** when an added site shows nobody signed in while one of your accounts is in use, Swapdeck marks
   that account "expired" on your computer, so you know to sign in again.
 - **Separate tabs** (only the ones you open): requests from those tabs to the app's own sites carry the cookies of that
-  tab's account instead of Chrome's, and the cookies those sites set there are read from their responses and kept by
-  Swapdeck (in memory, above) instead of by Chrome. A small script on the app's pages keeps that tab's stored data under
+  tab's account instead of Chrome's — following each cookie's SameSite setting as Chrome does, and none at all on calls
+  that pages of other sites make to the app — and the cookies those sites set there are read from their responses and
+  kept by Swapdeck (in memory, above) instead of by Chrome. A small script on the app's pages keeps that tab's stored data under
   names of its own, and keeps those names out of sight of your other tabs. While a separate tab is open, its account's
   saved session is refreshed from it, as for the account in use; when it closes, what it left on the site is removed.
   Other sites in those tabs, and every other tab, are not touched.
@@ -130,7 +131,7 @@ Changes to this policy are listed here with a new date. Swapdeck is open source 
 
 # Chính sách quyền riêng tư Swapdeck
 
-_Cập nhật: 08/11/2026 · Áp dụng cho Swapdeck 1.0.0 trở lên (các bên, bảng bên: 1.1.0; tài khoản quan trọng: 1.3.0; kiểm tra nội dung chưa lưu: 1.4.0; đồng bộ danh sách tùy chọn: 1.5.0; link của tài khoản khác, kiểm tra bản mới: 1.6.0; tab riêng, nhập phiên đăng nhập, gửi tài khoản: 1.8.0)_
+_Cập nhật: 11/11/2026 · Áp dụng cho Swapdeck 1.0.0 trở lên (các bên, bảng bên: 1.1.0; tài khoản quan trọng: 1.3.0; kiểm tra nội dung chưa lưu: 1.4.0; đồng bộ danh sách tùy chọn: 1.5.0; link của tài khoản khác, kiểm tra bản mới: 1.6.0; tab riêng, nhập phiên đăng nhập, gửi tài khoản: 1.8.0)_
 
 Swapdeck là tiện ích Chrome giúp chuyển giữa nhiều tài khoản trên cùng một trang web. Tiện ích hoạt động hoàn toàn
 trong trình duyệt của bạn.
@@ -191,8 +192,9 @@ Mọi dữ liệu bị xóa khi gỡ tiện ích, hoặc bằng **Bảo mật �
 - **Phiên hết hạn:** khi trang đã thêm không còn ai đăng nhập trong lúc một tài khoản của bạn đang dùng, Swapdeck đánh dấu
   tài khoản đó "hết phiên" ngay trên máy bạn, để bạn biết mà đăng nhập lại.
 - **Tab riêng** (chỉ những tab bạn mở): yêu cầu từ các tab đó tới chính các trang của ứng dụng mang cookie của tài khoản
-  của tab thay vì cookie của Chrome, và cookie các trang đó đặt ở đây được đọc từ phản hồi rồi do Swapdeck giữ (trong bộ
-  nhớ tạm, xóa khi đóng Chrome) thay vì Chrome. Một script nhỏ trên trang của ứng dụng cất dữ liệu lưu trữ của tab đó
+  của tab thay vì cookie của Chrome — theo thiết lập SameSite của từng cookie như Chrome, và hoàn toàn không có cookie
+  nào trong các lời gọi mà trang của web khác gửi tới ứng dụng — và cookie các trang đó đặt ở đây được đọc từ phản hồi
+  rồi do Swapdeck giữ (trong bộ nhớ tạm, xóa khi đóng Chrome) thay vì Chrome. Một script nhỏ trên trang của ứng dụng cất dữ liệu lưu trữ của tab đó
   dưới tên riêng, và giấu các tên đó khỏi các tab khác. Trong lúc tab riêng mở, phiên đã lưu của tài khoản được làm mới
   từ đó như tài khoản đang dùng; khi đóng, những gì nó để lại trên trang bị xóa. Trang khác trong các tab đó, và mọi tab
   khác, không bị đụng tới. Để mở lại tab riêng sau khi Chrome khởi động lại, Swapdeck nhớ trên máy bạn tên nhóm tab và
@@ -234,7 +236,10 @@ tự cho phép từng ứng dụng.
 
 **Gửi tài khoản cho người khác** (menu của tài khoản hoặc của bên → Gửi cho người khác) tạo một tệp cùng loại, chỉ chứa
 tài khoản hoặc bên đó cùng phiên đăng nhập, luôn được mã hóa bằng mật khẩu bạn chọn; bạn tự gửi tệp, và trên máy người
-nhận tệp chỉ được thêm vào (không bao giờ thay dữ liệu của họ). **Nhập phiên đăng nhập** xuất từ công cụ khác (JSON cookie,
+nhận tệp chỉ được thêm vào (không bao giờ thay dữ liệu của họ). Tệp mang cách tài khoản được thiết lập (tên, email, màu,
+biểu tượng, trang đã ghim, trang mở đầu, quy tắc link, dấu quan trọng) và phiên đăng nhập — không có ghi chú của bạn, mục
+gần đây hay trang mở lần cuối, cũng không có bạn dùng nó bao nhiêu lần hay khi nào (với một bên: các trang của bên, không
+có ghi chú). **Nhập phiên đăng nhập** xuất từ công cụ khác (JSON cookie,
 `cookies.txt`, storage state của Playwright) đọc những gì bạn dán hoặc chọn ngay trên máy, chỉ giữ cookie của các trang
 thuộc ứng dụng đó, rồi lưu thành tài khoản.
 

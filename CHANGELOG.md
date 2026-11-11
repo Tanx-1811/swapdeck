@@ -20,6 +20,12 @@ Two accounts of the same site, side by side: **separate tabs**.
 - After Chrome restarts (or Swapdeck updates), separate tabs come back in their groups; when that isn't possible (a
   locked passphrase, a scratch tab, two separate tabs whose accounts have the same name) their group is removed rather
   than claim an account the tabs no longer have.
+- A link, a form or a window a separate tab opens in a new tab is that account's from its very first request — a form
+  is never sent as your other account; tabs that other pages, extensions or you open next to a separate tab stay
+  ordinary. A separate tab Chrome discards or swaps for another stays separate.
+- Separate tabs follow each cookie's SameSite setting as Chrome does, and pages of other sites opened there can't
+  call the app as that account. Your other tabs of the site — even ones already open when the separate tab started —
+  never see or clear its data, and its calls never share the browser's cache with them.
 - **Import a sign-in** (an app's ⋯ in the manager): paste or pick an export from Cookie-Editor, EditThisCookie, Playwright
   (`storageState`, with local storage) or a `cookies.txt`, and it is saved as the account it belongs to (never one
   where nobody is signed in, nor into an account of someone else).

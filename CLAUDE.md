@@ -85,7 +85,10 @@ tests, demo data and screenshots (use `*.example`/`*.test` addresses). Contribut
 
 - A lane's cookies live only in its jar (`sd:lanes`, session storage) and reach requests through declarativeNetRequest
   session rules limited to its `tabIds`, ids ≥ `LANE_RULE_BASE` (100 000): `guard.ts` stays below and
-  `clearStaleRules` never removes them. Never write a lane's cookies into `chrome.cookies`.
+  `clearStaleRules` never removes them. Never write a lane's cookies into `chrome.cookies`. The rules follow SameSite
+  as Chrome does (`cookieSets`: levels per scope/path, `domainType`, `topDomains` from Chrome 145, `navTabIds` for
+  Swapdeck's own navigations — call `allowNav` before navigating a lane tab yourself), and the jar takes only what
+  the request's context may set (`cookieContext`, `settableCrossSite`).
 - Lane storage is the origin's real storage under `__sdl:<token>:`. Every page script that reads or writes storage must
   stay lane-aware: `readPageStorage`/`writePageStorage` skip `__sdl:` names unless given `lane`; keep it that way in new
   page scripts, or a switch would save or wipe a lane's sign-in.
@@ -93,14 +96,23 @@ tests, demo data and screenshots (use `*.example`/`*.test` addresses). Contribut
   tabs" must do the same. A switch to an account with a lane goes through `releaseAccountLane` first.
 - Saving from a lane follows auto-sync's rule (strong identity of the lane's account, `decideSave` with it as active);
   never save a lane into another account except through `saveLane` with an explicit, identity-checked target.
-- `content/lane-main.ts` runs in the page's world on every page of a lane app while lanes exist: it must never throw,
-  never break pages outside a lane (only hide `__sdl:` keys when present) and talk only to `lane-relay.ts`. Its own work
-  uses the natives it captures at `document_start` (timers, promises, events, Storage methods), never what the page
-  may have wrapped since. Lane rules never add a request header that isn't CORS-safelisted to calls (XHR/fetch). The worker
-  re-checks every relay message (`onRelay`: sender tab's lane, app domain, script-set cookies only).
-- Tests: `tests/unit/lanes.test.ts` (cookie parsing, jar, rules), `tests/e2e/lanes.spec.ts` (two accounts side by side,
-  scratch → account, window.open, closing, takeover by a switch, restore after restart via `swapdeckTest` in the e2e
-  build). Shared files and sign-in import: `tests/e2e/sharing.spec.ts`, `tests/unit/session-import.test.ts`.
+- `content/lane-main.ts` (with `lane-open.ts`, `lane-xhr.ts`) runs in the page's world on every page of a lane app
+  while lanes exist (pages already open get it through `executeScript`, `hideInOpenPages`): it must never throw, never
+  break pages outside a lane (there it only hides `__sdl:` names: localStorage, `databases()`, `locks.query()`) and
+  talk only to `lane-relay.ts`. Its own work uses the natives it captures at `document_start` (timers, promises,
+  events, Storage, XHR and Event methods), never what the page may have wrapped since. Lane rules never add a request
+  header that isn't CORS-safelisted to calls (XHR/fetch); the page script keeps calls out of the HTTP cache instead.
+  The worker re-checks every relay message (`onRelay`: sender tab's lane, app domain, script-set cookies only,
+  about:blank/srcdoc frames by `sender.origin`).
+- A tab joins a lane only when the lane's page asked (`opening`/`adopt` with a nonce, from `lane-open.ts`), when its
+  first request shows a page of the app opened it (`candidates`, links the browser opens itself), or by
+  `tabs.onReplaced` — never by `openerTabId` alone (Chrome names the active tab the opener of tabs others open).
+- Tests: `tests/unit/lanes.test.ts` (cookie parsing, jar, rules, SameSite through a declarativeNetRequest matcher),
+  `tests/e2e/lanes.spec.ts` (two accounts side by side, scratch → account, window.open, closing, takeover by a switch,
+  restore after restart via `swapdeckTest` in the e2e build), `tests/e2e/lanes-edges.spec.ts` (first request of new
+  tabs, tabs others open, about:blank frames, tabs open before a lane, discarded/replaced tabs, XHR and the cache,
+  SameSite with a second site; the test server logs every request: `server.log`). Shared files and sign-in import:
+  `tests/e2e/sharing.spec.ts`, `tests/unit/session-import.test.ts`.
 
 ## Sync of the list (`core/sync.ts`, `background/sync.ts`; read ARCHITECTURE §10 first)
 
@@ -184,7 +196,7 @@ tests, demo data and screenshots (use `*.example`/`*.test` addresses). Contribut
 - The switching page falls back to `/favicon.ico`, `/robots.txt`, `/` when it redirects off the main origin
   (`stagingCandidates` in `engine.ts`). `npm run test:live` checks every preset on the real site (network; not in CI);
   `npx playwright test --project=live lanes-live` opens every preset in a scratch separate tab and compares it with an
-  ordinary tab (new page errors, failed requests to the app, a page that renders much less) — run it after touching
-  `lane-main.ts` or the lane rules.
+  ordinary tab, then that ordinary tab again while the lane exists (new page errors, failed requests to the app, a page
+  that renders much less) — run it after touching `content/lane-*.ts` or the lane rules.
 - Avoid common words for the omnibox keyword and keep shortcuts clear of Penmark (`Alt+Shift+N/K/H/C`) and Breakpointer
   (`Alt+Shift+V/P`); new commands get no default key (Chrome allows four suggested keys).

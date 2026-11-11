@@ -13,7 +13,7 @@ does. Product scope and decisions are in [PLAN.md](PLAN.md); privacy in [PRIVACY
 | Side panel     | `src/sidepanel/` (`sidepanel/sidepanel.html`) | The same switcher (`mode="panel"`), kept open next to the page; follows the active tab of its window.                                                                                                                                                 |
 | Manager        | `src/options/` (`options/options.html#/…`)    | Full-page UI: overview, workspaces (list, suggestions, editor), apps & accounts, add app (preset gallery with multi-select, or any site), app settings, history, backup, security (passphrase lock), settings, help.                                  |
 | Service worker | `src/background/service-worker.ts`            | The only writer of state. Switching apps and workspaces, saving, watching tabs, badge, context menus (pages and toolbar button), omnibox (`swd`), commands, side-panel behaviour, auto-lock.                                                          |
-| Lane scripts   | `src/content/lane-main.ts`, `lane-relay.ts`   | Registered while separate tabs exist, on their apps' sites: in a separate tab, the page's own view of cookies and storage (§6a).                                                                                                                      |
+| Lane scripts   | `src/content/lane-*.ts`                       | Registered while separate tabs exist, on their apps' sites: in a separate tab, the page's own view of cookies and storage, new windows (`lane-open`), XHR (`lane-xhr`) (§6a).                                                                         |
 | Page scripts   | `src/background/page-scripts.ts`              | Self-contained functions injected with `chrome.scripting.executeScript` (isolated world): read/write web storage and IndexedDB, probe the page, overlay, in-page toast, warning strip for important accounts.                                         |
 | Core           | `src/core/`                                   | Pure, unit-tested logic: types, presets (164), domains, identity detection, save decisions, workspaces (status, suggestions, tab-group colours), search ranking, cookies, crypto, backup format, validation, settings.                                |
 | Shared         | `src/shared/`                                 | Storage layout and readers (`store.ts`), typed messaging (`protocol.ts`), app helpers (`apps.ts`).                                                                                                                                                    |
@@ -307,46 +307,92 @@ in the worker (`lane-state.ts`: in memory, written through to `sd:lanes` in sess
   `laneRules` turns it into declarativeNetRequest session rules limited to the lane's `tabIds` (ids from
   `LANE_RULE_BASE` = 100 000 up; `clearStaleRules` never touches them): per scope (each app domain with its subdomains,
   each cookie's host or domain), cookie path and — when Secure cookies need it — scheme (WebSocket handshakes
-  included: ws like http, wss like https), a rule **sets** the `Cookie` header (or removes it, so the browser's own
+  included: ws like http, wss like https), rules **set** the `Cookie` header (or remove it, so the browser's own
   cookies never go along); one rule drops `Set-Cookie` from every response of the lane's sites; two keep private
   responses out of Chrome's HTTP cache both ways. Response headers a rule sets come too late for that cache, so pages
   and frames get `If-Range` (`LANE_CACHE_GUARD`: the cache neither reads nor stores such a request; servers ignore it
   without `Range`) and `no-cache`; calls (XHR, fetch), where CORS applies, only lose their conditional headers — a
   rule never adds a header that isn't CORS-safelisted there (a cross-origin call would need a preflight) — and the
-  page script keeps them out of the cache (fetch: `cache: 'no-store'`; same-origin XHR: the If-Range guard). More
-  specific rules have higher priority (Chrome applies the highest rule that sets a header). The worker reads `Set-Cookie` through `webRequest.onHeadersReceived` with
-  `extraHeaders` (it sees the headers before the rule drops them), parses them (`parseCookie`, RFC 6265: domain,
-  path, Secure on secure origins only, prefixes, Max-Age over Expires) into the jar (`storeCookie`) and re-applies the
-  rules (`syncRules`: one at a time, coalesced). Listeners are added only while lanes exist, filtered to their apps'
-  sites; a 20 s heartbeat keeps the worker alive meanwhile and purges expired cookies.
+  page script keeps them out of the cache (fetch: `cache: 'no-store'`; same-origin XHR: the If-Range guard; XHR to
+  another origin of the app: made with fetch, below). More specific rules have higher priority (Chrome applies the
+  highest rule that sets a header).
+- **SameSite, as Chrome applies it** (`cookieSets`, `sameSiteKind`: no attribute means Lax, None needs Secure). Per
+  scope, path and scheme the rules are levels of one priority band (`PRIORITY_LEVELS`): anything (`cross`) sends only
+  SameSite=None cookies; a top-level GET (`requestMethods`) adds Lax ones, a top-level POST… adds Lax-by-default
+  cookies set less than two minutes ago (Chrome's Lax-allowing-unsafe; `bornAt`, rules re-applied when they age); a
+  same-site request (`domainType: firstParty` — the initiator's registrable domain, by Chrome's own list — and, from
+  Chrome 145, `topDomains` of the scope's site: a frame of the app inside another site's page is cross-site) sends
+  every cookie. One lane-wide rule above them all removes the `Cookie` header from calls (`xmlhttprequest`, `other`)
+  that pages of other sites make (`excludedInitiatorDomains`: the app's domains, `thirdParty`): a rule can't see
+  whether a call asks for credentials, and an answer with `Access-Control-Allow-Origin: *` to one that doesn't would
+  be readable there. Rules can't tell a navigation the browser started itself (address bar, bookmark, Swapdeck —
+  no initiator) from another site's link: both are third-party and get the top-level GET set. So Swapdeck's own
+  navigations of lane tabs (`navigateLaneTab`, `loadAgain`, restore, a reload) first mark the tab (`allowNav`, only
+  when the lane has Strict cookies): a rule for `navTabIds` sends every cookie on its next top-level GET, until that
+  navigation's answer (`endNav`, matched by request id) or 15 s; a browser navigation the user started that went
+  without the lane's Strict cookies is loaded again that way (below). `regexOf` counts each lane's regex rules for
+  the budget.
 - **Only the lane's own requests feed its jar.** A tab's rules count from when Chrome has applied them
-  (`coveredAt`); a request the tab sent before (a tab that just joined, from `openerTabId`) carried the browser's
-  cookies, so `onSendHeaders` marks it (`uncovered`, per redirect hop) and its response's `Set-Cookie` is ignored. Rule
-  updates go through one queue (`syncRules`/`runRules`): a lane that ended meanwhile gets its rules removed, never
-  re-added (`retired`); ids waiting for removal are never reused; a failure only fails that lane's callers; rules of the
-  lane range that no lane owns are removed when the worker starts.
+  (`coveredAt`); a request the tab sent before (a tab that just joined) carried the browser's cookies, so
+  `onSendHeaders` marks it (`uncovered`, per redirect hop) and its response's `Set-Cookie` is ignored. Responses set
+  what Chrome would let them (`cookieContext`): any cookie on a top-level navigation or a same-site request (the
+  initiator, and the tab's top-level page, `topUrl`, of the same site), only SameSite=None ones in a cross-site
+  context, nothing from a call of another site's page (it went without cookies). Rule updates go through one queue
+  (`syncRules`/`runRules`): a lane that ended meanwhile gets its rules removed, never re-added (`retired`); ids
+  waiting for removal are never reused; a failure only fails that lane's callers; rules of the lane range that no
+  lane owns are removed when the worker starts.
 - **Pages that went out with stale cookies load again.** `onSendHeaders` (main frames, GET only) compares the `Cookie`
-  header actually sent (after the rules) with the jar: a redirect that set cookies, or a tab that joined the lane
-  mid-load, is re-navigated once its rules are in step (`reloadOnce`: at most every 5 s per tab).
-- **The page's own view** (`content/lane-main.ts`, MAIN world, `document_start`, all frames, registered with
-  `scripting.registerContentScripts` only while lanes exist): the lane's document rules also set a `Server-Timing`
-  entry `swapdeck-lane;desc="<token>|<document.cookie value>"` on top-level pages (frames get the token only: their
-  timing can be visible to the page around them), which the script reads synchronously from the navigation entry
-  (about:blank frames take their parent's). The relay asks the worker what `document.cookie` reads (`sync`) when the page
-  starts and whenever the site sets cookies in the lane (`changed`, sent to the lane's tabs), and every answer to a write
-  or flush carries it too, so cookies set by responses (CSRF tokens) show up. In a lane it redefines `document.cookie` (reads the lane's non-HttpOnly
-  cookies; writes go to the worker through `lane-relay.ts` → `runtime.sendMessage`, parsed as a script would, never
-  over an HttpOnly cookie), removes `cookieStore` (`'cookieStore' in window` is false), makes `fetch`/XHR wait for
-  pending cookie writes and, after non-GET
-  requests, for the response's `Set-Cookie` ("flush"), and keeps `localStorage`, IndexedDB names, BroadcastChannel names
-  and Web Locks under `__sdl:<token>:` (storage events translated). Service workers can't be registered there; a page
-  a service worker controls is reported (`workerWarning`). In other tabs, when lane keys exist, it only hides them
-  (and keeps them out of the page's `clear()`). Its `localStorage` views are Proxies: `Storage.prototype`'s methods
-  and `length` are wrapped to act on a view when called with one as `this` (and are the browser's own otherwise), and
-  the views use the natives captured at `document_start`. Its own timers, promises and events use the originals
-  captured then too, so page instrumentation (New Relic, Sentry) never sees them. The relay also says hello with the token it saw: a lane page without it
-  (served from cache, or before the tab joined) is reloaded bypassing the cache. The worker checks every relay message
-  against the sender tab's lane and the app's domains (`onRelay`).
+  header actually sent (after the rules) with what the lane should have sent for that request: every cookie for a
+  page's same-site navigation or the browser's own (no initiator), every cookie or the top-level GET set for another
+  site's. A redirect that set cookies, a tab that joined the lane mid-load, or a typed address that went without the
+  lane's Strict cookies is loaded again once the rules are in step, as the browser's own navigation (`loadAgain`:
+  `allowNav`, then `tabs.update`; at most every 5 s per tab). A form is never sent twice.
+- **The page's own view** (`content/lane-main.ts` with `lane-open.ts` and `lane-xhr.ts`, MAIN world,
+  `document_start`, all frames, registered with `scripting.registerContentScripts` only while lanes exist): the lane's
+  document rules also set a `Server-Timing` entry `swapdeck-lane;desc="<token>|<document.cookie value>"` on top-level
+  pages (frames get the token only: their timing can be visible to the page around them), which the script reads
+  synchronously from the navigation entry (about:blank and srcdoc frames take their parent's, a blank window its
+  opener's). The relay asks the worker what `document.cookie` reads (`sync`) when the page starts (about:blank and
+  srcdoc documents always) and whenever the lane's cookies change (`changed`, sent to the lane's tabs), and every
+  answer to a write or flush carries it too, so cookies set by responses (CSRF tokens) or by another frame show up. In
+  a lane it redefines `document.cookie` (reads the lane's non-HttpOnly cookies; writes go to the worker through
+  `lane-relay.ts` → `runtime.sendMessage`, parsed as a script would, never over an HttpOnly cookie; about:blank and
+  srcdoc documents use their creator's address, which the relay sends and the worker takes only on the origin Chrome
+  gives the frame, `sender.origin`; a frame inside another site's page reads and sets only SameSite=None cookies),
+  removes `cookieStore` (`'cookieStore' in window` is false), makes `fetch`/XHR wait for pending cookie writes and,
+  after non-GET requests, for the response's `Set-Cookie` ("flush"), keeps `localStorage`, IndexedDB names,
+  BroadcastChannel names and Web Locks under `__sdl:<token>:` (storage events translated; `databases()` and
+  `locks.query()` list only the lane's), and keeps its calls out of the HTTP cache: fetch to the app's site gets
+  `cache: 'no-store'` (unless the page asked for `no-store` or `only-if-cached`), and an asynchronous GET/HEAD XHR to
+  another origin of the app is made with fetch(`no-store`) by `lane-xhr.ts`, the XHR object showing its states,
+  answer, headers and events (`loadstart`, `readystatechange`, `progress`, `load`/`error`/`timeout`/`abort`,
+  `loadend`) as XHR does. Service workers can't be registered there; a page a service worker controls is reported
+  (`workerWarning`). Its `localStorage` views are Proxies: `Storage.prototype`'s methods and `length` are wrapped to
+  act on a view when called with one as `this` (and are the browser's own otherwise), and the views use the natives
+  captured at `document_start`. Its own timers, promises and events use the originals captured then too, so page
+  instrumentation (New Relic, Sentry) never sees them. The relay also says hello with the token it saw: a lane page
+  without it (served from cache, or before the tab joined) is reloaded bypassing the cache. The worker checks every
+  relay message against the sender tab's lane and the app's domains (`onRelay`).
+- **Other tabs never see a lane's data.** While lanes exist, every other page of their apps gets the script too, and
+  only hides: `localStorage` shows (and `clear()` removes) none of the `__sdl:` keys — the real Storage's methods and
+  `length` hide them as well, for a page that kept a reference — storage events of lane keys are dropped, and
+  `indexedDB.databases()` and `navigator.locks.query()` leave lane names out. Pages already open when a lane's app
+  gets its first lane get it through `scripting.executeScript` (MAIN world, all frames, `hideInOpenPages`) before
+  the lane's storage is written; it runs once per document.
+- **Windows a lane page opens join it first** (`lane-open.ts`). A tab Chrome opens for a link or a form starts loading
+  at once, before the worker could add it to the rules. So `window.open`, links and forms whose target opens a new tab
+  or window (`_blank`, a name that isn't a frame of the page; a submit button clicked with Ctrl/Meta/Shift) first open
+  a blank window in the same gesture (same features; the page gets that WindowProxy, `opener` works for OAuth
+  popups), ask the worker (`opening`, from the lane tab, with a one-time nonce the blank window's relay confirms:
+  `adopt`, from the new tab, still about:blank) and only once the new tab is in the lane and its rules are applied
+  send it on: a link through `location.assign` (or an anchor in the blank document for `noreferrer`/`referrerpolicy`;
+  `noopener` severs `opener`), a form by posting the data it had (`FormData` with its submitter, files too) from a
+  form in the blank document. A form whose window couldn't join is not sent (the window closes). Links and forms are
+  decided after the page's own handlers (a listener added on `window` during capture runs last); one whose
+  propagation the page stopped is taken over at `stopPropagation` (a `preventDefault` after that still cancels it).
+  Tabs the browser opens itself from a lane tab's link (middle or Ctrl-click, the link's menu) are `candidates`: they
+  join when their first request's initiator is a page of the app, and that GET loads again. A tab whose opener is a
+  lane tab joins in no other way: Chrome names the active tab as the opener of tabs other pages and extensions open.
 - **Page scripts and normal switches leave lanes alone.** `readPageStorage`/`writePageStorage` take `lane` (only that
   lane's names, prefix stripped) and otherwise skip every `__sdl:` key and database; `dropLaneData` removes a lane's.
   `queryAppTabs` leaves lane tabs out, so switches never park, reload, save from or swap in them; the watcher and links
@@ -356,8 +402,11 @@ in the worker (`lane-state.ts`: in memory, written through to `sd:lanes` in sess
   that already has a lane gets another tab in it. Otherwise the snapshot is loaded (`LOCKED`/`NO_SESSION` as for a
   switch), a blank tab joins the new lane, the lane's storage is written on the switching page (scripts blocked, as in a
   switch) under the lane's names, leftovers of ended lanes are dropped, and the tab opens the account's start or last
-  page. Its tabs form a tab group named "label · app" in the account's colour. Tabs a lane page opens (`openerTabId`,
-  http(s) or about:blank) join its lane.
+  page (Swapdeck's own navigation: `allowNav`). Its tabs form a tab group named "label · app" in the account's colour.
+  Tabs its pages open join it as above. When Chrome puts another tab in a lane tab's place (`tabs.onReplaced`: a
+  discarded tab, a prerendered page), the new tab takes the old one's place in the lane (group, badge, rules); a page
+  already loaded in it came with the browser's cookies and loads again (`loadAgain`), a discarded one loads with the
+  lane's when shown.
 - **Saving.** An account lane's session (its jar and its storage, read from a lane tab on the origin, else a hidden
   staging tab) is saved into its account like auto-sync: only a strong identity of that account (`decideSave` with the
   lane's account as "active"; sites with detector `none` as they are), 4 s after its cookies change, at most every
@@ -565,8 +614,10 @@ through `executeScript`'s return value, never by message. Requests: `probe`, `sw
 `workspace.fromActive`, `workspace.remove`, `workspace.reorder`, `workspace.switch`, `workspace.open` (both return a
 `WorkspaceOutcome`: per-app results, `switched`, `failed`, `opened`), `settings.update`, `vault.*`, `backup.*`,
 `history.clear`, `data.wipe`, `unsaved`, `ask.answer`, `switch.guarded`, `sync.now`, `sync.clear`, `lane.open`,
-`lane.close`, `lane.focus`, `lane.save`, `lane.unsaved`, `session.import`. Lane page relays send `{ swapdeckLane: true, kind }`
-messages, answered by `lanes.ts` only for content scripts in lane tabs (§6a); the router never answers them.
+`lane.close`, `lane.focus`, `lane.save`, `lane.unsaved`, `session.import`. Lane page relays send
+`{ swapdeckLane: true, kind }` messages (`hello`, `sync`, `cookie`, `flush`, `sw`, `opening`, `adopt`), answered by
+`lanes.ts` only for content scripts in lane tabs — `adopt` only from a blank top-level document with a nonce a lane
+tab's `opening` gave (§6a); the router never answers them.
 Error codes: `NO_ACCESS`, `LOCKED`, `BAD_PASSPHRASE`, `NOT_FOUND`, `NO_SESSION`, `NO_TAB`, `STAGING_FAILED`, `TIMEOUT`,
 `BUSY`, `INVALID` (with a detail such as `identity`, `passphrase`, `password`, `origin`, `url`, `overlap:<app>`),
 `BLOCKED_DOMAIN`, `CORRUPT`, `VAULT_EXISTS`, `NO_VAULT`, `UNKNOWN`. `ui/hooks.ts` (`errorText`) turns them into
@@ -620,12 +671,32 @@ refuses to zip a build with install-time host permissions.
 - **Separate tabs** cover the app's own domains: a sign-in provider on another domain (GitHub, Google…) uses the
   browser's account there. Requests made by the site's service worker or shared workers carry no tab, so they use the
   browser's sign-in (Swapdeck warns when a lane page is controlled by one); dedicated workers' `indexedDB` and
-  `BroadcastChannel` aren't renamed. SameSite isn't applied to the lane's cookies (they go with every request to the
-  app's sites from that tab, even one asking for no credentials). A page served from a service worker without its lane
-  is reloaded once. An XHR of a lane page to another origin of the app can't be kept out of the HTTP cache (no header
-  can be added there without a CORS preflight). A page that was open before the lane's keys existed doesn't hide them
-  (its `localStorage.clear()` also removes them).
-  A lane's cookies live in memory; what changed since its last save is lost if Chrome crashes.
+  `BroadcastChannel` aren't renamed. A page served from a service worker without its lane is reloaded once. A lane's
+  cookies live in memory; what changed since its last save is lost if Chrome crashes. What declarativeNetRequest and
+  the page script can't see, precisely:
+  - **SameSite.** Rules can't see a request's credentials mode: the app's own calls that ask for no credentials
+    (`credentials: 'omit'`, a cross-origin XHR without `withCredentials`) still carry the lane's cookies, and calls from
+    other sites' pages carry none even when they ask for credentials (Chrome would send SameSite=None cookies). Same
+    site is the registrable domain, without the scheme (Chrome's schemeful same-site counts http and https of one site
+    as two). Of the frames around a request only its initiator and the top-level page count (a frame of site A inside
+    a frame of B inside A is same-site here), and before Chrome 145 (no `topDomains`) only the initiator: a frame of
+    the app inside another site's page then sends every cookie on its own requests. A navigation the user starts
+    without a page (address bar, bookmark) can't be told from another site's link: where Strict cookies apply, it
+    goes once without them and loads again with them.
+  - **New tabs.** A tab the browser opens itself from a lane page's link (middle or Ctrl-click, the link's menu,
+    dragging it to the tab strip) is only seen once its first request has gone: that GET carries the browser's
+    cookies, then the tab joins and loads again (forms never go that way: a Ctrl/Shift-clicked submit is sent through
+    a window that joined first). A click whose propagation the page stops is taken over then; if the page cancels it
+    afterwards without `preventDefault` (an inline handler returning `false`), the window still opens. A page of
+    another site shown in a lane tab runs no page script: windows it opens are ordinary tabs. If the worker doesn't
+    confirm a new window within 5 s, a link still opens there as an ordinary tab and a form is not sent.
+  - **Other tabs.** A reference to the real `localStorage` a page kept before the page script ran hides lane keys from
+    its methods and `length`, not from property access (`Object.keys(saved)`, `saved['__sdl:…']`). Names a lane
+    couldn't remove when it ended (`sd:laneLeftovers`, no page of the site to run in) show until the next cleanup.
+  - **HTTP cache.** XHRs to another origin of the app that `lane-xhr.ts` leaves to the browser — synchronous ones,
+    `open()` with a user name, after `overrideMimeType`, `responseType: 'document'` — and fetches with an `init` that
+    isn't a plain object can still be answered from, or stored in, the HTTP cache (no header can be added there
+    without a CORS preflight).
 
 ## 14. Build and tests
 

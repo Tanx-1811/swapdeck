@@ -266,10 +266,17 @@ body {
 
 .page-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
   padding-bottom: 4px;
+}
+
+/* The lead keeps a readable measure: when the buttons would squeeze it, they move under it. */
+.page-header__text {
+  flex: 1 1 380px;
+  min-width: 0;
 }
 
 .page-header h1 {
@@ -291,6 +298,7 @@ body {
 
 .page-header__actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -1695,6 +1703,8 @@ body {
   letter-spacing: 0.12em;
   text-align: left;
   text-transform: uppercase;
+  /* "ỨNG DỤNG" stays one heading on a narrow window; the cells below wrap instead. */
+  white-space: nowrap;
 }
 
 .table td {
@@ -1711,16 +1721,14 @@ body {
   background: color-mix(in srgb, var(--bg-hover) 60%, transparent);
 }
 
-.history-accounts {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
+/* "From → to" reads as one line of text: on a narrow window it wraps between words, not inside names. */
 .history-accounts svg {
+  display: inline-block;
   width: 14px;
   height: 14px;
+  margin: 0 5px;
   color: var(--text-3);
+  vertical-align: -2px;
 }
 
 /* --- Backup ------------------------------------------------------------------------------ */
@@ -2119,6 +2127,8 @@ body {
   /* minmax(0, …): the strip of tabs scrolls inside the column instead of widening the page. */
   .manager {
     grid-template-columns: minmax(0, 1fr);
+    /* The strip keeps its own height; a short page never stretches it into an empty band. */
+    grid-template-rows: auto 1fr;
     background: none;
   }
 
@@ -2178,8 +2188,14 @@ body {
     border-bottom: 1px solid var(--lacquer-border);
   }
 
+  /* The name goes, the link keeps it (for screen readers): it leads to the overview. */
   .sidebar__brand .logo > span {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .sidebar nav {
@@ -2195,6 +2211,31 @@ body {
 
   .sidebar__link {
     white-space: nowrap;
+  }
+
+  /* Only the open page shows its name: the others are icons (names as tooltips and for screen
+     readers), so every page fits in the strip without scrolling. */
+  .sidebar__link:not([aria-current='page']) {
+    padding: 8px 10px;
+  }
+
+  .sidebar__link:not([aria-current='page']) .sidebar__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .sidebar__link:not([aria-current='page']) .sidebar__count {
+    position: absolute;
+    top: 1px;
+    right: -2px;
+    margin: 0;
+    padding: 0 4px;
+    font-size: 9.5px;
+    line-height: 14px;
   }
 
   .sidebar__link[aria-current='page']::before {

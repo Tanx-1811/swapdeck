@@ -302,3 +302,39 @@ test.describe('importing a sign-in', () => {
     await expect(dialog.locator('.callout--danger')).toHaveCount(0);
   });
 });
+
+test.describe('the manager on a narrow window', () => {
+  for (const language of ['en', 'vi'] as const) {
+    test(`keeps every page in the top strip, with no empty band (${language})`, async ({
+      call,
+      extensionId,
+      openExtensionPage,
+    }) => {
+      await call('settings.update', { patch: { language } });
+      const manager = await openExtensionPage('options/options.html#/add/custom');
+      for (const width of [600, 700, 760]) {
+        await manager.setViewportSize({ width, height: 800 });
+        for (const hash of ['#/add/custom', '#/settings', '#/apps']) {
+          await manager.goto(`chrome-extension://${extensionId}/options/options.html${hash}`);
+          await manager.locator('html[data-ready]').waitFor({ state: 'attached' });
+          const strip = await manager.locator('.sidebar').boundingBox();
+          // One row of tabs, however short the page.
+          expect(strip!.height, `${width} ${hash}`).toBeLessThan(70);
+          const links = manager.locator('.sidebar__link');
+          await expect(links).toHaveCount(8);
+          for (const link of await links.all()) {
+            const box = (await link.boundingBox())!;
+            expect(box.x, `${width} ${hash}`).toBeGreaterThanOrEqual(0);
+            expect(box.x + box.width, `${width} ${hash}`).toBeLessThanOrEqual(width);
+          }
+          expect(await manager.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+        }
+      }
+      // Every page keeps its name for screen readers and as a tooltip.
+      await expect(manager.getByRole('link', { name: language === 'vi' ? 'Lịch sử' : 'History' })).toHaveAttribute(
+        'title',
+        language === 'vi' ? 'Lịch sử' : 'History',
+      );
+    });
+  }
+});

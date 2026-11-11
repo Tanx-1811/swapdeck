@@ -63,6 +63,14 @@ Không cần đăng xuất, không gõ lại mật khẩu, không cần thêm h�
   tài khoản khác, Swapdeck đề nghị chuyển ngay trên trang rồi mở lại đúng trang đó — dựa vào dự án gần đây, trang đã ghim
   và **link bạn đặt cho tài khoản** ("supabase.com/dashboard/project/…", "acme.example"). Có thể cho tự chuyển luôn. Chuột
   phải vào link → **Mở link bằng tài khoản…**
+- **Tab riêng — hai tài khoản song song:** mở một tài khoản trong **tab riêng** và dùng nó ngay cạnh tài khoản của các
+  tab khác, cùng một cửa sổ, không cần thêm hồ sơ Chrome. Các tab của nó được gom vào nhóm mang tên và màu của tài khoản;
+  liên kết nó mở vẫn thuộc về nó; phiên được làm mới trong lúc dùng và tab riêng được mở lại sau khi Chrome khởi động lại.
+  **Tab nháp** đăng nhập người mới mà không đụng tới các tab khác: đóng là mất, hoặc **lưu thành tài khoản**. Có trong
+  popup (⋯ cạnh tài khoản), trang quản lý, menu chuột phải (cả trên link) và phím tắt.
+- **Nhập phiên đăng nhập** từ công cụ khác (Cookie-Editor, EditThisCookie, `cookies.txt`, storage state của Playwright)
+  thành tài khoản, và **gửi một tài khoản hay một bên cho người khác** bằng tệp khóa mật khẩu — không qua máy chủ nào;
+  tệp nhận được chỉ được thêm vào, không bao giờ thay dữ liệu.
 - **Báo phiên hết hạn:** khi trang không còn ai đăng nhập trong lúc một tài khoản đang dùng, tài khoản đó có nhãn **Hết
   phiên** và nằm trong mục **Đăng nhập lại**; đăng nhập lại là Swapdeck lưu phiên mới ngay.
 - **Bắt đầu với Swapdeck:** danh sách việc cho người mới, tự đánh dấu khi xong; nút **Kiểm tra bản mới** ở trang Hướng dẫn
@@ -211,6 +219,15 @@ click. No signing out, no retyping passwords, no extra Chrome profiles.
   Slack) while another one is in use, and Swapdeck offers to switch right on the page, then reopens that page — it knows
   from recent projects, pinned pages and **links you give an account** ("supabase.com/dashboard/project/…",
   "acme.example"). It can switch by itself, too. Right-click a link → **Open link as…**
+- **Separate tabs — two accounts side by side:** open an account in a **separate tab** and use it right next to the one
+  your other tabs use, in the same window, with no extra Chrome profile. Its tabs are grouped under the account's name
+  and colour; links it opens stay with it; its session stays fresh while you use it, and separate tabs come back after
+  Chrome restarts. A **scratch tab** signs in someone new without touching your other tabs: close it and it's gone, or
+  **save it as an account**. In the popup (⋯ next to an account), the manager, the right-click menu (links too) and a
+  shortcut.
+- **Import a sign-in** from other tools (Cookie-Editor, EditThisCookie, `cookies.txt`, Playwright storage state) as an
+  account, and **send one account or workspace to someone** in a password-locked file — no server involved; a received
+  file is only ever added, never replaces anything.
 - **Expired sessions:** when a site shows nobody signed in while one of your accounts is in use, the account gets an
   **Expired** label and a place under **Sign in again**; signing in saves the new session at once.
 - **Get started with Swapdeck:** a checklist for new users that ticks itself off; **Check for updates** on the Help

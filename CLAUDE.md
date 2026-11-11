@@ -80,6 +80,25 @@ tests, demo data and screenshots (use `*.example`/`*.test` addresses). Contribut
 - `Account.expiredAt` is informational: never let it decide what to save (`decideSave` trusts the active account when
   the automatic detector finds nobody). Mark only through `signedOutIsReliable` and two observations.
 
+## Separate tabs (lanes; read ARCHITECTURE §6a first)
+
+- A lane's cookies live only in its jar (`sd:lanes`, session storage) and reach requests through declarativeNetRequest
+  session rules limited to its `tabIds`, ids ≥ `LANE_RULE_BASE` (100 000): `guard.ts` stays below and
+  `clearStaleRules` never removes them. Never write a lane's cookies into `chrome.cookies`.
+- Lane storage is the origin's real storage under `__sdl:<token>:`. Every page script that reads or writes storage must
+  stay lane-aware: `readPageStorage`/`writePageStorage` skip `__sdl:` names unless given `lane`; keep it that way in new
+  page scripts, or a switch would save or wipe a lane's sign-in.
+- `queryAppTabs` excludes lane tabs; the watcher and links skip them (`isLaneTab`). New code that acts on "the app's
+  tabs" must do the same. A switch to an account with a lane goes through `releaseAccountLane` first.
+- Saving from a lane follows auto-sync's rule (strong identity of the lane's account, `decideSave` with it as active);
+  never save a lane into another account except through `saveLane` with an explicit, identity-checked target.
+- `content/lane-main.ts` runs in the page's world on every page of a lane app while lanes exist: it must never throw,
+  never break pages outside a lane (only hide `__sdl:` keys when present) and talk only to `lane-relay.ts`. The worker
+  re-checks every relay message (`onRelay`: sender tab's lane, app domain, script-set cookies only).
+- Tests: `tests/unit/lanes.test.ts` (cookie parsing, jar, rules), `tests/e2e/lanes.spec.ts` (two accounts side by side,
+  scratch → account, window.open, closing, takeover by a switch, restore after restart via `swapdeckTest` in the e2e
+  build). Shared files and sign-in import: `tests/e2e/sharing.spec.ts`, `tests/unit/session-import.test.ts`.
+
 ## Sync of the list (`core/sync.ts`, `background/sync.ts`; read ARCHITECTURE §10 first)
 
 - Never put a snapshot, cookie, token, the vault or anything else that signs in into `chrome.storage.sync`; only the

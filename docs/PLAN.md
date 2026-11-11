@@ -63,6 +63,9 @@ Tagline: **"Switch accounts in one click"** / **"Đổi tài khoản chỉ với
 | D20 | **164 presets, each checked live** (`scripts/verify-presets.mjs`); no presets on Google/Microsoft/Apple sign-in or sharing another's domain.   | A broad catalogue only helps if every entry works; shared domains (e.g. Amazon/AWS, TikTok Shop/TikTok) would switch two apps at once.                     |
 | D21 | Gallery **multi-select** with **one permission prompt** for all chosen sites (`app.addMany`).                                                  | Adding twenty apps one by one (twenty prompts) is the main friction for the owner's many apps.                                                             |
 | D22 | **Open source under MIT**, public repository, Swapdeck Desktop in `desktop/` of the same repository.                                           | Community use and contributions; one place for the extension, the desktop app and the brand kit.                                                           |
+| D23 | **Separate tabs** (1.8): an account per tab group through per-tab declarativeNetRequest cookie rules and a page-world storage shim, no proxy.  | Two accounts side by side without Chrome profiles or a desktop helper; everything stays in the extension and on the device. Limits: ARCHITECTURE §13.      |
+| D24 | **No fingerprint spoofing, proxies or "avoid account bans"** features, unlike anti-detect tools.                                               | Swapdeck is for people who legitimately hold several accounts (clients, work/personal), not for evading a site's rules.                                    |
+| D25 | Sending an account is a **password-locked file the user sends**, merge-only on import — no server, no team accounts.                           | Keeps the "no server, nothing leaves your device unless you send it" promise; a received file can never wipe someone's data.                               |
 
 ## 5. Open questions for the owner
 

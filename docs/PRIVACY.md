@@ -1,6 +1,6 @@
 # Swapdeck Privacy Policy
 
-_Last updated: 22 October 2026 · Applies to Swapdeck 1.0.0 and later (workspaces, side panel: 1.1.0; important accounts: 1.3.0; unsaved-work check: 1.4.0; optional sync of the list: 1.5.0; links of another account, check for updates: 1.6.0)_ · [Tiếng Việt](#chính-sách-quyền-riêng-tư-swapdeck)
+_Last updated: 8 November 2026 · Applies to Swapdeck 1.0.0 and later (workspaces, side panel: 1.1.0; important accounts: 1.3.0; unsaved-work check: 1.4.0; optional sync of the list: 1.5.0; links of another account, check for updates: 1.6.0; separate tabs, importing a sign-in, sending an account: 1.8.0)_ · [Tiếng Việt](#chính-sách-quyền-riêng-tư-swapdeck)
 
 Swapdeck is a Chrome extension for switching between several accounts on the same website. It works entirely inside
 your browser.
@@ -32,8 +32,10 @@ your browser.
 | For sync of the list: an id for this installation, what was last synced, the ids of things you removed (180 days)                                                             | Sync without copying or losing things            | While sync is on; removals are noted even while it is off               |
 
 While Chrome is open, the extension also keeps in memory (`chrome.storage.session`, erased when Chrome closes) who was
-last seen signed in on each app, the progress of a workspace switch while it runs, the links you said "not now" to and,
-while unlocked, the key that decrypts saved sessions.
+last seen signed in on each app, the progress of a workspace switch while it runs, the links you said "not now" to,
+the **separate tabs** you opened (which tabs, and the cookies their app's sites set in them — kept there instead of in
+Chrome's cookie store) and, while unlocked, the key that decrypts saved sessions. To bring separate tabs back after Chrome
+restarts, it remembers on your computer the names of their tab groups and which account each one was.
 
 **Saved sessions are sensitive:** anyone who can use your Chrome profile could sign in with them. Turn on the
 **passphrase lock** (Security) to encrypt them (RSA-OAEP and AES-256-GCM, with a key derived from your passphrase by
@@ -62,6 +64,12 @@ Everything is removed when you uninstall the extension, or with **Security → D
   to switch; only a real click answers it. It can also switch right away, or do nothing (Settings).
 - **Expired sessions:** when an added site shows nobody signed in while one of your accounts is in use, Swapdeck marks
   that account "expired" on your computer, so you know to sign in again.
+- **Separate tabs** (only the ones you open): requests from those tabs to the app's own sites carry the cookies of that
+  tab's account instead of Chrome's, and the cookies those sites set there are read from their responses and kept by
+  Swapdeck (in memory, above) instead of by Chrome. A small script on the app's pages keeps that tab's stored data under
+  names of its own, and keeps those names out of sight of your other tabs. While a separate tab is open, its account's
+  saved session is refreshed from it, as for the account in use; when it closes, what it left on the site is removed.
+  Other sites in those tabs, and every other tab, are not touched.
 
 ## Network requests
 
@@ -96,14 +104,21 @@ You can export a backup file yourself (apps, accounts, workspaces and settings).
 choose (AES-256-GCM, key derived with PBKDF2). The file goes only where you save it. Importing a backup never grants
 access to any site; you allow each app yourself.
 
+**Sending an account to someone** (an account's or a workspace's menu → Send to someone) makes the same kind of file
+with only that account or workspace and its sign-in, always encrypted with a password you choose; you send it yourself,
+and on their computer it can only be added (never replace what they have). **Importing a sign-in** exported by another
+tool (cookie JSON, `cookies.txt`, Playwright storage state) reads what you paste or pick on your computer, keeps only the
+cookies of that app's sites, and saves them as an account.
+
 ## Permissions
 
 `storage`, `unlimitedStorage` (saved data on this computer and, if you turn it on, sync of the list), `cookies` (sign-in cookies of added sites), `scripting`
 (stored data of added sites, the switching screen and confirmation), `activeTab` (offer "Add this site" for the current
 tab), `contextMenus`, `alarms`, `favicon` (right-click menu, auto-lock, site icons), `declarativeNetRequestWithHostAccess`
 (pauses the site's own scripts in the one tab doing a switch, during the switch), `sidePanel` (shows Swapdeck in Chrome's
-side panel), `tabGroups` (puts a workspace's pages in one named tab group) — these two give no access to any data — and
-optional access to the sites you add. Swapdeck doesn't run in incognito windows.
+side panel), `tabGroups` (puts a workspace's pages, or a separate tab's, in one named tab group) — these two give no
+access to any data — `webRequest` (reads the cookies the added sites set in separate tabs; it works only on sites you
+gave access to) and optional access to the sites you add. Swapdeck doesn't run in incognito windows.
 
 ## Changes and contact
 
@@ -113,7 +128,7 @@ Changes to this policy are listed here with a new date. Swapdeck is open source 
 
 # Chính sách quyền riêng tư Swapdeck
 
-_Cập nhật: 22/10/2026 · Áp dụng cho Swapdeck 1.0.0 trở lên (các bên, bảng bên: 1.1.0; tài khoản quan trọng: 1.3.0; kiểm tra nội dung chưa lưu: 1.4.0; đồng bộ danh sách tùy chọn: 1.5.0; link của tài khoản khác, kiểm tra bản mới: 1.6.0)_
+_Cập nhật: 08/11/2026 · Áp dụng cho Swapdeck 1.0.0 trở lên (các bên, bảng bên: 1.1.0; tài khoản quan trọng: 1.3.0; kiểm tra nội dung chưa lưu: 1.4.0; đồng bộ danh sách tùy chọn: 1.5.0; link của tài khoản khác, kiểm tra bản mới: 1.6.0; tab riêng, nhập phiên đăng nhập, gửi tài khoản: 1.8.0)_
 
 Swapdeck là tiện ích Chrome giúp chuyển giữa nhiều tài khoản trên cùng một trang web. Tiện ích hoạt động hoàn toàn
 trong trình duyệt của bạn.
@@ -173,6 +188,13 @@ Mọi dữ liệu bị xóa khi gỡ tiện ích, hoặc bằng **Bảo mật �
   chuyển; chỉ cú bấm thật mới trả lời được. Cũng có thể tự chuyển luôn, hoặc không làm gì (Cài đặt).
 - **Phiên hết hạn:** khi trang đã thêm không còn ai đăng nhập trong lúc một tài khoản của bạn đang dùng, Swapdeck đánh dấu
   tài khoản đó "hết phiên" ngay trên máy bạn, để bạn biết mà đăng nhập lại.
+- **Tab riêng** (chỉ những tab bạn mở): yêu cầu từ các tab đó tới chính các trang của ứng dụng mang cookie của tài khoản
+  của tab thay vì cookie của Chrome, và cookie các trang đó đặt ở đây được đọc từ phản hồi rồi do Swapdeck giữ (trong bộ
+  nhớ tạm, xóa khi đóng Chrome) thay vì Chrome. Một script nhỏ trên trang của ứng dụng cất dữ liệu lưu trữ của tab đó
+  dưới tên riêng, và giấu các tên đó khỏi các tab khác. Trong lúc tab riêng mở, phiên đã lưu của tài khoản được làm mới
+  từ đó như tài khoản đang dùng; khi đóng, những gì nó để lại trên trang bị xóa. Trang khác trong các tab đó, và mọi tab
+  khác, không bị đụng tới. Để mở lại tab riêng sau khi Chrome khởi động lại, Swapdeck nhớ trên máy bạn tên nhóm tab và
+  tài khoản của từng nhóm.
 
 ## Kết nối mạng
 
@@ -208,14 +230,21 @@ Bạn có thể tự xuất tệp sao lưu (ứng dụng, tài khoản, các bê
 (AES-256-GCM, khóa sinh bằng PBKDF2). Tệp chỉ nằm ở nơi bạn lưu. Nhập bản sao lưu không tự cấp quyền cho trang nào; bạn
 tự cho phép từng ứng dụng.
 
+**Gửi tài khoản cho người khác** (menu của tài khoản hoặc của bên → Gửi cho người khác) tạo một tệp cùng loại, chỉ chứa
+tài khoản hoặc bên đó cùng phiên đăng nhập, luôn được mã hóa bằng mật khẩu bạn chọn; bạn tự gửi tệp, và trên máy người
+nhận tệp chỉ được thêm vào (không bao giờ thay dữ liệu của họ). **Nhập phiên đăng nhập** xuất từ công cụ khác (JSON cookie,
+`cookies.txt`, storage state của Playwright) đọc những gì bạn dán hoặc chọn ngay trên máy, chỉ giữ cookie của các trang
+thuộc ứng dụng đó, rồi lưu thành tài khoản.
+
 ## Quyền
 
 `storage`, `unlimitedStorage` (dữ liệu lưu trên máy và, nếu bạn bật, đồng bộ danh sách), `cookies` (cookie đăng nhập của trang đã thêm), `scripting` (dữ
 liệu lưu trữ của trang đã thêm, màn hình chuyển và thông báo), `activeTab` (đề xuất "Thêm trang này" cho tab hiện tại),
 `contextMenus`, `alarms`, `favicon` (menu chuột phải, tự khóa, biểu tượng trang), `declarativeNetRequestWithHostAccess`
 (tạm dừng script của trang trong đúng tab đang chuyển, trong lúc chuyển), `sidePanel` (hiện Swapdeck ở bảng bên của
-Chrome), `tabGroups` (gom các trang của một bên vào một nhóm tab có tên) — hai quyền này không truy cập dữ liệu nào — và
-quyền tùy chọn trên các trang bạn thêm. Swapdeck không chạy trong cửa sổ ẩn danh.
+Chrome), `tabGroups` (gom các trang của một bên, hay của một tab riêng, vào một nhóm tab có tên) — hai quyền này không
+truy cập dữ liệu nào — `webRequest` (đọc cookie mà các trang đã thêm đặt trong tab riêng; chỉ trên trang bạn đã cấp quyền)
+và quyền tùy chọn trên các trang bạn thêm. Swapdeck không chạy trong cửa sổ ẩn danh.
 
 ## Thay đổi và liên hệ
 

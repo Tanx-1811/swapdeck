@@ -13,6 +13,7 @@ does. Product scope and decisions are in [PLAN.md](PLAN.md); privacy in [PRIVACY
 | Side panel     | `src/sidepanel/` (`sidepanel/sidepanel.html`) | The same switcher (`mode="panel"`), kept open next to the page; follows the active tab of its window.                                                                                                                                                 |
 | Manager        | `src/options/` (`options/options.html#/…`)    | Full-page UI: overview, workspaces (list, suggestions, editor), apps & accounts, add app (preset gallery with multi-select, or any site), app settings, history, backup, security (passphrase lock), settings, help.                                  |
 | Service worker | `src/background/service-worker.ts`            | The only writer of state. Switching apps and workspaces, saving, watching tabs, badge, context menus (pages and toolbar button), omnibox (`swd`), commands, side-panel behaviour, auto-lock.                                                          |
+| Lane scripts   | `src/content/lane-main.ts`, `lane-relay.ts`   | Registered while separate tabs exist, on their apps' sites: in a separate tab, the page's own view of cookies and storage (§6a).                                                                                                                      |
 | Page scripts   | `src/background/page-scripts.ts`              | Self-contained functions injected with `chrome.scripting.executeScript` (isolated world): read/write web storage and IndexedDB, probe the page, overlay, in-page toast, warning strip for important accounts.                                         |
 | Core           | `src/core/`                                   | Pure, unit-tested logic: types, presets (164), domains, identity detection, save decisions, workspaces (status, suggestions, tab-group colours), search ranking, cookies, crypto, backup format, validation, settings.                                |
 | Shared         | `src/shared/`                                 | Storage layout and readers (`store.ts`), typed messaging (`protocol.ts`), app helpers (`apps.ts`).                                                                                                                                                    |
@@ -21,25 +22,28 @@ does. Product scope and decisions are in [PLAN.md](PLAN.md); privacy in [PRIVACY
 
 ### Service worker modules (`src/background/`)
 
-| Module            | Responsibility                                                                                                                                                 |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `router.ts`       | Answers `chrome.runtime` messages from the extension's own pages only (`fromOwnPage`: the sender's own `url`/`origin`, never its tab's address).               |
-| `engine.ts`       | `switchTo` (with parking, rollback, `recoverInterruptedSwaps`), `saveLive`, `probe`, `capture`, `persist`, `restorePrevious`, per-app locks, staging tab.      |
-| `swap-journal.ts` | The journal of a running switch in session storage (`sd:swap`), read at worker start to undo a swap left halfway.                                              |
-| `workspaces.ts`   | `switchWorkspace` (every app of a workspace, background where possible, progress), `openWorkspace` (then its pages in a tab group).                            |
-| `watcher.ts`      | Reacts to app page loads: detects who is signed in, auto-sync, auto-capture, mismatch flag, confirmation toasts, account strip, last page & recents.           |
-| `state.ts`        | Single write queue (`exclusive`, `update`), history, snapshot packing/sealing, vault key in session storage.                                                   |
-| `admin.ts`        | Apps (incl. `addApps` in one step)/accounts/workspaces CRUD and cascades, settings, vault, backups (export/inspect/import), wipe.                              |
-| `guard.ts`        | The declarativeNetRequest session rule that blocks page scripts and frames in the tabs of a swap; clears rules left by a stopped worker.                       |
-| `cookie-jar.ts`   | Read/clear/write cookies of an app's domains through `chrome.cookies`.                                                                                         |
-| `tabs.ts`         | Tab queries for an app, `navigateAndWait`, `waitForComplete`, `runInTab`.                                                                                      |
-| `badge.ts`        | Per-tab toolbar badge (active account's initials and colour) and tooltip.                                                                                      |
-| `menus.ts`        | Right-click menu per app (`documentUrlPatterns`) and on the toolbar button (workspaces, side panel); rebuilt only when it changes.                             |
-| `omnibox.ts`      | `swd` keyword: ranked workspace and account suggestions, switch on Enter.                                                                                      |
-| `guarded.ts`      | Switches started without a page of ours (shortcuts, omnibox, menus): unsaved-work and important-account checks, the question on the page or in a small window. |
-| `sync.ts`         | Optional Chrome Sync of the list (`syncNow`, `clearSyncData`): pull, apply, push through `chrome.storage.sync` (§10).                                          |
-| `sync-journal.ts` | What the user removed on purpose (`noteRemoved`, `readRemoved`), so only that is removed on other computers.                                                   |
-| `links.ts`        | "Links of another account": `routeLink` (ask on the page, switch, or leave it), `openLinkAs` (right-click on a link), `ownerOfPage` (§6).                      |
+| Module              | Responsibility                                                                                                                                                 |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `router.ts`         | Answers `chrome.runtime` messages from the extension's own pages only (`fromOwnPage`: the sender's own `url`/`origin`, never its tab's address).               |
+| `engine.ts`         | `switchTo` (with parking, rollback, `recoverInterruptedSwaps`), `saveLive`, `probe`, `capture`, `persist`, `restorePrevious`, per-app locks, staging tab.      |
+| `swap-journal.ts`   | The journal of a running switch in session storage (`sd:swap`), read at worker start to undo a swap left halfway.                                              |
+| `workspaces.ts`     | `switchWorkspace` (every app of a workspace, background where possible, progress), `openWorkspace` (then its pages in a tab group).                            |
+| `watcher.ts`        | Reacts to app page loads: detects who is signed in, auto-sync, auto-capture, mismatch flag, confirmation toasts, account strip, last page & recents.           |
+| `state.ts`          | Single write queue (`exclusive`, `update`), history, snapshot packing/sealing, vault key in session storage.                                                   |
+| `admin.ts`          | Apps (incl. `addApps` in one step)/accounts/workspaces CRUD and cascades, settings, vault, backups (export/inspect/import), wipe.                              |
+| `guard.ts`          | The declarativeNetRequest session rule that blocks page scripts and frames in the tabs of a swap; clears rules left by a stopped worker.                       |
+| `cookie-jar.ts`     | Read/clear/write cookies of an app's domains through `chrome.cookies`.                                                                                         |
+| `tabs.ts`           | Tab queries for an app, `navigateAndWait`, `waitForComplete`, `runInTab`.                                                                                      |
+| `badge.ts`          | Per-tab toolbar badge (active account's initials and colour) and tooltip.                                                                                      |
+| `menus.ts`          | Right-click menu per app (`documentUrlPatterns`) and on the toolbar button (workspaces, side panel); rebuilt only when it changes.                             |
+| `omnibox.ts`        | `swd` keyword: ranked workspace and account suggestions, switch on Enter.                                                                                      |
+| `guarded.ts`        | Switches started without a page of ours (shortcuts, omnibox, menus): unsaved-work and important-account checks, the question on the page or in a small window. |
+| `sync.ts`           | Optional Chrome Sync of the list (`syncNow`, `clearSyncData`): pull, apply, push through `chrome.storage.sync` (§10).                                          |
+| `sync-journal.ts`   | What the user removed on purpose (`noteRemoved`, `readRemoved`), so only that is removed on other computers.                                                   |
+| `links.ts`          | "Links of another account": `routeLink` (ask on the page, switch, or leave it), `openLinkAs` (right-click on a link), `ownerOfPage` (§6).                      |
+| `lane-state.ts`     | The record of separate tabs (lanes) in memory and `sd:lanes`; `releaseAccountLane` for the engine (§6a).                                                       |
+| `lanes.ts`          | Separate tabs: open/end lanes, their rules, jar, Set-Cookie and page relay, saving into the account, restore (§6a).                                            |
+| `import-session.ts` | "Import a sign-in": an exported sign-in (core/session-import.ts) saved as an account (§10).                                                                    |
 
 ## 2. Data model and storage
 
@@ -71,18 +75,21 @@ are left alone), `links` (pages for "Open workspace", ≤ 30) and usage counters
 | `sd:install`        | This installation's random id, written into each sync item it sends                                                  |
 | `sd:syncRemoved`    | Sync keys of things the user removed → when (180 days, ≤ 3,000), noted even while sync is off                        |
 | `sd:syncGoneSeen`   | Tombstone sync key → when this computer first saw it (its own clock): tombstones expire 45 days after that           |
+| `sd:laneRestore`    | Separate tabs to bring back after a restart: lane token, kind, app, account, tab group title                         |
+| `sd:laneLeftovers`  | Per app: tokens of ended lanes whose names may still be on the site (removed the next time a page there is scripted) |
 
 `chrome.storage.session` (memory only, cleared when Chrome closes; extension pages and the worker only):
 
-| Key                | Contents                                                                                    |
-| ------------------ | ------------------------------------------------------------------------------------------- |
-| `sd:key`           | The unlocked vault private key (PKCS#8, base64) while the vault is unlocked                 |
-| `sd:live`          | Per app: last detected identity, whether it mismatches the active account, URL              |
-| `sd:progress`      | While a workspace switch runs: `{ workspaceId, total, done, current }` (shown in the popup) |
-| `sd:ask`           | A switch waiting for the user's answer in the confirmation window                           |
-| `sd:sync`          | How the last sync of the list went (`SyncStatus`, shown in Settings)                        |
-| `sd:linksDeclined` | Links the user said "not now" to (app, account and what matched; ≤ 200)                     |
-| `sd:swap`          | Per app, while a switch runs: its journal (tabs moved, where the live session was saved)    |
+| Key                | Contents                                                                                      |
+| ------------------ | --------------------------------------------------------------------------------------------- |
+| `sd:key`           | The unlocked vault private key (PKCS#8, base64) while the vault is unlocked                   |
+| `sd:live`          | Per app: last detected identity, whether it mismatches the active account, URL                |
+| `sd:progress`      | While a workspace switch runs: `{ workspaceId, total, done, current }` (shown in the popup)   |
+| `sd:ask`           | A switch waiting for the user's answer in the confirmation window                             |
+| `sd:sync`          | How the last sync of the list went (`SyncStatus`, shown in Settings)                          |
+| `sd:linksDeclined` | Links the user said "not now" to (app, account and what matched; ≤ 200)                       |
+| `sd:swap`          | Per app, while a switch runs: its journal (tabs moved, where the live session was saved)      |
+| `sd:lanes`         | Separate tabs: lanes (token, app, account, tabs, cookie jar, rule ids, groups) and tab → lane |
 
 Everything read from storage, backups or pages is untrusted and goes through `src/core/validate.ts`
 (`sanitizeApp`, `sanitizeAccount`, `sanitizeSnapshot`, …) or `parseSettings`. Ids pass `isId` (letters, digits, `_`,
@@ -285,6 +292,81 @@ the vault, a backup; sync optional) until `settings.onboardingHidden`. Help → 
 credentials, no referrer), parses the zip names and links only to this repository's release pages; installs with an
 `update_url` (Chrome Web Store) say Chrome updates them.
 
+## 6a. Separate tabs (`core/lanes.ts`, `background/lanes.ts`, `content/lane-*.ts`)
+
+A **lane** is an account used in some tabs while the browser's other tabs keep the account in use (VI "tab riêng"); a
+**scratch** lane is a fresh sign-in nobody saved yet ("tab nháp"), forgotten when its tabs close unless saved. Lanes live
+in the worker (`lane-state.ts`: in memory, written through to `sd:lanes` in session storage) and cover only their app's
+`domains`; every other site in their tabs, and every other tab, uses the browser's own sign-in.
+
+- **Cookies never reach Chrome's store.** Each lane has a jar (`CookieRecord[]`, seeded from the account's snapshot).
+  `laneRules` turns it into declarativeNetRequest session rules limited to the lane's `tabIds` (ids from
+  `LANE_RULE_BASE` = 100 000 up; `clearStaleRules` never touches them): per scope (each app domain with its subdomains,
+  each cookie's host or domain), cookie path and — when Secure cookies need it — scheme, a rule **sets** the `Cookie`
+  header (or removes it, so the browser's own cookies never go along); one rule drops `Set-Cookie` from every response
+  of the lane's sites; one keeps private responses (documents, XHR) out of the HTTP cache both ways (conditional
+  headers removed, `no-cache` asked, `no-store` answered). More specific rules have higher priority (Chrome applies the
+  highest rule that sets a header). The worker reads `Set-Cookie` through `webRequest.onHeadersReceived` with
+  `extraHeaders` (it sees the headers before the rule drops them), parses them (`parseCookie`, RFC 6265: domain,
+  path, Secure on secure origins only, prefixes, Max-Age over Expires) into the jar (`storeCookie`) and re-applies the
+  rules (`syncRules`: one at a time, coalesced). Listeners are added only while lanes exist, filtered to their apps'
+  sites; a 20 s heartbeat keeps the worker alive meanwhile and purges expired cookies.
+- **Only the lane's own requests feed its jar.** A tab's rules count from when Chrome has applied them
+  (`coveredAt`); a request the tab sent before (a tab that just joined, from `openerTabId`) carried the browser's
+  cookies, so `onSendHeaders` marks it (`uncovered`, per redirect hop) and its response's `Set-Cookie` is ignored. Rule
+  updates go through one queue (`syncRules`/`runRules`): a lane that ended meanwhile gets its rules removed, never
+  re-added (`retired`); ids waiting for removal are never reused; a failure only fails that lane's callers; rules of the
+  lane range that no lane owns are removed when the worker starts.
+- **Pages that went out with stale cookies load again.** `onSendHeaders` (main frames, GET only) compares the `Cookie`
+  header actually sent (after the rules) with the jar: a redirect that set cookies, or a tab that joined the lane
+  mid-load, is re-navigated once its rules are in step (`reloadOnce`: at most every 5 s per tab).
+- **The page's own view** (`content/lane-main.ts`, MAIN world, `document_start`, all frames, registered with
+  `scripting.registerContentScripts` only while lanes exist): the lane's document rules also set a `Server-Timing`
+  entry `swapdeck-lane;desc="<token>|<document.cookie value>"` on top-level pages (frames get the token only: their
+  timing can be visible to the page around them), which the script reads synchronously from the navigation entry
+  (about:blank frames take their parent's). The relay asks the worker what `document.cookie` reads (`sync`) when the page
+  starts and whenever the site sets cookies in the lane (`changed`, sent to the lane's tabs), and every answer to a write
+  or flush carries it too, so cookies set by responses (CSRF tokens) show up. In a lane it redefines `document.cookie` (reads the lane's non-HttpOnly
+  cookies; writes go to the worker through `lane-relay.ts` → `runtime.sendMessage`, parsed as a script would, never
+  over an HttpOnly cookie), hides `cookieStore`, makes `fetch`/XHR wait for pending cookie writes and, after non-GET
+  requests, for the response's `Set-Cookie` ("flush"), and keeps `localStorage`, IndexedDB names, BroadcastChannel names
+  and Web Locks under `__sdl:<token>:` (storage events translated). Service workers can't be registered there; a page
+  a service worker controls is reported (`workerWarning`). In other tabs, when lane keys exist, it only hides them
+  (and keeps them out of the page's `clear()`). The relay also says hello with the token it saw: a lane page without it
+  (served from cache, or before the tab joined) is reloaded bypassing the cache. The worker checks every relay message
+  against the sender tab's lane and the app's domains (`onRelay`).
+- **Page scripts and normal switches leave lanes alone.** `readPageStorage`/`writePageStorage` take `lane` (only that
+  lane's names, prefix stripped) and otherwise skip every `__sdl:` key and database; `dropLaneData` removes a lane's.
+  `queryAppTabs` leaves lane tabs out, so switches never park, reload, save from or swap in them; the watcher and links
+  ignore them (`lanes.ts` watches them: identity from the jar and the lane's storage, `status` ok / other-person /
+  signed-out, last page and recents of the account, toast once per tab, the ribbon for important accounts, the badge).
+- **Opening** (`openLane`): the account in use by the browser's own tabs is refused (`INVALID: in-use`); an account
+  that already has a lane gets another tab in it. Otherwise the snapshot is loaded (`LOCKED`/`NO_SESSION` as for a
+  switch), a blank tab joins the new lane, the lane's storage is written on the switching page (scripts blocked, as in a
+  switch) under the lane's names, leftovers of ended lanes are dropped, and the tab opens the account's start or last
+  page. Its tabs form a tab group named "label · app" in the account's colour. Tabs a lane page opens (`openerTabId`,
+  http(s) or about:blank) join its lane.
+- **Saving.** An account lane's session (its jar and its storage, read from a lane tab on the origin, else a hidden
+  staging tab) is saved into its account like auto-sync: only a strong identity of that account (`decideSave` with the
+  lane's account as "active"; sites with detector `none` as they are), 4 s after its cookies change, at most every
+  30 s, with auto-sync on — and always when the lane ends. Someone else signed in there is never saved into it
+  (`status: other-person`); "Save as account" (`saveLane`) files any lane's sign-in by identity (or a chosen account,
+  refused for another person) and turns a scratch lane into that account's lane when it isn't in use elsewhere.
+- **Ending** (last tab closed, "Close separate tab", account or app removed, wipe): save (account lanes); then its
+  pages leave **before** its rules go — closed, or (kept tabs) their sessionStorage cleared and moved to `about:blank`
+  — so no lane page ever runs with the browser's cookies; then the rules go (through the queue), restore info is
+  recorded and the lane's names are removed from the site (from any page of the origin, else a hidden staging tab,
+  else noted in `sd:laneLeftovers`). Kept tabs go back to their pages with the browser's sign-in. **A switch of the
+  browser's tabs to an account that has a lane** (`switchTo`, after the target snapshot loaded) ends that lane with a
+  save (`releaseAccountLane`), loads the snapshot again (the lane's is newer) and adds the lane's tabs to its parked
+  tabs: they come back once the account is in place (or the rollback is).
+- **Restarts.** Session rules, `sd:lanes` and registered scripts go when Chrome restarts or the extension updates; tab
+  groups come back. `restoreLanes` (on start-up and on update) re-opens account lanes in the tabs of their groups (by
+  title, `sd:laneRestore`): the tabs first leave the site (their pages run the browser's account), then join the lane,
+  its storage is written from the saved session, and they go back to their pages. A lane that can't come back (scratch,
+  locked vault, account in use, site unreachable) has its tabs ungrouped and back on their pages, so no group claims an
+  account its tabs don't have. `openLane` holds the app's lock (no switch changes the account in use meanwhile).
+
 ## 7. Workspaces (`core/workspaces.ts`, `background/workspaces.ts`)
 
 A workspace is the unit for people who work for several parties ("các bên"): which saved account each app uses for a
@@ -384,6 +466,17 @@ sets `backupNudgeUntil`. The Backup page explains moving to another computer, an
 lists accounts without a saved session here with a "Sign in" (a fresh sign-in; the identity check files the new
 session under the matching account).
 
+**Sending an account** (`backup.export` with `only: { accountId | workspaceId }`): the same file, with only that
+account (or the workspace, its member accounts and their apps), their sessions, default settings and no `active`;
+always encrypted, marked `shared: true`, and it doesn't count as a backup (`lastBackupAt` unchanged). A shared file can
+only be merged: `importBackup` refuses `replace` (`INVALID: shared`) and the Backup page hides it.
+
+**Importing a sign-in** (`session.import`, `background/import-session.ts`): `parseSessionExport` reads Cookie-Editor /
+EditThisCookie JSON, Playwright storage state (cookies and the main origin's localStorage), Netscape `cookies.txt`
+(`#HttpOnly_` lines too) or a `Cookie:` header; keeps only unexpired cookies of the app's domains; and the snapshot is
+filed by identity like "Save this session" (an explicit account is refused for another person; a specific detector
+that finds nobody refuses with `NO_SESSION`). The browser isn't touched and no account becomes active.
+
 ### Sync of the list
 
 Off unless `settings.syncList`. Never synced: snapshots, cookies, tokens, the vault, history, recents, last pages,
@@ -454,7 +547,9 @@ through `executeScript`'s return value, never by message. Requests: `probe`, `sw
 `fresh`, `cycle`, `save`, `restorePrevious`, `app.*` (incl. `app.addMany`), `account.*`, `workspace.save`,
 `workspace.fromActive`, `workspace.remove`, `workspace.reorder`, `workspace.switch`, `workspace.open` (both return a
 `WorkspaceOutcome`: per-app results, `switched`, `failed`, `opened`), `settings.update`, `vault.*`, `backup.*`,
-`history.clear`, `data.wipe`, `unsaved`, `ask.answer`, `switch.guarded`, `sync.now`, `sync.clear`.
+`history.clear`, `data.wipe`, `unsaved`, `ask.answer`, `switch.guarded`, `sync.now`, `sync.clear`, `lane.open`,
+`lane.close`, `lane.focus`, `lane.save`, `session.import`. Lane page relays send `{ swapdeckLane: true, kind }`
+messages, answered by `lanes.ts` only for content scripts in lane tabs (§6a); the router never answers them.
 Error codes: `NO_ACCESS`, `LOCKED`, `BAD_PASSPHRASE`, `NOT_FOUND`, `NO_SESSION`, `NO_TAB`, `STAGING_FAILED`, `TIMEOUT`,
 `BUSY`, `INVALID` (with a detail such as `identity`, `passphrase`, `password`, `origin`, `url`, `overlap:<app>`),
 `BLOCKED_DOMAIN`, `CORRUPT`, `VAULT_EXISTS`, `NO_VAULT`, `UNKNOWN`. `ui/hooks.ts` (`errorText`) turns them into
@@ -475,7 +570,8 @@ detected identity, the active and matching accounts, and a status: `match`, `mis
 | `contextMenus`, `alarms`, `favicon`       | Right-click switching, auto-lock, site icons in the UI                                                                                                |
 | `declarativeNetRequestWithHostAccess`     | The script-blocking CSP rule on the staging page, in one tab, during a swap                                                                           |
 | `sidePanel`                               | The switcher in Chrome's side panel (`side_panel.default_path: sidepanel/sidepanel.html`)                                                             |
-| `tabGroups`                               | "Open workspace" names and colours the tab group of the workspace's pages                                                                             |
+| `tabGroups`                               | "Open workspace" names and colours the tab group of the workspace's pages; each separate tab's pages are grouped under its account                    |
+| `webRequest`                              | Separate tabs: reads `Set-Cookie` of the added sites' responses in those tabs (with `extraHeaders`), to keep them in the lane's jar (§6a)             |
 | Optional host access (`*://*/*` declared) | Requested **per app** when it is added, e.g. `*://*.supabase.com/*`; released when the app is removed                                                 |
 
 `incognito: "not_allowed"`: incognito sign-ins vanish with the window. Google, YouTube, Gmail, Microsoft Online,
@@ -504,6 +600,12 @@ refuses to zip a build with install-time host permissions.
   and is reported as failed while the others go on. Apps sharing a sign-in provider (e.g. several sites signing in with
   the same GitHub account) only switch the sites themselves, not the provider.
 - No incognito; sites that bind sessions to device fingerprints may reject restored sessions.
+- **Separate tabs** cover the app's own domains: a sign-in provider on another domain (GitHub, Google…) uses the
+  browser's account there. Requests made by the site's service worker or shared workers carry no tab, so they use the
+  browser's sign-in (Swapdeck warns when a lane page is controlled by one); dedicated workers' `indexedDB` and
+  `BroadcastChannel` aren't renamed. SameSite isn't applied to the lane's cookies (they go with every request to the
+  app's sites from that tab). A page served from the HTTP cache or a service worker without its lane is reloaded once.
+  A lane's cookies live in memory; what changed since its last save is lost if Chrome crashes.
 
 ## 14. Build and tests
 

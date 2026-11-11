@@ -2,6 +2,31 @@
 
 All notable changes to Swapdeck are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 1.8.0 — 2026-11-08
+
+Two accounts of the same site, side by side: **separate tabs**.
+
+- **Open in a separate tab** (popup or manager: ⋯ next to an account; right-click a page or a link; works for any saved
+  account but the one your tabs use): the account opens in a new tab with its own sign-in, while your other tabs keep
+  theirs — same window, no Chrome profile. Its tabs are grouped under the account's name and colour, the toolbar badge
+  shows it, links it opens in new tabs stay with it, and important accounts keep their red strip there.
+- **Scratch tab** (popup, manager, right-click, or a shortcut you set): a separate tab with nobody signed in. Sign in with
+  anyone; close it and it's gone, or **Save as account** from the popup — the tab then becomes that account's.
+- In a separate tab the popup says so: who is signed in there, which account your other tabs keep, and **Use in all
+  tabs** (your other tabs switch to it; these tabs become ordinary ones), **Another tab**, **Close separate tab**.
+- A separate tab's session is saved into its account while you use it (only when it is that account's person — someone
+  else signed in there is never saved into it) and once more when it closes; switching your tabs to that account takes
+  the separate tab over with its latest sign-in.
+- After Chrome restarts (or Swapdeck updates), separate tabs come back in their groups; when that isn't possible (a
+  locked passphrase, a scratch tab) their group is removed rather than claim an account the tabs no longer have.
+- **Import a sign-in** (an app's ⋯ in the manager): paste or pick an export from Cookie-Editor, EditThisCookie, Playwright
+  (`storageState`, with local storage) or a `cookies.txt`, and it is saved as the account it belongs to.
+- **Send to someone** (⋯ of an account or a workspace): a file with just that account or workspace and its sign-ins,
+  always locked with a password. Whoever receives it adds it with Backup → Import; such a file can never replace their
+  data.
+- New permission `webRequest` (no install warning): separate tabs read the cookies your added sites set there, so they
+  stay in that tab instead of Chrome's cookie store. Privacy policy and store listing updated.
+
 ## 1.7.0 — 2026-11-06
 
 A review of every part of Swapdeck — switching, sync, the lock, backups, every screen, and Swapdeck Desktop — found

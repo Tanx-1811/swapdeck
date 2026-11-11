@@ -4,7 +4,9 @@
  * compare. The lane's page script runs on every page of the app there, so it must not break
  * anything: the page loads, the lane is in force on the app's own pages (its `Server-Timing`
  * entry reached the page), nothing throws there that didn't throw in the ordinary tab, and the
- * page shows about as much as it did. Signed out, in a throwaway profile.
+ * page shows about as much as it did. Then the ordinary tab loads again while that lane exists
+ * (the page script runs there too, hiding the lane's names) and must look as it did the first
+ * time. Signed out, in a throwaway profile.
  *
  *   npm run build:e2e && npx playwright test --project=live lanes-live
  *   LIVE_ONLY=supabase,vercel npx playwright test --project=live lanes-live
@@ -188,6 +190,20 @@ for (let start = 0; start < presets.length; start += BATCH) {
           // A page that renders much less there than in an ordinary tab broke somewhere.
           if (plain.seen.text > 200 && seen.text < plain.seen.text * 0.3)
             line.problems.push(`shows much less (${seen.text} vs ${plain.seen.text} characters)`);
+
+          // The ordinary tab again, now that a lane of its app exists: the page script runs there
+          // too (it only hides the lane's names) and must change nothing for the page.
+          const watchedAgain = watch(plain.page, preset.domains);
+          await plain.page.reload({ waitUntil: 'domcontentloaded', timeout: 25_000 }).catch(() => undefined);
+          const again = await look(plain.page, watchedAgain);
+          const againErrors = again.errors.filter((message) => !before.has(normalize(message)));
+          const againFailures = again.failed.filter((request) => worked.has(request));
+          if (againErrors.length)
+            line.problems.push(`ordinary tab, new errors: ${againErrors.slice(0, 3).join(' | ')}`);
+          if (againFailures.length)
+            line.problems.push(`ordinary tab, requests failed: ${againFailures.slice(0, 3).join(' | ')}`);
+          if (plain.seen.text > 200 && again.text < plain.seen.text * 0.3)
+            line.problems.push(`ordinary tab shows much less (${again.text} vs ${plain.seen.text} characters)`);
         }
         await call('lane.close', { token: result.data!.token });
       }

@@ -613,4 +613,42 @@ test.describe('separate tabs after a restart', () => {
     expect(await whoIsSignedIn(lane.page)).toEqual(signedInAs('alice@acme.test'));
     expect(await reloadAndRead(site)).toEqual(signedInAs('bob@acme.test'));
   });
+  test("don't guess between two lanes whose groups have the same name", async ({ context, server, call, worker }) => {
+    const acme = await addAcme(call, server);
+    const { site, alice, bob } = await aliceAndBob(context, acme);
+    await signOutByHand(site);
+    await signIn(site, acme.origin, 'carol@acme.test');
+    await expect.poll(() => storedAccounts(context, acme.id)).toHaveLength(3);
+    // Two accounts with the same name: their separate tabs' groups are named alike.
+    await call('account.update', { id: bob.id, patch: { label: alice.label } });
+    const first = await openLane(context, call as Call, { appId: acme.id, accountId: alice.id });
+    const second = await openLane(context, call as Call, { appId: acme.id, accountId: bob.id });
+    await expect(second.page.locator('#server-user')).toHaveText('bob@acme.test');
+
+    await worker.evaluate(async () => {
+      await chrome.storage.session.remove('sd:lanes');
+      const rules = await chrome.declarativeNetRequest.getSessionRules();
+      await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: rules.map((rule) => rule.id) });
+      const scripts = await chrome.scripting.getRegisteredContentScripts();
+      if (scripts.length) await chrome.scripting.unregisterContentScripts({ ids: scripts.map((item) => item.id) });
+    });
+    await worker.evaluate(() =>
+      (
+        globalThis as unknown as { swapdeckTest: { forgetLanesForTest: () => Promise<void> } }
+      ).swapdeckTest.forgetLanesForTest(),
+    );
+    await worker.evaluate(() =>
+      (globalThis as unknown as { swapdeckTest: { restoreLanes: () => Promise<void> } }).swapdeckTest.restoreLanes(),
+    );
+    // Neither group claims an account now: both tabs are ordinary ones, with the browser's sign-in.
+    expect(await lanes(worker)).toEqual([]);
+    for (const page of [first.page, second.page]) {
+      expect(await reloadAndRead(page)).toEqual(signedInAs('carol@acme.test'));
+    }
+    const grouped = await worker.evaluate(
+      async (ids) => (await Promise.all(ids.map((id) => chrome.tabs.get(id)))).map((tab) => tab.groupId),
+      [first.tabId, second.tabId],
+    );
+    expect(grouped).toEqual([-1, -1]);
+  });
 });

@@ -912,8 +912,11 @@ export type EndLaneOptions = {
   reload?: boolean;
 };
 
-/** Lanes being ended (their tabs closing don't end them a second time). */
-const ending = new Set<string>();
+/**
+ * Lanes being ended, and when that is done: their tabs closing don't end them a second time, and
+ * whoever else asks to end one (a switch taking its account over) waits for it, session saved.
+ */
+const ending = new Map<string, Promise<unknown>>();
 
 /** Moves a tab off the site (its scripts stop) and resolves once it has, or after a few seconds. */
 async function toBlank(tabId: number): Promise<void> {
@@ -928,9 +931,16 @@ async function toBlank(tabId: number): Promise<void> {
  */
 export async function endLane(token: string, options: EndLaneOptions): Promise<ParkedTab[]> {
   await lanesReady();
+  const running = ending.get(token);
+  if (running) {
+    // Already ending (its tabs are that caller's): done once its session is saved and it is gone.
+    await running.catch(() => undefined);
+    return [];
+  }
   const lane = laneByToken(token);
-  if (!lane || ending.has(token)) return [];
-  ending.add(token);
+  if (!lane) return [];
+  let done!: () => void;
+  ending.set(token, new Promise<void>((resolve) => (done = resolve)));
   try {
     clearTimeout(captureTimers.get(token));
     captureTimers.delete(token);
@@ -1005,6 +1015,7 @@ export async function endLane(token: string, options: EndLaneOptions): Promise<P
     return kept;
   } finally {
     ending.delete(token);
+    done();
   }
 }
 
@@ -1290,19 +1301,32 @@ export async function restoreLanes(): Promise<void> {
   const raw = (await chrome.storage.local.get(RESTORE_KEY))[RESTORE_KEY];
   const live = new Set(allLanes().map((lane) => lane.token));
   const state = await readState();
-  for (const entry of sanitizeRestore(raw)) {
-    if (live.has(entry.token)) continue;
+  const entries = sanitizeRestore(raw).filter((entry) => !live.has(entry.token));
+  // Groups are found by name only: when two lanes had the same name (two accounts labelled alike),
+  // which group was whose can't be told, so neither comes back (rather than one account in both).
+  const titles = entries.map((entry) => entry.title);
+  const ambiguous = new Set(titles.filter((title, index) => titles.indexOf(title) !== index));
+  const claimed = new Set<number>();
+  for (const entry of entries) {
     await noteLeftovers(entry.appId, [entry.token]).catch(() => undefined);
     const groups = await chrome.tabGroups.query({ title: entry.title }).catch(() => [] as chrome.tabGroups.TabGroup[]);
     const tabIds: number[] = [];
     for (const group of groups) {
+      if (claimed.has(group.id)) continue;
+      claimed.add(group.id);
       const tabs = await chrome.tabs.query({ groupId: group.id }).catch(() => [] as chrome.tabs.Tab[]);
       for (const tab of tabs) if (tab.id !== undefined && !laneOfTab(tab.id)) tabIds.push(tab.id);
     }
     if (!tabIds.length) continue;
     const app = state.apps.find((item) => item.id === entry.appId);
     let restored = false;
-    if (entry.kind === 'account' && app && entry.accountId && state.active[app.id] !== entry.accountId) {
+    if (
+      entry.kind === 'account' &&
+      !ambiguous.has(entry.title) &&
+      app &&
+      entry.accountId &&
+      state.active[app.id] !== entry.accountId
+    ) {
       restored = await openLane({ appId: app.id, accountId: entry.accountId, adoptTabIds: tabIds })
         .then(() => true)
         .catch(() => false);

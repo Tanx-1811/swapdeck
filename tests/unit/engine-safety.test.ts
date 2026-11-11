@@ -446,3 +446,34 @@ describe('a swap interrupted by the worker stopping (journal in session storage)
     expect(browser.rules.map((rule) => rule.id)).toEqual([own]);
   });
 });
+
+describe('separate tabs and the app tabs a switch acts on', () => {
+  it("leaves out a lane's tabs for its own app only: on another app's site they are that app's tabs", async () => {
+    const lanes = await import('../../src/background/lane-state');
+    const { queryAppTabs } = await import('../../src/background/tabs');
+    lanes.resetLaneState();
+    await lanes.lanesReady();
+    const own = browser.addTab('https://acme.test/dashboard');
+    // A separate tab of another app whose page followed a link to Acme: Acme there uses the browser's sign-in.
+    const visiting = browser.addTab('https://app.acme.test/project');
+    const plain = browser.addTab('https://acme.test/');
+    const lane = (token: string, appId: string, tabIds: number[]) => ({
+      token,
+      kind: 'scratch' as const,
+      appId,
+      accountId: null,
+      tabIds,
+      jar: [],
+      ruleIds: [],
+      createdAt: 0,
+      title: token,
+      color: '#6f665b',
+      groups: {},
+    });
+    lanes.addLane(lane('aaaaaaaaaaaa', 'acme', [own.id]));
+    lanes.addLane(lane('bbbbbbbbbbbb', 'other', [visiting.id]));
+    const ids = (await queryAppTabs(APP)).map((tab) => tab.id).sort();
+    expect(ids).toEqual([visiting.id, plain.id].sort());
+    lanes.resetLaneState();
+  });
+});

@@ -1,7 +1,7 @@
 import { appForUrl, hostMatchesDomain, matchPatterns, parseHttpUrl } from '../core/domains';
 import type { AppDef } from '../core/types';
 import { SwapdeckError } from '../shared/protocol';
-import { isLaneTab, lanesReady } from './lane-state';
+import { laneOfTab, lanesReady } from './lane-state';
 
 export async function getTab(tabId: number | undefined | null): Promise<chrome.tabs.Tab | null> {
   if (tabId === undefined || tabId === null || tabId < 0) return null;
@@ -23,7 +23,9 @@ export function tabUrl(tab: chrome.tabs.Tab | null | undefined): string | null {
 
 /**
  * Normal-window tabs currently showing one of the app's sites, with the browser's own sign-in:
- * separate tabs (lanes.ts) have their own and are never switched, parked or saved from.
+ * the app's separate tabs (lanes.ts) have their own and are never switched, parked or saved from.
+ * A separate tab of another app that went to this app's site uses the browser's sign-in here, so
+ * it is one of these (a switch must park it, or its page could write the old session back).
  */
 export async function queryAppTabs(app: AppDef): Promise<chrome.tabs.Tab[]> {
   const [tabs] = await Promise.all([chrome.tabs.query({ url: matchPatterns(app) }), lanesReady()]);
@@ -32,7 +34,7 @@ export async function queryAppTabs(app: AppDef): Promise<chrome.tabs.Tab[]> {
     return (
       tab.id !== undefined &&
       !tab.incognito &&
-      !isLaneTab(tab.id) &&
+      laneOfTab(tab.id)?.appId !== app.id &&
       url &&
       app.domains.some((d) => hostMatchesDomain(url.hostname, d))
     );

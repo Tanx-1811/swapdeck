@@ -16,7 +16,8 @@ lần), chọn email hỗ trợ, chọn nơi công khai chính sách quyền ri�
 | Chính sách quyền riêng tư | `docs/PRIVACY.md` (EN + VI) — cần một địa chỉ công khai, xem bước 5                           |
 
 Trước mỗi lần nộp, chạy: `npm run lint && npm run format:check && npm run typecheck && npm test && npm run test:e2e`,
-rồi `npm run package`. Nên chạy thêm `npm run test:live` (kiểm tra mọi ứng dụng có sẵn trên trang thật).
+rồi `npm run package`. Nên chạy thêm `npm run test:live` (chuyển tài khoản trên mọi ứng dụng có sẵn, trang thật)
+và `npx playwright test --project=live lanes-live` (mở mọi ứng dụng có sẵn trong tab riêng, so với tab thường).
 
 ## 1. Tài khoản nhà phát triển
 

@@ -819,6 +819,12 @@ export const vi: Record<MessageKey, string> = {
   // Tab riêng: danh sách trong trang quản lý, đóng tab riêng, popup mở trong tab riêng (lane-ui)
   'lane.closeUnsavedBody': 'Đóng tab riêng sẽ đóng các tab này; nội dung chưa lưu ở đó có thể mất:',
   'lane.closeAnyway': 'Vẫn đóng',
+  'lane.otherTabs': 'Các tab {app} khác của bạn',
+  'lane.otherTabsHint': 'Chuyển ở đây là chuyển các tab đó, không phải tab riêng này.',
+  'lane.freshScratch': 'Tài khoản khác ở tab nháp',
+  'lane.freshScratchHint': 'Đăng nhập người khác trong một tab nháp mới; tab này và các tab khác giữ nguyên',
+  'lane.openOrdinary': 'Mở {app} ở tab thường',
+  'lane.switchedOthers': 'Các tab {app} khác giờ dùng “{label}”',
   'lanes.title': 'Tab riêng',
   'lanes.lead': 'Đang mở, mỗi tab có phiên đăng nhập riêng; các tab khác vẫn giữ tài khoản của chúng.',
   'lanes.signedInAs': 'Đang đăng nhập bằng {who}',

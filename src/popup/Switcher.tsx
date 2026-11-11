@@ -248,6 +248,9 @@ export function Switcher({ data, mode }: { data: Snapshot | null; mode: Mode }) 
         notify(t('popup.previousSaved', { label: saved?.label ?? '' }), 'info');
       } else if (here || options.open) {
         notify(t('popup.switched', { label: account.label }));
+      } else if (probe?.lane && probe.appId === app.id) {
+        // Asked from a separate tab of this app: it stays as it is, the other tabs changed.
+        notify(t('lane.switchedOthers', { app: app.name, label: account.label }));
       } else {
         notify(t('popup.switchedApp', { app: app.name, label: account.label }));
       }

@@ -141,7 +141,12 @@ export function AppPanel({ app, onBack }: { app: AppDef; onBack?: () => void }) 
         },
       );
     } else if (!isActive && account.capturedAt) {
-      items.push({ label: t('lane.open'), icon: <AppWindow />, onSelect: () => void openLane(app, account) });
+      items.push({
+        label: t('lane.open'),
+        icon: <AppWindow />,
+        hint: t('lane.openHint'),
+        onSelect: () => void openLane(app, account),
+      });
     }
     if (isActive && pageUrl) {
       items.push(
@@ -229,7 +234,8 @@ export function AppPanel({ app, onBack }: { app: AppDef; onBack?: () => void }) 
               : app.domains.join(', ')}
           </p>
         </div>
-        {!onCurrentTab && (
+        {/* In a separate tab the app is open already: "Open" (an ordinary tab) is in the menu, said so. */}
+        {!onCurrentTab && !inLane && (
           <button
             type="button"
             className="btn btn--sm"
@@ -246,7 +252,7 @@ export function AppPanel({ app, onBack }: { app: AppDef; onBack?: () => void }) 
           icon={<Ellipsis />}
           items={[
             {
-              label: t('popup.openApp', { app: app.name }),
+              label: inLane ? t('lane.openOrdinary', { app: app.name }) : t('popup.openApp', { app: app.name }),
               icon: <ExternalLink />,
               onSelect: () => {
                 void chrome.tabs.create({ url: active?.lastUrl ?? app.homeUrl });
@@ -308,53 +314,85 @@ export function AppPanel({ app, onBack }: { app: AppDef; onBack?: () => void }) 
         </Callout>
       )}
 
+      {/* A separate tab with nothing saved yet: its card above says what to do (sign in, save). */}
       {accounts.length === 0 ? (
-        <div className="empty">
-          <p className="empty__title">{t('popup.noAccounts', { app: app.name })}</p>
-          <p className="empty__text">
-            {onCurrentTab ? t('popup.noAccountsHint') : t('popup.noAccountsElsewhere', { app: app.name })}
-          </p>
-          {!onCurrentTab && (
-            <button
-              type="button"
-              className="btn btn--primary empty__action"
-              onClick={() => {
-                void chrome.tabs.create({ url: app.homeUrl });
-                close();
-              }}
-            >
-              <ExternalLink /> {t('popup.openToSignIn', { app: app.name })}
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="accounts" ref={listRef} role="list" aria-label={t('apps.accountsHeading')}>
-          {accounts.map((account, index) => (
-            <AccountRow
-              key={account.id}
-              account={account}
-              index={index}
-              active={account.id === activeId}
-              busy={busy === `acc:${account.id}` || busy === `lane:${account.id}`}
-              disabled={busy !== null}
-              menu={accountMenu(account)}
-              onSwitch={() => void switchAccount(app, account)}
-              onOpen={(url) => {
-                if (onCurrentTab && probe.tabId !== null && account.id === activeId) {
-                  void chrome.tabs.update(probe.tabId, { url });
+        !inLane && (
+          <div className="empty">
+            <p className="empty__title">{t('popup.noAccounts', { app: app.name })}</p>
+            <p className="empty__text">
+              {onCurrentTab ? t('popup.noAccountsHint') : t('popup.noAccountsElsewhere', { app: app.name })}
+            </p>
+            {!onCurrentTab && (
+              <button
+                type="button"
+                className="btn btn--primary empty__action"
+                onClick={() => {
+                  void chrome.tabs.create({ url: app.homeUrl });
                   close();
-                } else {
-                  void switchAccount(app, account, { url, open: true });
-                }
-              }}
-            />
-          ))}
-        </div>
+                }}
+              >
+                <ExternalLink /> {t('popup.openToSignIn', { app: app.name })}
+              </button>
+            )}
+          </div>
+        )
+      ) : (
+        <>
+          {/* In a separate tab, the list acts on the browser's other tabs: say so above it. */}
+          {inLane && (
+            <div className="lane-others">
+              <h2 className="section__title" id="lane-others">
+                {t('lane.otherTabs', { app: app.name })}
+              </h2>
+              <p className="lane-others__hint">{t('lane.otherTabsHint')}</p>
+            </div>
+          )}
+          <div
+            className="accounts"
+            ref={listRef}
+            role="list"
+            aria-label={inLane ? undefined : t('apps.accountsHeading')}
+            aria-labelledby={inLane ? 'lane-others' : undefined}
+          >
+            {accounts.map((account, index) => (
+              <AccountRow
+                key={account.id}
+                account={account}
+                index={index}
+                active={account.id === activeId}
+                busy={busy === `acc:${account.id}` || busy === `lane:${account.id}`}
+                disabled={busy !== null}
+                menu={accountMenu(account)}
+                onSwitch={() => void switchAccount(app, account)}
+                onOpen={(url) => {
+                  if (onCurrentTab && probe.tabId !== null && account.id === activeId) {
+                    void chrome.tabs.update(probe.tabId, { url });
+                    close();
+                  } else {
+                    void switchAccount(app, account, { url, open: true });
+                  }
+                }}
+              />
+            ))}
+          </div>
+        </>
       )}
 
       <div className="popup__actions">
+        {/* In a separate tab, another account means a scratch tab: nothing else changes. */}
+        {inLane && (
+          <button
+            type="button"
+            className="btn btn--dashed"
+            onClick={() => void openLane(app, null)}
+            disabled={busy !== null}
+            title={t('lane.freshScratchHint')}
+          >
+            {busy === `lane:${app.id}` ? <Spinner /> : <SquareDashed />} {t('lane.freshScratch')}
+          </button>
+        )}
         {/* With nothing saved and the app not open here, "another account" means nothing yet. */}
-        {(accounts.length > 0 || onCurrentTab) && (
+        {!inLane && (accounts.length > 0 || onCurrentTab) && (
           <button
             type="button"
             className="btn btn--dashed"
@@ -370,15 +408,17 @@ export function AppPanel({ app, onBack }: { app: AppDef; onBack?: () => void }) 
             {pending === 'save:' ? <Spinner /> : <Save />} {t('popup.saveSession')}
           </button>
         )}
-        <button
-          type="button"
-          className="btn btn--ghost"
-          onClick={() => void openLane(app, null)}
-          disabled={busy !== null}
-          title={t('lane.scratchHint')}
-        >
-          {busy === `lane:${app.id}` ? <Spinner /> : <SquareDashed />} {t('lane.scratch')}
-        </button>
+        {!inLane && (
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={() => void openLane(app, null)}
+            disabled={busy !== null}
+            title={t('lane.scratchHint')}
+          >
+            {busy === `lane:${app.id}` ? <Spinner /> : <SquareDashed />} {t('lane.scratch')}
+          </button>
+        )}
       </div>
       {editing && (
         <AccountEditor

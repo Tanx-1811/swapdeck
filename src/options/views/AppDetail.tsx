@@ -271,6 +271,7 @@ function AccountsPanel({
       {
         label: t('lane.open'),
         icon: <AppWindow />,
+        hint: t('lane.openHint'),
         onSelect: async () => {
           if (!(await requireUnlock())) return;
           if (account.important) {

@@ -814,6 +814,13 @@ export const en = {
   // Separate tabs: the manager's list, closing them, the popup in one (lane-ui)
   'lane.closeUnsavedBody': "Closing the separate tab closes these tabs; what isn't saved there may be lost:",
   'lane.closeAnyway': 'Close anyway',
+  'lane.otherTabs': 'Your other {app} tabs',
+  'lane.otherTabsHint': 'Switching here changes those tabs, not this separate tab.',
+  'lane.freshScratch': 'Another account in a scratch tab',
+  'lane.freshScratchHint':
+    'Sign in with someone else in a new scratch tab; this tab and your other tabs stay as they are',
+  'lane.openOrdinary': 'Open {app} in an ordinary tab',
+  'lane.switchedOthers': 'Your other {app} tabs now use "{label}"',
   'lanes.title': 'Separate tabs',
   'lanes.lead': 'Open now, each with its own sign-in; your other tabs keep theirs.',
   'lanes.signedInAs': 'Signed in as {who}',

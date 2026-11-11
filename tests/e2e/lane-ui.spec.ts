@@ -220,3 +220,65 @@ test.describe('separate tabs in the manager', () => {
     await expect(card.locator('[data-lane]')).toHaveCount(1);
   });
 });
+
+test.describe('the popup in a separate tab', () => {
+  test('says which tabs its actions change, and offers another account in a scratch tab', async ({
+    context,
+    server,
+    call,
+    worker,
+    extensionId,
+    tabIdOf,
+  }) => {
+    const acme = await addAcme(call, server);
+    const { site, alice, bob } = await aliceAndBob(context, acme);
+    const lane = await openLane(context, call as Call, tabIdOf, { appId: acme.id, accountId: alice.id });
+
+    const popup = await pageBeside(
+      context,
+      site,
+      `chrome-extension://${extensionId}/popup/popup.html?tab=${lane.tabId}`,
+    );
+    // The account list acts on the other tabs, and says so.
+    await expect(popup.getByRole('heading', { name: 'Your other Acme tabs' })).toBeVisible();
+    await expect(popup.getByRole('list', { name: 'Your other Acme tabs' })).toBeVisible();
+    await expect(popup.getByText('Switching here changes those tabs, not this separate tab.')).toBeVisible();
+    // Nothing acts on the other tabs without saying so: no plain "Open", no plain "another account".
+    await expect(popup.locator('.app-head').getByRole('button', { name: 'Open', exact: true })).toHaveCount(0);
+    await expect(popup.getByRole('button', { name: 'Sign in with another account' })).toHaveCount(0);
+    await popup.locator('.app-head').getByRole('button', { name: 'More actions' }).click();
+    await expect(popup.getByRole('menuitem', { name: 'Open Acme in an ordinary tab' })).toBeVisible();
+    await popup.keyboard.press('Escape');
+
+    const opened = context.waitForEvent('page');
+    await popup.getByRole('button', { name: 'Another account in a scratch tab' }).click();
+    const scratch = await opened;
+    await scratch.locator('#server-user', { hasText: 'nobody' }).waitFor();
+    await expect
+      .poll(async () => (await lanes(worker)).map((item) => item.kind).sort())
+      .toEqual(['account', 'scratch']);
+    // The browser's own tabs and this separate tab are as they were.
+    expect(await activeAccount(context, acme.id)).toBe(bob.id);
+    await expect(site.locator('#server-user')).toHaveText('bob@acme.test');
+    await lane.page.reload();
+    await expect(lane.page.locator('#server-user')).toHaveText('alice@acme.test');
+  });
+
+  test('outside a separate tab, keeps "Sign in with another account" and offers the menu hint', async ({
+    context,
+    server,
+    call,
+    openPopup,
+  }) => {
+    const acme = await addAcme(call, server);
+    const { site, alice } = await aliceAndBob(context, acme);
+    const popup = await openPopup(site);
+    await expect(popup.getByRole('button', { name: 'Sign in with another account' })).toBeVisible();
+    await expect(popup.getByRole('heading', { name: 'Your other Acme tabs' })).toHaveCount(0);
+    await popup.getByRole('button', { name: `More actions: ${alice.label}` }).click();
+    await expect(popup.getByRole('menuitem', { name: 'Open in a separate tab' })).toHaveAttribute(
+      'title',
+      'Use this account in a new tab; your other tabs stay as they are',
+    );
+  });
+});

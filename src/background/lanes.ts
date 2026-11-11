@@ -21,6 +21,7 @@ import {
   LANE_REGEX_BUDGET,
   LANE_RULE_BASE,
   LANE_RULE_BUDGET,
+  LANE_WIDE_RULES,
   laneJar,
   laneRules,
   newLaneToken,
@@ -142,8 +143,9 @@ async function applyRules(token: string): Promise<void> {
   const rules = laneRules({ token, tabIds, domains: app.domains, jar: lane.jar });
   const others = allLanes().filter((item) => item !== lane);
   const total = others.reduce((sum, item) => sum + item.ruleIds.length, 0) + rules.length;
-  // Every lane rule but the two lane-wide ones uses a regex.
-  const regexes = others.reduce((sum, item) => sum + Math.max(0, item.ruleIds.length - 3), 0) + regexCount(rules);
+  // Every lane rule but the lane-wide ones uses a regex.
+  const regexes =
+    others.reduce((sum, item) => sum + Math.max(0, item.ruleIds.length - LANE_WIDE_RULES), 0) + regexCount(rules);
   if (total > LANE_RULE_BUDGET || regexes > LANE_REGEX_BUDGET) throw new SwapdeckError('BUSY', 'lanes');
   const ids = ruleIdsFor(lane, rules.length);
   await chrome.declarativeNetRequest.updateSessionRules({

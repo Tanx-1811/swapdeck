@@ -42,9 +42,9 @@ export function newLaneToken(): string {
 
 // --- Cookies -----------------------------------------------------------------
 
-/** Whether a URL counts as secure for cookies (https, or a local address, as Chrome treats them). */
+/** Whether a URL counts as secure for cookies (https/wss, or a local address, as Chrome treats them). */
 export function isSecureUrl(url: URL): boolean {
-  if (url.protocol === 'https:') return true;
+  if (url.protocol === 'https:' || url.protocol === 'wss:') return true;
   const host = url.hostname;
   return host === 'localhost' || host.endsWith('.localhost') || /^127\.\d+\.\d+\.\d+$/.test(host) || host === '[::1]';
 }
@@ -254,9 +254,13 @@ type Scope = { host: string; exact: boolean };
 
 const escapeRegex = (text: string) => text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 
-/** Regex for requests to a scope and path, over the given scheme(s). RE2, as declarativeNetRequest uses. */
+/**
+ * Regex for requests to a scope and path, over the given scheme(s). RE2, as declarativeNetRequest
+ * uses. WebSockets count with their page's scheme (ws: like http:, wss: like https:): their
+ * handshake carries cookies too, and a rule that missed it would let the browser's own go along.
+ */
 export function scopeRegex(scope: Scope, path: string, scheme: 'any' | 'https' | 'http'): string {
-  const schemes = scheme === 'any' ? 'https?' : scheme;
+  const schemes = scheme === 'any' ? '(?:http|ws)s?' : scheme === 'https' ? '(?:https|wss)' : '(?:http|ws)';
   const host = scope.exact ? escapeRegex(scope.host) : `(?:[^/?#:@]+\\.)?${escapeRegex(scope.host)}`;
   const pathPart =
     path === '/' ? '(?:[/?#]|$)' : path.endsWith('/') ? escapeRegex(path) : `${escapeRegex(path)}(?:[/?#]|$)`;
@@ -288,12 +292,13 @@ const ALL_TYPES: chrome.declarativeNetRequest.ResourceType[] = [
 const PAGES = ['main_frame'] as chrome.declarativeNetRequest.ResourceType[];
 const FRAMES = ['sub_frame'] as chrome.declarativeNetRequest.ResourceType[];
 /** Responses that carry the signed-in person's data: never shared with the browser's cache. */
-const PRIVATE_TYPES = [
-  'main_frame',
-  'sub_frame',
-  'xmlhttprequest',
-  'other',
-] as chrome.declarativeNetRequest.ResourceType[];
+const NAVIGATIONS = ['main_frame', 'sub_frame'] as chrome.declarativeNetRequest.ResourceType[];
+/**
+ * The same for calls of the page (fetch, XHR…), where CORS applies: a header a rule adds that isn't
+ * CORS-safelisted (cache-control, pragma) can make a cross-origin call need a preflight its API
+ * doesn't answer. Rules only remove request headers there; lane-main.ts asks for no cache instead.
+ */
+const CALLS = ['xmlhttprequest', 'other'] as chrome.declarativeNetRequest.ResourceType[];
 
 export type LaneRule = Omit<chrome.declarativeNetRequest.Rule, 'id'>;
 
@@ -324,8 +329,9 @@ export function parseLaneTiming(description: string): { token: string; cookies: 
  * The session rules that make `tabIds` a lane over `domains` with cookie jar `jar`:
  *
  * - one rule drops `Set-Cookie` from every response of the lane's sites (the worker read them);
- * - one keeps the lane's private responses (pages, API calls) out of the browser's cache, both ways:
- *   no cached copy of another account's page answers the lane, and the lane's pages aren't kept;
+ * - two keep the lane's private responses (pages, API calls) out of the browser's cache, both ways:
+ *   no cached copy of another account's page answers the lane, and the lane's pages aren't kept
+ *   (calls only lose their conditional headers: rules never add an unsafe header where CORS applies);
  * - one names the lane to its frames (without cookies: see below);
  * - per scope (each app domain with its subdomains, each cookie's host or domain), per cookie path
  *   and per scheme when Secure cookies need it: the `Cookie` header (removed when no cookie of the
@@ -364,7 +370,20 @@ export function laneRules(options: {
         ],
         responseHeaders: [{ header: 'cache-control', operation: HEADER.set, value: 'no-store' }],
       },
-      condition: { tabIds, requestDomains: [...domains], resourceTypes: PRIVATE_TYPES },
+      condition: { tabIds, requestDomains: [...domains], resourceTypes: NAVIGATIONS },
+    },
+    {
+      priority: 1,
+      action: {
+        type: MODIFY,
+        requestHeaders: [
+          // No revalidation answered "not modified" for a copy the browser's own account cached.
+          { header: 'if-none-match', operation: HEADER.remove },
+          { header: 'if-modified-since', operation: HEADER.remove },
+        ],
+        responseHeaders: [{ header: 'cache-control', operation: HEADER.set, value: 'no-store' }],
+      },
+      condition: { tabIds, requestDomains: [...domains], resourceTypes: CALLS },
     },
     {
       // Frames learn only their lane: a frame's timing can be visible to the page around it (with
@@ -433,6 +452,9 @@ export function laneRules(options: {
   }
   return rules;
 }
+
+/** Rules of a lane that cover all its sites (no regex): Set-Cookie, the two cache rules, the frames' timing. */
+export const LANE_WIDE_RULES = 4;
 
 /** How many of a lane's rules use a regex (Chrome counts those separately). */
 export const regexCount = (rules: readonly LaneRule[]) => rules.filter((rule) => rule.condition.regexFilter).length;

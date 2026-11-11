@@ -6,6 +6,7 @@ import {
   laneJar,
   laneRules,
   laneTiming,
+  LANE_WIDE_RULES,
   LANE_TOKEN,
   newLaneToken,
   parseCookie,
@@ -273,7 +274,39 @@ describe('lane rules', () => {
     expect(domain.test('https://user@acme.test.evil.test/')).toBe(false);
   });
 
+  it("gives WebSocket handshakes the lane's cookies, never the browser's", () => {
+    for (const at of ['wss://app.acme.test/socket', 'ws://app.acme.test/socket', 'wss://api.acme.test/v1/live']) {
+      const expected = cookieHeader(jar.filter((cookie) => cookieApplies(cookie, url(at), NOW)));
+      expect(headerFor(rules, at, 'cookie', 'websocket'), at).toBe(expected || '<removed>');
+    }
+    // Secure cookies go over wss only, as over https.
+    expect(headerFor(rules, 'wss://app.acme.test/', 'cookie', 'websocket')).toContain('sec=1');
+    expect(headerFor(rules, 'ws://app.acme.test/', 'cookie', 'websocket')).not.toContain('sec=1');
+    const empty = laneRules({ token, tabIds: [1], domains: ['acme.test'], jar: [], nowSeconds: NOW });
+    expect(headerFor(empty, 'wss://acme.test/socket', 'cookie', 'websocket')).toBe('<removed>');
+  });
+
+  it('never adds a request header that would make a cross-origin call need a CORS preflight', () => {
+    // CORS-safelisted request headers, and those a page can't set (the browser owns them).
+    const allowed = new Set(['accept', 'accept-language', 'content-language', 'content-type', 'cookie']);
+    for (const rule of rules) {
+      const types = rule.condition.resourceTypes ?? [];
+      if (types.every((type) => type === 'main_frame' || type === 'sub_frame')) continue;
+      for (const header of rule.action.requestHeaders ?? []) {
+        if (header.operation === 'remove') continue;
+        expect(allowed.has(header.header), `${header.header} on ${types.join(',')}`).toBe(true);
+      }
+    }
+    expect(headerFor(rules, 'https://api.acme.test/v1', 'cache-control', 'xmlhttprequest', 'request')).toBeNull();
+    expect(headerFor(rules, 'https://api.acme.test/v1', 'pragma', 'xmlhttprequest', 'request')).toBeNull();
+    expect(headerFor(rules, 'https://api.acme.test/v1', 'cache-control', 'xmlhttprequest', 'response')).toBe(
+      'no-store',
+    );
+    expect(headerFor(rules, 'https://app.acme.test/', 'cache-control', 'sub_frame', 'request')).toBe('no-cache');
+  });
+
   it('stays small', () => {
+    expect(regexCount(rules)).toBe(rules.length - LANE_WIDE_RULES);
     expect(rules.length).toBeLessThan(30);
     expect(regexCount(rules)).toBeLessThan(28);
   });

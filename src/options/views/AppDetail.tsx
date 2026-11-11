@@ -27,7 +27,7 @@ import { formatBytes, relativeTime } from '../../i18n/translate';
 import { appToInput } from '../../shared/apps';
 import { hasAccess, onAccessChange, requestAccess } from '../../ui/access';
 import { AccountEditor } from '../../ui/AccountEditor';
-import { useAskBeforeSwitch } from '../../ui/askBeforeSwitch';
+import { useAskBeforeLaneClose, useAskBeforeSwitch } from '../../ui/askBeforeSwitch';
 import { AppIcon, Avatar } from '../../ui/Avatar';
 import { Callout, MenuButton, Spinner, useConfirm, useToast, type MenuItem } from '../../ui/controls';
 import { ExpiredFlag, LaneFlag } from '../../ui/flags';
@@ -229,6 +229,7 @@ function AccountsPanel({
 }) {
   const { t, language } = useI18n();
   const askBeforeSwitch = useAskBeforeSwitch();
+  const askBeforeLaneClose = useAskBeforeLaneClose();
   const { data, run, pending, requireUnlock } = useManager();
   const notify = useToast();
   const confirm = useConfirm();
@@ -250,7 +251,14 @@ function AccountsPanel({
       return [
         { kind: 'separator' },
         { label: t('lane.show'), icon: <AppWindow />, onSelect: () => void run('lane.focus', { token: lane.token }) },
-        { label: t('lane.close'), icon: <X />, onSelect: () => void run('lane.close', { token: lane.token }) },
+        {
+          label: t('lane.close'),
+          icon: <X />,
+          hint: t('lane.closeHint'),
+          onSelect: async () => {
+            if (await askBeforeLaneClose(lane)) await run('lane.close', { token: lane.token });
+          },
+        },
       ];
     }
     if (isActive || !account.capturedAt || !canSwitch) return [];

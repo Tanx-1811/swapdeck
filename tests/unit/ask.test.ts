@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { askText, type UnsavedTab } from '../../src/core/ask';
+import { askText, laneCloseText, type UnsavedTab } from '../../src/core/ask';
 import { parseSettings } from '../../src/core/settings';
 import { askOnPage, unsavedWork } from '../../src/background/page-scripts';
 import { createTranslator } from '../../src/i18n/translate';
@@ -92,6 +92,45 @@ describe('the confirmation a switch needs', () => {
   it('keeps the setting on unless turned off', () => {
     expect(parseSettings({}).guardUnsaved).toBe(true);
     expect(parseSettings({ guardUnsaved: false }).guardUnsaved).toBe(false);
+  });
+});
+
+describe('the confirmation "Close separate tab" needs', () => {
+  it('closes at once when nothing would be lost', () => {
+    expect(laneCloseText(t, { scratch: false, who: 'alice@acme.test', unsaved: [] })).toBeNull();
+    // A scratch tab nobody signed in to loses nothing either.
+    expect(laneCloseText(t, { scratch: true, who: null, unsaved: [] })).toBeNull();
+  });
+
+  it('asks about work not saved in its tabs, which closing closes', () => {
+    const text = laneCloseText(t, { scratch: false, who: 'alice@acme.test', unsaved: [tab('Editor | Acme')] })!;
+    expect(text).toMatchObject({
+      title: 'Unsaved work',
+      items: ['Editor | Acme — edited form'],
+      confirm: 'Close anyway',
+      danger: true,
+    });
+    expect(text.body).toContain('Closing the separate tab closes these tabs');
+  });
+
+  it('asks once about a scratch sign-in nobody saved, with the work in its tabs', () => {
+    const scratch = laneCloseText(t, { scratch: true, who: 'carol@acme.test', unsaved: [] })!;
+    expect(scratch).toMatchObject({ title: 'Close the scratch tab?', confirm: 'Close scratch tab', items: [] });
+    expect(scratch.body).toContain('carol@acme.test is signed in there and not saved');
+    const both = laneCloseText(t, { scratch: true, who: 'carol@acme.test', unsaved: [tab('Draft', 'typing')] })!;
+    expect(both.title).toBe('Close the scratch tab?');
+    expect(both.body).toContain('not saved');
+    expect(both.body).toContain('Closing the separate tab closes these tabs');
+    expect(both).toMatchObject({ items: ['Draft — text being typed'], confirm: 'Close anyway' });
+  });
+
+  it('speaks Vietnamese', () => {
+    const text = laneCloseText(createTranslator('vi'), { scratch: false, who: null, unsaved: [tab('Nháp')] })!;
+    expect(text).toMatchObject({
+      title: 'Có nội dung chưa lưu',
+      confirm: 'Vẫn đóng',
+      items: ['Nháp — biểu mẫu đã sửa'],
+    });
   });
 });
 

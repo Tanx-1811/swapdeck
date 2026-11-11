@@ -2,7 +2,8 @@ import { AppWindow, Plus, Save, Users, X } from 'lucide-react';
 import { identityLabel } from '../core/identity';
 import type { LaneSummary } from '../core/lane-registry';
 import type { AppDef } from '../core/types';
-import { Callout, Spinner, useConfirm, useToast } from '../ui/controls';
+import { useAskBeforeLaneClose } from '../ui/askBeforeSwitch';
+import { Callout, Spinner, useToast } from '../ui/controls';
 import { useI18n } from '../ui/i18n';
 import { useSwitcher } from './context';
 
@@ -14,7 +15,7 @@ import { useSwitcher } from './context';
 export function LaneCard({ app, lane }: { app: AppDef; lane: LaneSummary }) {
   const { t } = useI18n();
   const notify = useToast();
-  const confirm = useConfirm();
+  const askBeforeClose = useAskBeforeLaneClose();
   const { data, run, pending, busy, switchAccount, openLane, close, refresh } = useSwitcher();
   const { state } = data;
   const account = lane.accountId ? state.accounts.find((item) => item.id === lane.accountId) : undefined;
@@ -88,19 +89,8 @@ export function LaneCard({ app, lane }: { app: AppDef; lane: LaneSummary }) {
               title={scratch ? undefined : t('lane.closeHint')}
               disabled={pending !== null}
               onClick={async () => {
-                // A scratch sign-in that nobody saved is gone with its tabs: ask first.
-                if (
-                  scratch &&
-                  who &&
-                  !(await confirm({
-                    title: t('lane.closeScratchTitle'),
-                    body: t('lane.closeScratchBody', { who }),
-                    confirmLabel: t('lane.closeScratch'),
-                    danger: true,
-                  }))
-                ) {
-                  return;
-                }
+                // A scratch sign-in nobody saved, or work not saved in its tabs, is gone with them: ask first.
+                if (!(await askBeforeClose(lane))) return;
                 if (await run('lane.close', { token: lane.token }, 'lane.close')) close();
               }}
             >

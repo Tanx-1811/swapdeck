@@ -28,6 +28,8 @@ Two accounts of the same site, side by side: **separate tabs**.
   data, and a sign-in in any imported file only goes into an account it belongs to.
 - Closing a scratch tab where someone signed in and wasn't saved asks first; separate tabs wear their own indigo mark
   (never the red "in use" seal), and long names or emails no longer widen the popup.
+- **Close separate tab** asks first when its tabs hold unsaved work (an edited form, text being typed, a page that
+  warns before you leave), as a switch does — from the popup, an account's ⋯ menu and the manager's list.
 - New permission `webRequest` (no install warning): separate tabs read the cookies your added sites set there, so they
   stay in that tab instead of Chrome's cookie store. Privacy policy and store listing updated.
 - Store screenshots and a 21-second demo video (`npm run video`) show separate tabs; the README shows the demo.

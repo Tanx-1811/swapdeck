@@ -31,6 +31,7 @@ import {
 import { probe, restorePrevious, saveLive, switchTo } from './engine';
 import { importSession } from './import-session';
 import { closeLane, focusLane, openLane, saveLane } from './lanes';
+import { findLaneUnsaved } from './lane-ui';
 import { answerAsk, cycleGuarded, findUnsaved, runGuarded } from './guarded';
 import { clearSyncData, syncNow } from './sync';
 import { openWorkspace, switchWorkspace } from './workspaces';
@@ -175,6 +176,8 @@ async function handle(request: AnyRequest): Promise<unknown> {
     case 'lane.focus':
       await focusLane(request.token);
       return true;
+    case 'lane.unsaved':
+      return findLaneUnsaved(request.token);
     case 'lane.save':
       return saveLane(request.token, request.target);
   }

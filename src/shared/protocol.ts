@@ -167,6 +167,8 @@ type Api = {
   };
   /** Closes a separate tab's tabs (an account's session is saved first). */
   'lane.close': { req: { token: string }; res: true };
+  /** Tabs of a separate tab that may hold unsaved work (asked before "Close separate tab"). */
+  'lane.unsaved': { req: { token: string }; res: UnsavedTab[] };
   'lane.focus': { req: { token: string }; res: true };
   /**
    * Saves a sign-in exported by another tool (cookie JSON, cookies.txt, Playwright storage state,

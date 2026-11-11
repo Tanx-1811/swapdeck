@@ -22,6 +22,7 @@ import { appForUrl, displayUrl } from '../core/domains';
 import { identityLabel } from '../core/identity';
 import type { Account, AppDef } from '../core/types';
 import { AccountEditor } from '../ui/AccountEditor';
+import { useAskBeforeLaneClose } from '../ui/askBeforeSwitch';
 import { AppIcon } from '../ui/Avatar';
 import { Callout, MenuButton, Spinner, useConfirm, useToast, type MenuItem } from '../ui/controls';
 import { usePreviousSessions } from '../ui/hooks';
@@ -39,6 +40,7 @@ export function AppPanel({ app, onBack }: { app: AppDef; onBack?: () => void }) 
   const { t } = useI18n();
   const notify = useToast();
   const confirm = useConfirm();
+  const askBeforeLaneClose = useAskBeforeLaneClose();
   const { data, probe, run, pending, busy, switchAccount, freshLogin, saveSession, openLane, openManager, close } =
     useSwitcher();
   const [editing, setEditing] = useState<Account | null>(null);
@@ -132,7 +134,10 @@ export function AppPanel({ app, onBack }: { app: AppDef; onBack?: () => void }) 
         {
           label: t('lane.close'),
           icon: <X />,
-          onSelect: () => void run('lane.close', { token: lane.token }),
+          hint: t('lane.closeHint'),
+          onSelect: async () => {
+            if (await askBeforeLaneClose(lane)) await run('lane.close', { token: lane.token });
+          },
         },
       );
     } else if (!isActive && account.capturedAt) {

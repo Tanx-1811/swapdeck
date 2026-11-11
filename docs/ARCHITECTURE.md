@@ -44,6 +44,7 @@ does. Product scope and decisions are in [PLAN.md](PLAN.md); privacy in [PRIVACY
 | `lane-state.ts`     | The record of separate tabs (lanes) in memory and `sd:lanes`; `releaseAccountLane` for the engine (§6a).                                                       |
 | `lanes.ts`          | Separate tabs: open/end lanes, their rules, jar, Set-Cookie and page relay, saving into the account, restore (§6a).                                            |
 | `import-session.ts` | "Import a sign-in": an exported sign-in (core/session-import.ts) saved as an account (§10).                                                                    |
+| `lane-ui.ts`        | What the popup and manager ask about separate tabs before acting: `findLaneUnsaved` (unsaved work in a lane's tabs).                                           |
 
 ## 2. Data model and storage
 
@@ -238,6 +239,9 @@ On `tabs.onUpdated` for tabs of an added app (with access, not incognito, not th
   `beforeunload` handlers (a synthetic, cancelable `beforeunload`; an old-style `onbeforeunload` returning text), edited
   form fields (not search boxes) and a focused editor holding text. It returns yes/no only, 800 ms at most per tab.
   The popup, side panel and manager merge it into one confirmation (`askText` in `core/ask.ts`, `useAskBeforeSwitch`).
+  "Close separate tab" (popup, an account's menu, the manager's list) asks the same about the lane's own tabs, which
+  closing closes (`lane.unsaved` → `findLaneUnsaved` in `lane-ui.ts`; `laneCloseText`, `useAskBeforeLaneClose`), in
+  one question with a scratch sign-in nobody saved.
 - **Shortcut, address-bar and menu switches** go through `runGuarded`: the same checks (important accounts, unsaved
   work — also when re-opening the account in use, which reloads the tabs too — and "ask before switching"), then
   `askOnPage` (a closed shadow-root dialog; only trusted clicks confirm; Escape or 25 s answers no) on the current tab,
@@ -557,7 +561,7 @@ through `executeScript`'s return value, never by message. Requests: `probe`, `sw
 `workspace.fromActive`, `workspace.remove`, `workspace.reorder`, `workspace.switch`, `workspace.open` (both return a
 `WorkspaceOutcome`: per-app results, `switched`, `failed`, `opened`), `settings.update`, `vault.*`, `backup.*`,
 `history.clear`, `data.wipe`, `unsaved`, `ask.answer`, `switch.guarded`, `sync.now`, `sync.clear`, `lane.open`,
-`lane.close`, `lane.focus`, `lane.save`, `session.import`. Lane page relays send `{ swapdeckLane: true, kind }`
+`lane.close`, `lane.focus`, `lane.save`, `lane.unsaved`, `session.import`. Lane page relays send `{ swapdeckLane: true, kind }`
 messages, answered by `lanes.ts` only for content scripts in lane tabs (§6a); the router never answers them.
 Error codes: `NO_ACCESS`, `LOCKED`, `BAD_PASSPHRASE`, `NOT_FOUND`, `NO_SESSION`, `NO_TAB`, `STAGING_FAILED`, `TIMEOUT`,
 `BUSY`, `INVALID` (with a detail such as `identity`, `passphrase`, `password`, `origin`, `url`, `overlap:<app>`),

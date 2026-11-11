@@ -816,6 +816,10 @@ export const vi: Record<MessageKey, string> = {
     'Tab riêng áp dụng cho các trang của chính ứng dụng: đăng nhập bằng Google, Microsoft hay GitHub trên trang của họ vẫn dùng tài khoản của trình duyệt. Trang trả lời qua service worker có thể hiện tài khoản của các tab khác (Swapdeck sẽ báo). Phiên được lưu vào tài khoản trong lúc dùng và khi đóng tab. Sau khi Chrome khởi động lại, tab riêng được mở lại trong nhóm của nó, trừ khi các phiên đã lưu đang bị khóa.',
   'shortcut.scratch': 'Tab nháp mới cho trang hiện tại',
 
+  // Tab riêng: danh sách trong trang quản lý, đóng tab riêng, popup mở trong tab riêng (lane-ui)
+  'lane.closeUnsavedBody': 'Đóng tab riêng sẽ đóng các tab này; nội dung chưa lưu ở đó có thể mất:',
+  'lane.closeAnyway': 'Vẫn đóng',
+
   // Sending an account, importing a sign-in
   'share.menu': 'Gửi cho người khác…',
   'share.title': 'Gửi cho người khác',

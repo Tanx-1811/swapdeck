@@ -290,7 +290,16 @@ export function useConfirm() {
 // --- Menu --------------------------------------------------------------------
 
 export type MenuItem =
-  | { kind?: 'item'; label: string; icon?: ReactNode; onSelect: () => void; danger?: boolean; disabled?: boolean }
+  | {
+      kind?: 'item';
+      label: string;
+      icon?: ReactNode;
+      onSelect: () => void;
+      danger?: boolean;
+      disabled?: boolean;
+      /** What the item does, as its tooltip. */
+      hint?: string;
+    }
   | { kind: 'separator' };
 
 /** A dropdown menu anchored to its trigger button. Arrow keys move, Escape closes. */
@@ -403,6 +412,7 @@ export function MenuButton({
                 type="button"
                 role="menuitem"
                 className={`menu__item${item.danger ? ' menu__item--danger' : ''}`}
+                title={item.hint}
                 disabled={item.disabled}
                 onClick={() => {
                   setOpen(false);

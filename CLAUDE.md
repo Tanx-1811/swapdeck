@@ -65,7 +65,8 @@ tests, demo data and screenshots (use `*.example`/`*.test` addresses). Contribut
 - Every UI switch path asks through `useAskBeforeSwitch` (important accounts, unsaved work via the `unsaved` request,
   "ask before every switch"); non-UI paths (commands, omnibox, context menus) must call `runGuarded`/`cycleGuarded`
   (`guarded.ts`), never `switchTo`/`switchWorkspace` directly. `unsavedWork` runs in the MAIN world: keep it
-  self-contained and side-effect free beyond the synthetic `beforeunload`.
+  self-contained and side-effect free beyond the synthetic `beforeunload`. Every UI "Close separate tab" asks through
+  `useAskBeforeLaneClose` (unsaved work in the lane's tabs via `lane.unsaved`, a scratch sign-in nobody saved).
 - The lock reminder (`VaultNudge`, `vaultNudgeDue`) shows with ≥ 2 saved sessions and no vault; "Later" sets
   `settings.vaultNudgeUntil`. The backup reminder (`BackupNudge`, `backupNudgeDue`) comes after it in `Reminders`;
   "Later" sets `settings.backupNudgeUntil`, and `exportBackup` records `lastBackupAt`. Demo data hides both unless

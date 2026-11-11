@@ -73,6 +73,35 @@ export function askText(t: Translate, input: AskInput): AskText | null {
   };
 }
 
+export type LaneCloseInput = {
+  /** A scratch sign-in (nobody saved): gone with its tabs. */
+  scratch: boolean;
+  /** Who is signed in there, when known. */
+  who: string | null;
+  /** The lane's tabs whose pages may hold work that closing them would lose. */
+  unsaved: UnsavedTab[];
+};
+
+/**
+ * The confirmation "Close separate tab" needs, or null when it can close at once: a scratch
+ * sign-in nobody saved is lost with its tabs, and so is work not saved in them (closing a
+ * separate tab closes its tabs). One question covers both.
+ */
+export function laneCloseText(t: Translate, input: LaneCloseInput): AskText | null {
+  const { scratch, who, unsaved } = input;
+  const signIn = scratch && who ? t('lane.closeScratchBody', { who }) : '';
+  if (!signIn && !unsaved.length) return null;
+  const items = unsaved.map((tab) => `${tab.title} — ${t(`ask.reason.${tab.reason}`)}`);
+  const lost = unsaved.length ? t('lane.closeUnsavedBody') : '';
+  return {
+    title: signIn ? t('lane.closeScratchTitle') : t('ask.unsavedTitle'),
+    body: [signIn, lost].filter(Boolean).join(' '),
+    items,
+    confirm: unsaved.length ? t('lane.closeAnyway') : t('lane.closeScratch'),
+    danger: true,
+  };
+}
+
 /** A switch asked for outside the popup and the manager: keyboard shortcut, address bar or menu. */
 export type GuardedPlan =
   | {

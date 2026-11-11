@@ -1,6 +1,7 @@
 import { askText, type AskText, type GuardedPlan, type PendingAsk, type UnsavedTab } from '../core/ask';
 import { appForUrl } from '../core/domains';
 import { cycleAccount } from '../core/decide';
+import type { AppDef } from '../core/types';
 import { importantTargets, pendingMembers } from '../core/workspaces';
 import { readSessionInfo, readState, SESSION_KEYS, type State } from '../shared/store';
 import { SwapdeckError } from '../shared/protocol';
@@ -19,6 +20,29 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
   return Promise.race([promise, new Promise<null>((resolve) => setTimeout(() => resolve(null), ms))]);
 }
 
+/**
+ * Which of these tabs of the app have pages that may hold work a reload or a close would lose
+ * (edited forms, text being typed, a page that warns before it is left). Discarded tabs have none.
+ */
+export async function unsavedInTabs(app: AppDef, tabs: readonly chrome.tabs.Tab[]): Promise<UnsavedTab[]> {
+  const live = tabs.filter((tab) => tab.id !== undefined && !tab.discarded);
+  const results = await Promise.all(
+    live.map((tab) =>
+      withTimeout(
+        runInTab(tab.id!, unsavedWork, [], 'MAIN').catch(() => null),
+        PROBE_TIMEOUT_MS,
+      ).then((work) => ({ tab, work })),
+    ),
+  );
+  const found: UnsavedTab[] = [];
+  for (const { tab, work } of results) {
+    if (work?.dirty && work.reason) {
+      found.push({ tabId: tab.id!, appId: app.id, title: tab.title || app.name, reason: work.reason });
+    }
+  }
+  return found;
+}
+
 /** Open tabs of these apps whose pages may hold work a switch would lose. */
 export async function findUnsaved(appIds: readonly string[], known?: State): Promise<UnsavedTab[]> {
   const state = known ?? (await readState());
@@ -27,20 +51,7 @@ export async function findUnsaved(appIds: readonly string[], known?: State): Pro
   for (const appId of new Set(appIds)) {
     const app = state.apps.find((item) => item.id === appId);
     if (!app || !(await hasAccess(app))) continue;
-    const tabs = (await queryAppTabs(app)).filter((tab) => tab.id !== undefined && !tab.discarded);
-    const results = await Promise.all(
-      tabs.map((tab) =>
-        withTimeout(
-          runInTab(tab.id!, unsavedWork, [], 'MAIN').catch(() => null),
-          PROBE_TIMEOUT_MS,
-        ).then((work) => ({ tab, work })),
-      ),
-    );
-    for (const { tab, work } of results) {
-      if (work?.dirty && work.reason) {
-        found.push({ tabId: tab.id!, appId, title: tab.title || app.name, reason: work.reason });
-      }
-    }
+    found.push(...(await unsavedInTabs(app, await queryAppTabs(app))));
   }
   return found;
 }

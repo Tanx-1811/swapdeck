@@ -811,6 +811,10 @@ export const en = {
     "They cover the app's own sites: signing in with Google, Microsoft or GitHub on their pages uses the browser's account there. A site that answers through a service worker may show your other tabs' account (Swapdeck warns you). The session is saved into the account while you use it and when you close the tab. After Chrome restarts, separate tabs come back in their groups, unless your saved sessions are locked.",
   'shortcut.scratch': 'New scratch tab for the current site',
 
+  // Separate tabs: the manager's list, closing them, the popup in one (lane-ui)
+  'lane.closeUnsavedBody': "Closing the separate tab closes these tabs; what isn't saved there may be lost:",
+  'lane.closeAnyway': 'Close anyway',
+
   // Sending an account, importing a sign-in
   'share.menu': 'Send to someone…',
   'share.title': 'Send to someone',

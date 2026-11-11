@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  dropLaneData,
   probePage,
   readPageStorage,
   showOverlay,
@@ -201,6 +202,63 @@ describe('IndexedDB', () => {
     expect(result.errors.join(' ')).toMatch(/held/);
     held.close();
   }, 10_000);
+});
+
+describe('separate tabs (lanes)', () => {
+  const LANE = 'lane00000001';
+  const OTHER = 'lane00000002';
+
+  it("keeps the browser's own session and each lane's apart", async () => {
+    localStorage.setItem('token', 'own');
+    localStorage.setItem(`__sdl:${LANE}:token`, 'lane');
+    localStorage.setItem(`__sdl:${OTHER}:token`, 'other');
+
+    expect((await readPageStorage({ local: true, session: false, idb: false, idbLimitBytes: 0 })).local).toEqual({
+      token: 'own',
+    });
+    expect(
+      (await readPageStorage({ local: true, session: false, idb: false, idbLimitBytes: 0, lane: LANE })).local,
+    ).toEqual({ token: 'lane' });
+
+    // A normal switch replaces the browser's own keys and leaves every lane's alone.
+    await writePageStorage({ local: { token: 'next' } }, { local: true, session: false, idb: false });
+    expect(localStorage.getItem('token')).toBe('next');
+    expect(localStorage.getItem(`__sdl:${LANE}:token`)).toBe('lane');
+    expect(localStorage.getItem(`__sdl:${OTHER}:token`)).toBe('other');
+
+    // A lane write replaces only that lane's keys.
+    await writePageStorage({ local: { a: '1' } }, { local: true, session: false, idb: false, lane: LANE });
+    expect(localStorage.getItem(`__sdl:${LANE}:a`)).toBe('1');
+    expect(localStorage.getItem(`__sdl:${LANE}:token`)).toBeNull();
+    expect(localStorage.getItem('token')).toBe('next');
+    expect(localStorage.getItem(`__sdl:${OTHER}:token`)).toBe('other');
+  });
+
+  it('scopes databases the same way', async () => {
+    const dump: IdbDatabaseDump = {
+      name: 'auth',
+      version: 1,
+      stores: [{ name: 's', keyPath: null, autoIncrement: false, indexes: [], records: [['k', 'lane']] }],
+    };
+    await writePageStorage({ idb: [dump] }, { local: false, session: false, idb: true, lane: LANE });
+    const own = await readPageStorage({ local: false, session: false, idb: true, idbLimitBytes: 1e6 });
+    expect(own.idb).toEqual([]);
+    const lane = await readPageStorage({ local: false, session: false, idb: true, idbLimitBytes: 1e6, lane: LANE });
+    expect(lane.idb?.map((db) => db.name)).toEqual(['auth']);
+    expect((await indexedDB.databases()).map((info) => info.name)).toEqual([`__sdl:${LANE}:auth`]);
+  });
+
+  it('drops what lanes left behind', async () => {
+    localStorage.setItem('own', '1');
+    localStorage.setItem(`__sdl:${LANE}:a`, '1');
+    localStorage.setItem(`__sdl:${OTHER}:a`, '1');
+    expect(await dropLaneData({ keep: [LANE] })).toMatchObject({ keys: 1 });
+    expect(localStorage.getItem(`__sdl:${OTHER}:a`)).toBeNull();
+    expect(localStorage.getItem(`__sdl:${LANE}:a`)).toBe('1');
+    expect(await dropLaneData({ tokens: [LANE] })).toMatchObject({ keys: 1 });
+    expect(localStorage.getItem('own')).toBe('1');
+    expect(await dropLaneData({ tokens: [LANE], expectedOrigin: 'https://elsewhere.test' })).toMatchObject({ keys: 0 });
+  });
 });
 
 describe('page UI', () => {

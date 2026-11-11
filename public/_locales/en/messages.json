@@ -28,5 +28,8 @@
   },
   "commandSidePanel": {
     "message": "Open Swapdeck in the side panel"
+  },
+  "commandScratch": {
+    "message": "New scratch tab (a separate sign-in) for the current site"
   }
 }

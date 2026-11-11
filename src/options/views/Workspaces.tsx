@@ -8,10 +8,11 @@ import {
   Layers,
   Pencil,
   Plus,
+  Send,
   Sparkles,
   Trash2,
 } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { Workspace } from '../../core/types';
 import { relativeTime } from '../../i18n/translate';
 import { importantTargets, liveMembers, suggestWorkspaces, workspaceStatus } from '../../core/workspaces';
@@ -25,6 +26,7 @@ import { useManager } from '../context';
 import { Card, PageHeader } from '../Options';
 import { navigate } from '../router';
 import { moveId } from './Apps';
+import { ShareDialog } from './SessionDialogs';
 
 export function useWorkspaceSwitch() {
   const { t } = useI18n();
@@ -92,6 +94,7 @@ export function Workspaces() {
   );
   const ids = state.workspaces.map((workspace) => workspace.id);
   const hasActive = Object.values(state.active).some(Boolean);
+  const [sharing, setSharing] = useState<Workspace | null>(null);
 
   return (
     <div className="stack">
@@ -247,6 +250,9 @@ export function Workspaces() {
                           disabled: index === state.workspaces.length - 1,
                           onSelect: () => void run('workspace.reorder', { ids: moveId(ids, index, index + 1) }),
                         },
+                        ...(liveMembers(workspace, state.apps, state.accounts).length
+                          ? [{ label: t('share.menu'), icon: <Send />, onSelect: () => setSharing(workspace) }]
+                          : []),
                         { kind: 'separator' },
                         {
                           label: t('workspaces.delete'),
@@ -274,6 +280,9 @@ export function Workspaces() {
             );
           })}
         </ul>
+      )}
+      {sharing && (
+        <ShareDialog open onClose={() => setSharing(null)} scope={{ workspaceId: sharing.id }} name={sharing.name} />
       )}
     </div>
   );

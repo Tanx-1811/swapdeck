@@ -8,8 +8,9 @@ import { translatorFor } from './engine';
  * checked), "sign in with another account", "save this session" and "manage".
  * Chrome shows each app's menu only on that app's pages (documentUrlPatterns).
  * On a link to an added app, "Open link as" lists its accounts with a saved
- * sign-in (targetUrlPatterns). Right-clicking the toolbar button lists the
- * workspaces and opens the side panel.
+ * sign-in (targetUrlPatterns), and "Open link in a separate tab as" too.
+ * Pages also offer a separate tab for another account and a scratch tab.
+ * Right-clicking the toolbar button lists the workspaces and opens the side panel.
  */
 
 let rebuildTimer: ReturnType<typeof setTimeout> | undefined;
@@ -18,6 +19,9 @@ let rebuilding: Promise<void> = Promise.resolve();
 export type MenuAction =
   | { kind: 'switch'; appId: string; accountId: string }
   | { kind: 'linkAs'; appId: string; accountId: string }
+  | { kind: 'lane'; appId: string; accountId: string }
+  | { kind: 'laneLink'; appId: string; accountId: string }
+  | { kind: 'scratch'; appId: string }
   | { kind: 'fresh'; appId: string }
   | { kind: 'save'; appId: string }
   | { kind: 'manage'; appId?: string }
@@ -28,6 +32,9 @@ export function parseMenuId(id: string | number): MenuAction | null {
   const [kind, appId, accountId] = String(id).split('|');
   if (kind === 'switch' && appId && accountId) return { kind, appId, accountId };
   if (kind === 'linkas' && appId && accountId) return { kind: 'linkAs', appId, accountId };
+  if (kind === 'lane' && appId && accountId) return { kind: 'lane', appId, accountId };
+  if (kind === 'lanelink' && appId && accountId) return { kind: 'laneLink', appId, accountId };
+  if (kind === 'scratch' && appId) return { kind: 'scratch', appId };
   if ((kind === 'fresh' || kind === 'save') && appId) return { kind, appId };
   if (kind === 'manage') return appId ? { kind: 'manage', appId } : { kind: 'manage' };
   if (kind === 'ws' && appId) return { kind: 'workspace', workspaceId: appId };
@@ -114,6 +121,33 @@ async function build(): Promise<void> {
       contexts: ['page', 'frame'],
       documentUrlPatterns,
     });
+    // Separate tabs: another saved account next to this one, or a scratch sign-in.
+    const others = accounts.filter((account) => account.capturedAt && account.id !== state.active[app.id]);
+    if (others.length) {
+      chrome.contextMenus.create({
+        id: `lanes|${app.id}`,
+        parentId,
+        title: t('menu.laneAs'),
+        contexts: ['page', 'frame'],
+        documentUrlPatterns,
+      });
+      for (const account of others) {
+        chrome.contextMenus.create({
+          id: `lane|${app.id}|${account.id}`,
+          parentId: `lanes|${app.id}`,
+          title: account.label,
+          contexts: ['page', 'frame'],
+          documentUrlPatterns,
+        });
+      }
+    }
+    chrome.contextMenus.create({
+      id: `scratch|${app.id}`,
+      parentId,
+      title: t('menu.scratch'),
+      contexts: ['page', 'frame'],
+      documentUrlPatterns,
+    });
     chrome.contextMenus.create({
       id: `save|${app.id}`,
       parentId,
@@ -148,6 +182,25 @@ async function build(): Promise<void> {
           contexts: ['link'],
           targetUrlPatterns,
         });
+      }
+      const laneAccounts = signedIn.filter((account) => account.id !== state.active[app.id]);
+      if (laneAccounts.length) {
+        chrome.contextMenus.create({
+          id: `lanelinks|${app.id}`,
+          parentId: linkParent,
+          type: 'separator',
+          contexts: ['link'],
+          targetUrlPatterns,
+        });
+        for (const account of laneAccounts) {
+          chrome.contextMenus.create({
+            id: `lanelink|${app.id}|${account.id}`,
+            parentId: linkParent,
+            title: `${t('menu.laneLinkAs')} ${account.label}`,
+            contexts: ['link'],
+            targetUrlPatterns,
+          });
+        }
       }
     }
   }

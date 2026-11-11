@@ -75,7 +75,7 @@ function UpdatesCard() {
 export function Help() {
   const { t } = useI18n();
   const { run } = useManager();
-  const questions = [1, 2, 3, 4, 5, 6, 7] as const;
+  const questions = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
   return (
     <div className="stack">
       <PageHeader title={t('help.title')} />

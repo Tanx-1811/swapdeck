@@ -1,4 +1,5 @@
 import {
+  AppWindow,
   ArrowDown,
   ArrowLeftRight,
   ArrowUp,
@@ -10,8 +11,11 @@ import {
   Pin,
   RotateCcw,
   Search,
+  Send,
+  SquareDashed,
   Trash2,
   TriangleAlert,
+  Upload,
   UserPlus,
   X,
 } from 'lucide-react';
@@ -25,8 +29,8 @@ import { hasAccess, onAccessChange, requestAccess } from '../../ui/access';
 import { AccountEditor } from '../../ui/AccountEditor';
 import { useAskBeforeSwitch } from '../../ui/askBeforeSwitch';
 import { AppIcon, Avatar } from '../../ui/Avatar';
-import { Callout, MenuButton, Spinner, useConfirm, useToast } from '../../ui/controls';
-import { ExpiredFlag } from '../../ui/flags';
+import { Callout, MenuButton, Spinner, useConfirm, useToast, type MenuItem } from '../../ui/controls';
+import { ExpiredFlag, LaneFlag } from '../../ui/flags';
 import { usePreviousSessions } from '../../ui/hooks';
 import { useI18n } from '../../ui/i18n';
 import { WorkspaceTags } from '../../ui/WorkspaceTags';
@@ -35,6 +39,7 @@ import { Card } from '../Options';
 import { navigate } from '../router';
 import { moveId } from './Apps';
 import { AppForm } from './AppForm';
+import { ImportSessionDialog, ShareDialog } from './SessionDialogs';
 
 /** With more accounts than this, an app's page offers a filter box. */
 const FILTER_FROM = 8;
@@ -58,6 +63,7 @@ export function AppDetail({ id, tab }: { id: string; tab: 'accounts' | 'settings
   const confirm = useConfirm();
   const app = data.state.apps.find((item) => item.id === id);
   const [granted, allow] = useAccess(app);
+  const [importing, setImporting] = useState(false);
 
   if (!app) {
     return (
@@ -126,14 +132,28 @@ export function AppDetail({ id, tab }: { id: string; tab: 'accounts' | 'settings
           >
             {pending === 'fresh' ? <Spinner /> : <UserPlus />} {t('popup.newLogin')}
           </button>
+          <button
+            type="button"
+            className="btn btn--ghost"
+            title={t('lane.scratchHint')}
+            disabled={!granted || pending === 'lane.scratch'}
+            onClick={() => void run('lane.open', { appId: app.id, accountId: null }, 'lane.scratch')}
+          >
+            {pending === 'lane.scratch' ? <Spinner /> : <SquareDashed />} {t('lane.scratch')}
+          </button>
           <MenuButton
             label={t('common.more')}
             icon={<Ellipsis />}
             className="btn btn--icon"
-            items={[{ label: t('apps.remove'), icon: <Trash2 />, danger: true, onSelect: () => void removeApp() }]}
+            items={[
+              { label: t('importSession.menu'), icon: <Upload />, onSelect: () => setImporting(true) },
+              { kind: 'separator' },
+              { label: t('apps.remove'), icon: <Trash2 />, danger: true, onSelect: () => void removeApp() },
+            ]}
           />
         </div>
       </header>
+      <ImportSessionDialog open={importing} onClose={() => setImporting(false)} app={app} />
 
       {granted === false && (
         <Callout
@@ -213,6 +233,7 @@ function AccountsPanel({
   const notify = useToast();
   const confirm = useConfirm();
   const [editing, setEditing] = useState<Account | null>(null);
+  const [sharing, setSharing] = useState<Account | null>(null);
   const [filter, setFilter] = useState('');
   const listRef = useRef<HTMLUListElement>(null);
   const ids = useMemo(() => accounts.map((account) => account.id), [accounts]);
@@ -221,6 +242,41 @@ function AccountsPanel({
   const filtering = accounts.length > FILTER_FROM && filter.trim() !== '';
   const matching = filtering ? new Set(rankAccounts([app], accounts, filter).map((item) => item.account.id)) : null;
   const shown = matching ? accounts.filter((account) => matching.has(account.id)) : accounts;
+
+  /** Separate tab: open the account in one (not the one the browser's tabs use), or show/close its tabs. */
+  const laneItems = (account: Account, isActive: boolean): MenuItem[] => {
+    const lane = data.lanes.find((item) => item.accountId === account.id);
+    if (lane) {
+      return [
+        { kind: 'separator' },
+        { label: t('lane.show'), icon: <AppWindow />, onSelect: () => void run('lane.focus', { token: lane.token }) },
+        { label: t('lane.close'), icon: <X />, onSelect: () => void run('lane.close', { token: lane.token }) },
+      ];
+    }
+    if (isActive || !account.capturedAt || !canSwitch) return [];
+    return [
+      { kind: 'separator' },
+      {
+        label: t('lane.open'),
+        icon: <AppWindow />,
+        onSelect: async () => {
+          if (!(await requireUnlock())) return;
+          if (account.important) {
+            const go = await askBeforeSwitch({
+              kind: 'account',
+              label: account.label,
+              app: app.name,
+              important: [`${app.name}: ${account.label}`],
+              confirmAll: false,
+              appIds: [],
+            });
+            if (!go) return;
+          }
+          await run('lane.open', { appId: app.id, accountId: account.id }, `lane:${account.id}`);
+        },
+      },
+    ];
+  };
 
   // With many accounts, the one in use may be far down the page: bring it into view on arrival.
   useEffect(() => {
@@ -316,6 +372,7 @@ function AccountsPanel({
                       </span>
                     )}
                     <ExpiredFlag account={account} />
+                    <LaneFlag lane={data.lanes.find((lane) => lane.accountId === account.id)} />
                     {isActive && <span className="seal">{t('account.inUse')}</span>}
                   </div>
                   <span className="muted truncate">
@@ -423,6 +480,10 @@ function AccountsPanel({
                         onSelect: () =>
                           void run('account.reorder', { appId: app.id, ids: moveId(ids, index, index + 1) }),
                       },
+                      ...laneItems(account, isActive),
+                      ...(account.capturedAt
+                        ? [{ label: t('share.menu'), icon: <Send />, onSelect: () => setSharing(account) }]
+                        : []),
                       // Only when there is an earlier session to go back to.
                       ...(previous.has(account.id)
                         ? [
@@ -501,6 +562,14 @@ function AccountsPanel({
           );
         })}
       </ul>
+      {sharing && (
+        <ShareDialog
+          open
+          onClose={() => setSharing(null)}
+          scope={{ accountId: sharing.id }}
+          name={`${app.name} · ${sharing.label}`}
+        />
+      )}
       {editing && (
         <AccountEditor
           account={editing}

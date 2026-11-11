@@ -236,7 +236,8 @@ function ImportCard() {
                 date: summary.createdAt ? formatDateTime(summary.createdAt, language) : '—',
               })}
             </Callout>
-            <fieldset className="fieldset">
+            {summary.shared && <Callout tone="info">{t('share.sharedFile')}</Callout>}
+            <fieldset className="fieldset" hidden={summary.shared}>
               <legend className="visually-hidden">{t('backup.import')}</legend>
               <label className="checkbox-row">
                 <input type="radio" name="mode" checked={mode === 'merge'} onChange={() => setMode('merge')} />
@@ -256,11 +257,13 @@ function ImportCard() {
             <div className="form__actions form__actions--start">
               <button
                 type="button"
-                className={`btn ${mode === 'replace' ? 'btn--danger' : 'btn--primary'}`}
+                className={`btn ${mode === 'replace' && !summary.shared ? 'btn--danger' : 'btn--primary'}`}
                 disabled={pending === 'backup.import'}
                 onClick={async () => {
+                  // A file someone sent is only ever added.
+                  const how = summary.shared ? 'merge' : mode;
                   if (
-                    mode === 'replace' &&
+                    how === 'replace' &&
                     !(await confirm({
                       title: t('backup.replace'),
                       body: t('backup.replaceHint'),
@@ -272,7 +275,7 @@ function ImportCard() {
                   }
                   const result = await run('backup.import', {
                     text: file.text,
-                    mode,
+                    mode: how,
                     ...(file.encrypted ? { password } : {}),
                   });
                   if (result) {

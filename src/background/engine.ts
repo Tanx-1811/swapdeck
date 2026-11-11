@@ -23,6 +23,8 @@ import {
   storeSnapshot,
   update,
 } from './state';
+import { summarize } from '../core/lane-registry';
+import { laneOfTab, lanesReady, releaseAccountLane } from './lane-state';
 import { clearJournal, readJournals, writeJournal, type ParkedTab, type SwapJournal } from './swap-journal';
 import { activeTab, getTab, navigateAndWait, queryAppTabs, runInTab, tabUrl } from './tabs';
 
@@ -237,7 +239,7 @@ export function stagingCandidates(app: AppDef): string[] {
  * another address, and fails only if none stays on the app's origin. Returns
  * the page it stayed on.
  */
-async function openStaging(tabId: number, app: AppDef): Promise<string> {
+export async function openStaging(tabId: number, app: AppDef): Promise<string> {
   let last = '';
   for (const url of stagingCandidates(app)) {
     await navigateAndWait(tabId, url);
@@ -515,7 +517,12 @@ export function switchTo(request: SwitchRequest): Promise<SwitchOutcome> {
     const t = translatorFor(state.settings);
     const target = request.accountId ? findAccount(state, request.accountId) : null;
     if (target && target.appId !== app.id) throw new SwapdeckError('INVALID');
-    const targetSnapshot = target ? await loadSnapshot(target.id) : null;
+    let targetSnapshot = target ? await loadSnapshot(target.id) : null;
+    // An account open in separate tabs comes back to the browser's own tabs: its lane's session is
+    // saved into it (and loaded again: it is the latest), and its tabs wait on a blank page to come
+    // back with the switch, like the app's parked tabs.
+    const released = target ? await releaseAccountLane(target.id) : null;
+    if (released && target) targetSnapshot = await loadSnapshot(target.id);
     const previousId = state.active[app.id] ?? null;
     const previous = previousId ? state.accounts.find((account) => account.id === previousId) : undefined;
     // Choosing the account that is already in use restores (or reopens) it.
@@ -564,6 +571,7 @@ export function switchTo(request: SwitchRequest): Promise<SwitchOutcome> {
       }
       parked.push({ id: tab.id, url });
     }
+    for (const tab of released ?? []) if (tab.id !== workId) parked.push(tab);
 
     const journal: SwapJournal = {
       appId: app.id,
@@ -917,6 +925,14 @@ export async function probe(tabId?: number): Promise<Probe> {
   };
   if (!app) return result;
   result.access = await hasAccess(app);
+  await lanesReady();
+  const lane = laneOfTab(tab?.id);
+  if (lane && lane.appId === app.id) {
+    // A separate tab: who is signed in there is the lane's business (lanes.ts keeps it).
+    result.lane = summarize(lane);
+    result.identity = lane.identity ?? null;
+    return result;
+  }
   if (!result.access || busyApps.has(app.id)) return result;
 
   const { identity, readable } = await detectLive(app, tab);

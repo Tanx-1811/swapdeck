@@ -26,6 +26,7 @@ import {
 import { showRibbon, showToast, type RibbonContent, type ToastContent } from './page-scripts';
 import { pushHistory, update } from './state';
 import { getTab, runInTab, tabUrl } from './tabs';
+import { isLaneTab, lanesReady } from './lane-state';
 
 /** Auto-sync refreshes a saved session at most this often per app. */
 const SYNC_INTERVAL_MS = 60_000;
@@ -424,7 +425,7 @@ function checkLater(appId: string, tabId: number, delayMs: number): void {
       followUps.delete(tabId);
       void (async () => {
         const tab = await getTab(tabId);
-        if (!tab || tab.status !== 'complete' || busyApps.has(appId)) return;
+        if (!tab || tab.status !== 'complete' || busyApps.has(appId) || isLaneTab(tabId)) return;
         const state = await readState();
         const app = appForUrl(state.apps, tabUrl(tab));
         if (app?.id !== appId || isStagingUrl(app, tabUrl(tab))) return;
@@ -438,6 +439,9 @@ function checkLater(appId: string, tabId: number, delayMs: number): void {
 
 export async function onTabUpdated(tabId: number, info: chrome.tabs.OnUpdatedInfo, tab: chrome.tabs.Tab) {
   if (info.status !== 'complete' && !info.url && info.title === undefined) return;
+  // Separate tabs have their own sign-in: lanes.ts watches them.
+  await lanesReady();
+  if (isLaneTab(tabId)) return;
   const state = await readState();
   if (info.status === 'complete' || info.url) void refreshBadge(tab, state);
   const app = appForUrl(state.apps, tabUrl(tab));

@@ -21,7 +21,7 @@ import { send } from '../shared/protocol';
 import { hasAccess, onAccessChange, requestAccess } from '../ui/access';
 import { Avatar } from '../ui/Avatar';
 import { Callout, MenuButton, Spinner, type MenuItem } from '../ui/controls';
-import { ExpiredFlag } from '../ui/flags';
+import { ExpiredFlag, LaneFlag } from '../ui/flags';
 import { errorText } from '../ui/hooks';
 import { useI18n } from '../ui/i18n';
 import { LogoMark } from '../ui/Logo';
@@ -160,7 +160,8 @@ export function AccountRow({
   appName?: string;
 }) {
   const { t, language } = useI18n();
-  const workspaces = useSwitcher().data.state.workspaces;
+  const { workspaces } = useSwitcher().data.state;
+  const { lanes } = useSwitcher().data;
   const shortcuts = [...account.pins.map((pin) => ({ key: pin.id, title: pin.title, url: pin.url, pinned: true }))];
   for (const recent of account.recents) {
     if (shortcuts.length >= 4) break;
@@ -200,6 +201,7 @@ export function AccountRow({
               </span>
             )}
             <ExpiredFlag account={account} />
+            <LaneFlag lane={lanes.find((lane) => lane.accountId === account.id)} />
             {active && <span className="seal">{t('account.inUse')}</span>}
           </span>
           <span className="account__meta">

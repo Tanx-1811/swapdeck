@@ -39,6 +39,8 @@ export type Switcher = {
   switchAccount: (app: AppDef, account: Account, options?: SwitchOptions) => Promise<void>;
   freshLogin: (app: AppDef) => Promise<void>;
   saveSession: (app: AppDef, target?: 'new' | string) => Promise<void>;
+  /** Opens an account (null: a scratch sign-in) in a separate tab, next to the current tab. */
+  openLane: (app: AppDef, account: Account | null) => Promise<void>;
   switchWorkspace: (workspace: Workspace, open?: boolean) => Promise<void>;
   addPreset: (presetId: string) => Promise<void>;
   addSite: (url: string) => Promise<void>;

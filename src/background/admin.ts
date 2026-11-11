@@ -44,6 +44,7 @@ import {
   unpackSnapshot,
   update,
 } from './state';
+import { endLanesOf } from './lanes';
 import { noteRemoved } from './sync-journal';
 
 export const AUTO_LOCK_ALARM = 'swapdeck-autolock';
@@ -134,6 +135,8 @@ async function releaseUnusedAccess(removed: AppDef, remaining: readonly AppDef[]
 }
 
 export async function removeApp(id: string): Promise<void> {
+  // Its separate tabs stay open, as ordinary tabs.
+  await endLanesOf({ appId: id });
   const { removed, accountIds, remaining } = await update(async (draft) => {
     const app = draft.apps.find((item) => item.id === id);
     if (!app) throw new SwapdeckError('NOT_FOUND', id);
@@ -177,6 +180,7 @@ export function updateAccount(id: string, patch: AccountPatch): Promise<Account>
 }
 
 export async function removeAccount(id: string): Promise<void> {
+  await endLanesOf({ accountId: id });
   await update(async (draft) => {
     const account = findAccount(draft, id);
     await noteRemoved([{ kind: 'account', id }]);
@@ -471,14 +475,48 @@ export async function vaultReset(): Promise<void> {
 
 // --- Backups -----------------------------------------------------------------
 
+/** What a shared file holds: one account (with its app) or one workspace (its accounts and apps). */
+export type ShareScope = { accountId?: string; workspaceId?: string };
+
+/** The part of the state a shared file carries: only what was picked, never settings of this computer. */
+function scoped(state: State, only: ShareScope): State {
+  let workspaces: Workspace[] = [];
+  let accountIds: Set<string>;
+  if (only.workspaceId) {
+    const workspace = state.workspaces.find((item) => item.id === only.workspaceId);
+    if (!workspace) throw new SwapdeckError('NOT_FOUND', only.workspaceId);
+    workspaces = [{ ...workspace, foreignMembers: undefined } as Workspace];
+    accountIds = new Set(Object.values(workspace.members));
+  } else if (only.accountId) {
+    findAccount(state, only.accountId);
+    accountIds = new Set([only.accountId]);
+  } else {
+    throw new SwapdeckError('INVALID');
+  }
+  const accounts = state.accounts.filter((account) => accountIds.has(account.id));
+  const appIds = new Set(accounts.map((account) => account.appId));
+  return {
+    ...state,
+    apps: state.apps.filter((app) => appIds.has(app.id)),
+    accounts,
+    active: {},
+    workspaces,
+    history: [],
+  };
+}
+
 export async function exportBackup(
   password: string | null,
   includeSessions: boolean,
+  only?: ShareScope,
 ): Promise<{ text: string; unreadable: string[] }> {
   if (includeSessions && (!password || password.length < MIN_PASSPHRASE)) {
     throw new SwapdeckError('INVALID', 'password');
   }
-  const state = await readState();
+  // A shared file always carries sign-ins, so it is always locked with a password.
+  if (only && (!includeSessions || !password)) throw new SwapdeckError('INVALID', 'password');
+  const everything = await readState();
+  const state = only ? scoped(everything, only) : everything;
   const sessions: Record<string, Snapshot> = {};
   /** Labels of accounts whose saved session can't be read: left out instead of failing the whole backup. */
   const unreadable: string[] = [];
@@ -498,28 +536,36 @@ export async function exportBackup(
     apps: state.apps,
     accounts: state.accounts,
     active: state.active,
-    settings: state.settings,
+    // A shared file isn't this computer's backup: its preferences stay here.
+    settings: only ? parseSettings(undefined) : state.settings,
     sessions,
     workspaces: state.workspaces,
   };
   const encrypted = Boolean(password);
-  await update((draft) => {
-    draft.settings = { ...draft.settings, lastBackupAt: Date.now() };
-  });
+  // Sending one account to someone isn't a backup of this computer.
+  if (!only) {
+    await update((draft) => {
+      draft.settings = { ...draft.settings, lastBackupAt: Date.now() };
+    });
+  }
   const text = serializeBackup({
     format: BACKUP_FORMAT,
     version: 1,
     createdAt: Date.now(),
     encrypted,
+    ...(only ? { shared: true } : {}),
     payload: encrypted ? await encryptWithPassword(JSON.stringify(payload), password!) : payload,
   });
   return { text, unreadable };
 }
 
-async function readBackup(text: string, password?: string): Promise<{ payload: BackupPayload; createdAt: number }> {
+async function readBackup(
+  text: string,
+  password?: string,
+): Promise<{ payload: BackupPayload; createdAt: number; shared: boolean }> {
   try {
     const file = parseBackupFile(text);
-    return { payload: await openBackup(file, password), createdAt: file.createdAt };
+    return { payload: await openBackup(file, password), createdAt: file.createdAt, shared: file.shared === true };
   } catch (error) {
     if (error instanceof BackupError) {
       throw new SwapdeckError(error.code === 'INVALID' ? 'INVALID' : 'BAD_PASSPHRASE', error.code);
@@ -529,9 +575,10 @@ async function readBackup(text: string, password?: string): Promise<{ payload: B
 }
 
 export async function inspectBackup(text: string, password?: string): Promise<BackupSummary> {
-  const { payload, createdAt } = await readBackup(text, password);
+  const { payload, createdAt, shared } = await readBackup(text, password);
   return {
     encrypted: Boolean(password),
+    shared,
     createdAt,
     apps: payload.apps.length,
     accounts: payload.accounts.length,
@@ -557,7 +604,9 @@ export async function importBackup(
   skipped: string[];
   syncOff: boolean;
 }> {
-  const { payload } = await readBackup(text, password);
+  const { payload, shared } = await readBackup(text, password);
+  // A file someone sent (one account or workspace) is only ever added: it must never wipe this computer.
+  if (shared && mode === 'replace') throw new SwapdeckError('INVALID', 'shared');
   // What belongs to this computer survives a replace (read before the wipe clears it).
   const before = (await readState()).settings;
   if (mode === 'replace') await wipeData({ keepVault: true });
@@ -664,6 +713,7 @@ export async function importBackup(
 // --- Wipe --------------------------------------------------------------------
 
 export async function wipeData(options: { keepVault?: boolean } = {}): Promise<void> {
+  await endLanesOf('all');
   await exclusive(async () => {
     const all = await chrome.storage.local.get(null);
     const keys = Object.keys(all).filter((key) => key.startsWith('sd:') && !(options.keepVault && key === KEYS.vault));

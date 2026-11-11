@@ -531,6 +531,10 @@ kbd {
     box-shadow 0.15s;
 }
 
+.textarea--mono {
+  font: 500 12px/1.5 var(--mono);
+}
+
 .input::placeholder,
 .textarea::placeholder {
   color: var(--text-3);
@@ -952,6 +956,31 @@ kbd {
 }
 
 .flag-expired svg {
+  width: 11px;
+  height: 11px;
+  stroke-width: 2.25;
+}
+
+/* Open in a separate tab (its own sign-in, apart from the browser's other tabs). */
+.flag-lane {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  padding: 0 6px 0 4px;
+  border: 1px solid var(--accent);
+  border-radius: var(--r-xs);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.flag-lane svg {
   width: 11px;
   height: 11px;
   stroke-width: 2.25;

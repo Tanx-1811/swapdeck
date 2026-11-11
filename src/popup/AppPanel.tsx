@@ -1,4 +1,5 @@
 import {
+  AppWindow,
   ChevronLeft,
   Ellipsis,
   ExternalLink,
@@ -11,8 +12,10 @@ import {
   RotateCcw,
   Save,
   Settings,
+  SquareDashed,
   Trash2,
   UserPlus,
+  X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { appForUrl, displayUrl } from '../core/domains';
@@ -24,6 +27,7 @@ import { Callout, MenuButton, Spinner, useConfirm, useToast, type MenuItem } fro
 import { usePreviousSessions } from '../ui/hooks';
 import { useI18n } from '../ui/i18n';
 import { useSwitcher } from './context';
+import { LaneCard } from './LaneCard';
 import { AccessCheck, AccountRow } from './parts';
 
 /**
@@ -35,14 +39,22 @@ export function AppPanel({ app, onBack }: { app: AppDef; onBack?: () => void }) 
   const { t } = useI18n();
   const notify = useToast();
   const confirm = useConfirm();
-  const { data, probe, run, pending, busy, switchAccount, freshLogin, saveSession, openManager, close } = useSwitcher();
+  const { data, probe, run, pending, busy, switchAccount, freshLogin, saveSession, openLane, openManager, close } =
+    useSwitcher();
   const [editing, setEditing] = useState<Account | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const { state } = data;
   const accounts = useMemo(() => state.accounts.filter((account) => account.appId === app.id), [state, app.id]);
   const activeId = state.active[app.id] ?? null;
   const active = accounts.find((account) => account.id === activeId);
-  const onCurrentTab = probe.appId === app.id;
+  // The current tab may be a separate tab of this app (its own sign-in): shown on its own.
+  const hereLane =
+    probe.appId === app.id && probe.lane
+      ? (data.lanes.find((lane) => lane.token === probe.lane!.token) ?? probe.lane)
+      : null;
+  const onCurrentTab = probe.appId === app.id && !hereLane;
+  const appLanes = data.lanes.filter((lane) => lane.appId === app.id);
+  const laneOf = (accountId: string) => appLanes.find((lane) => lane.accountId === accountId);
   const status = onCurrentTab ? probe.status : null;
   const who = identityLabel(probe.identity);
   const match = accounts.find((account) => account.id === probe.matchId);
@@ -104,6 +116,25 @@ export function AppPanel({ app, onBack }: { app: AppDef; onBack?: () => void }) 
         icon: <ExternalLink />,
         onSelect: () => void switchAccount(app, account, { open: true }),
       });
+    }
+    const lane = laneOf(account.id);
+    if (lane) {
+      items.push(
+        {
+          label: t('lane.show'),
+          icon: <AppWindow />,
+          onSelect: async () => {
+            if (await run('lane.focus', { token: lane.token })) close();
+          },
+        },
+        {
+          label: t('lane.close'),
+          icon: <X />,
+          onSelect: () => void run('lane.close', { token: lane.token }),
+        },
+      );
+    } else if (!isActive && account.capturedAt) {
+      items.push({ label: t('lane.open'), icon: <AppWindow />, onSelect: () => void openLane(app, account) });
     }
     if (isActive && pageUrl) {
       items.push(
@@ -220,6 +251,7 @@ export function AppPanel({ app, onBack }: { app: AppDef; onBack?: () => void }) 
         />
       </div>
 
+      {hereLane && <LaneCard app={app} lane={hereLane} />}
       {status === 'match' && (
         <p className="status-bar">
           <span className="dot dot--pulse" aria-hidden="true" />
@@ -331,6 +363,15 @@ export function AppPanel({ app, onBack }: { app: AppDef; onBack?: () => void }) 
             {pending === 'save:' ? <Spinner /> : <Save />} {t('popup.saveSession')}
           </button>
         )}
+        <button
+          type="button"
+          className="btn btn--ghost"
+          onClick={() => void openLane(app, null)}
+          disabled={busy !== null}
+          title={t('lane.scratchHint')}
+        >
+          {busy === `lane:${app.id}` ? <Spinner /> : <SquareDashed />} {t('lane.scratch')}
+        </button>
       </div>
       {editing && (
         <AccountEditor

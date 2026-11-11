@@ -312,7 +312,7 @@ export function sanitizeHistory(value: unknown): HistoryEntry | null {
   const id = str(value.id, 64);
   const at = num(value.at);
   const appId = str(value.appId, 64);
-  const kinds = ['switch', 'fresh', 'save', 'auto-save', 'restore'];
+  const kinds = ['switch', 'fresh', 'save', 'auto-save', 'restore', 'lane'];
   if (!id || at === undefined || !appId || !kinds.includes(value.kind as string)) return null;
   const entry: HistoryEntry = {
     id,

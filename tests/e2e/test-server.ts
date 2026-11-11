@@ -151,6 +151,15 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
     );
     return;
   }
+  if (url.pathname === '/api/csrf') {
+    // A readable cookie set by an API response (CSRF tokens work this way), for the signed-in person.
+    response.writeHead(200, {
+      'content-type': 'application/json',
+      'set-cookie': `acme_csrf=${encodeURIComponent(serverUser ?? 'anonymous')}; Path=/; SameSite=Lax`,
+    });
+    response.end('{}');
+    return;
+  }
   if (url.pathname === '/api/logout' && request.method === 'POST') {
     response.writeHead(204, { 'set-cookie': 'acme_sid=; Path=/; Max-Age=0' });
     response.end();

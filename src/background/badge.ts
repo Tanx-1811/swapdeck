@@ -2,6 +2,7 @@ import { appForUrl } from '../core/domains';
 import { initials, readableTextColor, WARNING_COLOR } from '../core/util';
 import { readSessionInfo, readState, type State } from '../shared/store';
 import { translatorFor } from './engine';
+import { refreshLaneBadge } from './lanes';
 import { tabUrl } from './tabs';
 
 const NEUTRAL = '#6f665b';
@@ -11,6 +12,7 @@ export async function refreshBadge(tab: chrome.tabs.Tab, known?: State): Promise
   const tabId = tab.id;
   if (tabId === undefined || tabId < 0) return;
   const state = known ?? (await readState());
+  if (await refreshLaneBadge(tabId, state)) return;
   const t = translatorFor(state.settings);
   const app = appForUrl(state.apps, tabUrl(tab));
   let text = '';

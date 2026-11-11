@@ -15,6 +15,11 @@ export type PageReadOptions = {
   idbLimitBytes: number;
   /** Read nothing unless the page is on this origin (the tab may have moved meanwhile). */
   expectedOrigin?: string;
+  /**
+   * A separate tab's lane (core/lanes.ts): read only its localStorage keys and databases, named
+   * `__sdl:<lane>:…`, without that prefix. Without it, every lane's names are left out.
+   */
+  lane?: string;
 };
 
 export type PageReadResult = {
@@ -99,15 +104,26 @@ export async function readPageStorage(options: PageReadOptions): Promise<PageRea
     });
   }
 
+  // Names of separate tabs (lanes) start with "__sdl:<token>:"; a read sees one lane or none.
+  const LANES = '__sdl:';
+  const own = options.lane ? `${LANES}${options.lane}:` : null;
+  /** The name as the page knows it, or null when it isn't in scope. */
+  function inScope(name: string): string | null {
+    if (own) return name.startsWith(own) ? name.slice(own.length) : null;
+    return name.startsWith(LANES) ? null : name;
+  }
+
   async function dumpIndexedDb(limit: number): Promise<IdbDatabaseDump[]> {
     const dumps: IdbDatabaseDump[] = [];
     let total = 0;
     for (const info of await indexedDB.databases()) {
       if (!info.name) continue;
+      const shown = inScope(info.name);
+      if (shown === null) continue;
       const db = await openExisting(info.name);
       if (!db) continue;
       try {
-        const dump: IdbDatabaseDump = { name: db.name, version: db.version, stores: [] };
+        const dump: IdbDatabaseDump = { name: shown, version: db.version, stores: [] };
         for (const storeName of Array.from(db.objectStoreNames)) {
           // One transaction per store, and encoding only after it is done:
           // awaiting a Blob read inside a transaction would let it commit early.
@@ -140,11 +156,13 @@ export async function readPageStorage(options: PageReadOptions): Promise<PageRea
     return dumps;
   }
 
-  function readWebStorage(storage: Storage): Record<string, string> {
+  function readWebStorage(storage: Storage, scoped: boolean): Record<string, string> {
     const out: Record<string, string> = {};
     for (let i = 0; i < storage.length; i++) {
       const key = storage.key(i);
-      if (key !== null) out[key] = storage.getItem(key) ?? '';
+      if (key === null) continue;
+      const shown = scoped ? inScope(key) : key;
+      if (shown !== null) out[shown] = storage.getItem(key) ?? '';
     }
     return out;
   }
@@ -156,8 +174,9 @@ export async function readPageStorage(options: PageReadOptions): Promise<PageRea
     contentType: document.contentType,
   };
   if (options.expectedOrigin && location.origin !== options.expectedOrigin) return result;
-  if (options.local) result.local = readWebStorage(localStorage);
-  if (options.session) result.session = readWebStorage(sessionStorage);
+  if (options.local) result.local = readWebStorage(localStorage, true);
+  // sessionStorage belongs to one tab: a separate tab's is its own already.
+  if (options.session) result.session = readWebStorage(sessionStorage, false);
   if (options.idb) {
     try {
       result.idb = await dumpIndexedDb(options.idbLimitBytes);
@@ -182,6 +201,8 @@ export type PageWriteOptions = {
    * site mid-switch must never have that site's storage cleared or filled.
    */
   expectedOrigin?: string;
+  /** A separate tab's lane: replace only its names (`__sdl:<lane>:…`). Without it, lanes are left alone. */
+  lane?: string;
 };
 export type PageWriteResult = {
   origin: string;
@@ -280,9 +301,15 @@ export async function writePageStorage(data: PageWriteData, options: PageWriteOp
     });
   }
 
+  // Names of separate tabs (lanes) start with "__sdl:<token>:"; a write touches one lane or none.
+  const LANES = '__sdl:';
+  const own = options.lane ? `${LANES}${options.lane}:` : null;
+  const inScope = (name: string) => (own ? name.startsWith(own) : !name.startsWith(LANES));
+  const stored = (name: string) => (own ? own + name : name);
+
   async function restoreIndexedDb(dumps: IdbDatabaseDump[]) {
     for (const info of await indexedDB.databases()) {
-      if (!info.name) continue;
+      if (!info.name || !inScope(info.name)) continue;
       // A database left behind would mix the previous account's data into the new one.
       if (!(await settle(indexedDB.deleteDatabase(info.name), 5000))) {
         idbFailed = true;
@@ -298,7 +325,7 @@ export async function writePageStorage(data: PageWriteData, options: PageWriteOp
           errors.push(`IndexedDB ${dump.name}: blocked by another open tab`);
           resolve();
         }, 8000);
-        const req = indexedDB.open(dump.name, Math.max(1, Math.floor(dump.version) || 1));
+        const req = indexedDB.open(stored(dump.name), Math.max(1, Math.floor(dump.version) || 1));
         req.onblocked = () => errors.push(`IndexedDB ${dump.name}: waiting for another open tab`);
         req.onupgradeneeded = () => {
           const db = req.result;
@@ -345,24 +372,38 @@ export async function writePageStorage(data: PageWriteData, options: PageWriteOp
     }
   }
 
-  function replace(storage: Storage, values: Record<string, string> | null | undefined, label: string) {
+  function replace(
+    storage: Storage,
+    values: Record<string, string> | null | undefined,
+    label: string,
+    scoped: boolean,
+  ) {
     try {
-      storage.clear();
+      if (!scoped) storage.clear();
+      else {
+        // Only this lane's keys (or, for the browser's own session, everything but the lanes').
+        const keys: string[] = [];
+        for (let i = 0; i < storage.length; i++) {
+          const key = storage.key(i);
+          if (key !== null && inScope(key)) keys.push(key);
+        }
+        for (const key of keys) storage.removeItem(key);
+      }
     } catch (error) {
       errors.push(`${label}: ${error instanceof Error ? error.message : error}`);
       return;
     }
     for (const [key, value] of Object.entries(values ?? {})) {
       try {
-        storage.setItem(key, value);
+        storage.setItem(scoped ? stored(key) : key, value);
       } catch (error) {
         errors.push(`${label} ${key}: ${error instanceof Error ? error.message : error}`);
       }
     }
   }
 
-  if (options.local) replace(localStorage, data.local, 'localStorage');
-  if (options.session) replace(sessionStorage, data.session, 'sessionStorage');
+  if (options.local) replace(localStorage, data.local, 'localStorage', true);
+  if (options.session) replace(sessionStorage, data.session, 'sessionStorage', false);
   if (options.idb) {
     try {
       await restoreIndexedDb(data.idb ?? []);
@@ -372,6 +413,50 @@ export async function writePageStorage(data: PageWriteData, options: PageWriteOp
     }
   }
   return { origin: location.origin, errors, ...(idbFailed ? { idbFailed } : {}) };
+}
+
+/**
+ * Removes what separate tabs (lanes) left on the page's origin: the localStorage keys and
+ * databases named `__sdl:<token>:…` of the given lanes, or of every lane except `keep`.
+ */
+export async function dropLaneData(options: {
+  tokens?: string[];
+  keep?: string[];
+  expectedOrigin?: string;
+}): Promise<{ origin: string; keys: number; databases: number }> {
+  const LANES = '__sdl:';
+  const out = { origin: location.origin, keys: 0, databases: 0 };
+  if (options.expectedOrigin && location.origin !== options.expectedOrigin) return out;
+  function goes(name: string): boolean {
+    if (!name.startsWith(LANES)) return false;
+    const token = name.slice(LANES.length).split(':')[0] ?? '';
+    if (options.tokens) return options.tokens.includes(token);
+    return !(options.keep ?? []).includes(token);
+  }
+  const keys: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key !== null && goes(key)) keys.push(key);
+  }
+  for (const key of keys) localStorage.removeItem(key);
+  out.keys = keys.length;
+  try {
+    for (const info of await indexedDB.databases()) {
+      if (!info.name || !goes(info.name)) continue;
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, 3000);
+        const req = indexedDB.deleteDatabase(info.name!);
+        req.onsuccess = req.onerror = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+      });
+      out.databases++;
+    }
+  } catch {
+    // No IndexedDB here.
+  }
+  return out;
 }
 
 /** Where the staging page really is (redirects may have moved it). */

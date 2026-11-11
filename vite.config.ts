@@ -77,6 +77,30 @@ function workerPlugin(mode: string, outDir: string): Plugin {
           },
         },
       });
+      // Scripts of separate tabs (registered at run time, background/lanes.ts): classic scripts.
+      for (const name of ['lane-main', 'lane-relay']) {
+        await build({
+          configFile: false,
+          logLevel: 'warn',
+          mode,
+          publicDir: false,
+          define: defines(mode),
+          build: {
+            outDir,
+            emptyOutDir: false,
+            copyPublicDir: false,
+            target: 'chrome116',
+            minify: mode === 'production',
+            sourcemap: false,
+            lib: {
+              entry: resolve(src, `content/${name}.ts`),
+              formats: ['iife'],
+              name: name.replace('-', '_'),
+              fileName: () => `content/${name}.js`,
+            },
+          },
+        });
+      }
     },
   };
 }

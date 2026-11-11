@@ -162,7 +162,8 @@ export type SealedBox = { alg: 'RSA-OAEP-256+A256GCM'; key: string; iv: string; 
 
 export type StoredSnapshot = { v: 1; plain: Snapshot } | { v: 1; sealed: SealedBox };
 
-export type HistoryKind = 'switch' | 'fresh' | 'save' | 'auto-save' | 'restore';
+/** lane: an account (or a scratch sign-in) opened in a separate tab. */
+export type HistoryKind = 'switch' | 'fresh' | 'save' | 'auto-save' | 'restore' | 'lane';
 
 export type HistoryEntry = {
   id: string;

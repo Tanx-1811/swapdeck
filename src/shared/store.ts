@@ -1,3 +1,4 @@
+import { sanitizeRegistry, summarize, type LaneSummary } from '../core/lane-registry';
 import { isSyncStatus, type SyncStatus } from '../core/sync';
 import { parseSettings } from '../core/settings';
 import type { Account, ActiveMap, AppDef, HistoryEntry, Identity, Settings, VaultMeta, Workspace } from '../core/types';
@@ -44,6 +45,8 @@ export const SESSION_KEYS = {
   ask: 'sd:ask',
   /** How the last Chrome Sync of the list went. */
   sync: 'sd:sync',
+  /** Separate tabs (background/lane-state.ts). */
+  lanes: 'sd:lanes',
 } as const;
 
 /** A workspace switch in progress, shown in the popup. */
@@ -133,6 +136,8 @@ export type SessionInfo = {
   live: LiveMap;
   progress: Progress | null;
   syncStatus: SyncStatus | null;
+  /** Separate tabs open now. */
+  lanes: LaneSummary[];
 };
 
 export async function readSessionInfo(): Promise<SessionInfo> {
@@ -141,6 +146,7 @@ export async function readSessionInfo(): Promise<SessionInfo> {
     SESSION_KEYS.live,
     SESSION_KEYS.progress,
     SESSION_KEYS.sync,
+    SESSION_KEYS.lanes,
   ]);
   const sync: unknown = raw[SESSION_KEYS.sync];
   return {
@@ -148,6 +154,7 @@ export async function readSessionInfo(): Promise<SessionInfo> {
     live: liveFromRaw(raw[SESSION_KEYS.live]),
     progress: progressFromRaw(raw[SESSION_KEYS.progress]),
     syncStatus: isSyncStatus(sync) ? sync : null,
+    lanes: Object.values(sanitizeRegistry(raw[SESSION_KEYS.lanes]).lanes).map(summarize),
   };
 }
 

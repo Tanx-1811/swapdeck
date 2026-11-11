@@ -29,6 +29,8 @@ import {
   wipeData,
 } from './admin';
 import { probe, restorePrevious, saveLive, switchTo } from './engine';
+import { importSession } from './import-session';
+import { closeLane, focusLane, openLane, saveLane } from './lanes';
 import { answerAsk, cycleGuarded, findUnsaved, runGuarded } from './guarded';
 import { clearSyncData, syncNow } from './sync';
 import { openWorkspace, switchWorkspace } from './workspaces';
@@ -141,7 +143,9 @@ async function handle(request: AnyRequest): Promise<unknown> {
       await vaultReset();
       return true;
     case 'backup.export':
-      return exportBackup(request.password, request.includeSessions);
+      return exportBackup(request.password, request.includeSessions, request.only);
+    case 'session.import':
+      return importSession(request.appId, request.text, request.target);
     case 'backup.inspect':
       return inspectBackup(request.text, request.password);
     case 'backup.import':
@@ -154,6 +158,25 @@ async function handle(request: AnyRequest): Promise<unknown> {
     case 'data.wipe':
       await wipeData();
       return true;
+    case 'lane.open': {
+      const outcome = await openLane({
+        appId: request.appId,
+        accountId: request.accountId,
+        besideTabId: request.tabId,
+        url: request.url,
+        background: request.background,
+      });
+      await scheduleAutoLock();
+      return outcome;
+    }
+    case 'lane.close':
+      await closeLane(request.token);
+      return true;
+    case 'lane.focus':
+      await focusLane(request.token);
+      return true;
+    case 'lane.save':
+      return saveLane(request.token, request.target);
   }
 }
 

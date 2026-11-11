@@ -28,5 +28,8 @@
   },
   "commandSidePanel": {
     "message": "Mở Swapdeck ở bảng bên"
+  },
+  "commandScratch": {
+    "message": "Tab nháp mới (đăng nhập riêng) cho trang hiện tại"
   }
 }

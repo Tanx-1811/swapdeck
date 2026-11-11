@@ -21,6 +21,8 @@ test.describe('store build', () => {
       'declarativeNetRequestWithHostAccess',
       'sidePanel',
       'tabGroups',
+      // Separate tabs read the cookies sites set in them (no install warning; sites still need access).
+      'webRequest',
     ]);
     expect(manifest.side_panel).toEqual({ default_path: 'sidepanel/sidepanel.html' });
   });

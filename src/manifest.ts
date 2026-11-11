@@ -13,7 +13,11 @@ import pkg from '../package.json' with { type: 'json' };
  * - declarativeNetRequestWithHostAccess: while a switch runs, blocks the site's own
  *   scripts in the one tab doing the swap, so they can't write the old session back.
  * - sidePanel: Swapdeck can stay open next to the page for frequent switching.
- * - tabGroups: "Open workspace" opens a workspace's pages together in a named group.
+ * - tabGroups: "Open workspace" opens a workspace's pages together in a named group, and each
+ *   separate tab's pages are grouped under its account's name.
+ * - webRequest: separate tabs keep an account's cookies apart from the browser's: the cookies the
+ *   site sets in those tabs are read (only on the sites of added apps, only in those tabs) and kept
+ *   by Swapdeck instead of the browser.
  * Host access is optional and requested per site when the user adds it, e.g.
  * only *.supabase.com for Supabase. Cookies and storage of other sites are never read.
  */
@@ -61,6 +65,7 @@ export function createManifest(mode: string): chrome.runtime.ManifestV3 {
       'declarativeNetRequestWithHostAccess',
       'sidePanel',
       'tabGroups',
+      'webRequest',
     ],
     side_panel: { default_path: 'sidepanel/sidepanel.html' },
     optional_host_permissions: ['*://*/*'],
@@ -79,6 +84,7 @@ export function createManifest(mode: string): chrome.runtime.ManifestV3 {
       'new-login': { description: '__MSG_commandNewLogin__' },
       'switch-workspace-next': { description: '__MSG_commandWorkspaceNext__' },
       'open-side-panel': { description: '__MSG_commandSidePanel__' },
+      'open-scratch-tab': { description: '__MSG_commandScratch__' },
       'open-manager': { description: '__MSG_commandManager__' },
     },
   };

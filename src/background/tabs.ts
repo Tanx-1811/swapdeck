@@ -1,6 +1,7 @@
 import { appForUrl, hostMatchesDomain, matchPatterns, parseHttpUrl } from '../core/domains';
 import type { AppDef } from '../core/types';
 import { SwapdeckError } from '../shared/protocol';
+import { isLaneTab, lanesReady } from './lane-state';
 
 export async function getTab(tabId: number | undefined | null): Promise<chrome.tabs.Tab | null> {
   if (tabId === undefined || tabId === null || tabId < 0) return null;
@@ -20,12 +21,21 @@ export function tabUrl(tab: chrome.tabs.Tab | null | undefined): string | null {
   return tab?.url || tab?.pendingUrl || null;
 }
 
-/** Normal-window tabs currently showing one of the app's sites. */
+/**
+ * Normal-window tabs currently showing one of the app's sites, with the browser's own sign-in:
+ * separate tabs (lanes.ts) have their own and are never switched, parked or saved from.
+ */
 export async function queryAppTabs(app: AppDef): Promise<chrome.tabs.Tab[]> {
-  const tabs = await chrome.tabs.query({ url: matchPatterns(app) });
+  const [tabs] = await Promise.all([chrome.tabs.query({ url: matchPatterns(app) }), lanesReady()]);
   return tabs.filter((tab) => {
     const url = parseHttpUrl(tabUrl(tab));
-    return tab.id !== undefined && !tab.incognito && url && app.domains.some((d) => hostMatchesDomain(url.hostname, d));
+    return (
+      tab.id !== undefined &&
+      !tab.incognito &&
+      !isLaneTab(tab.id) &&
+      url &&
+      app.domains.some((d) => hostMatchesDomain(url.hostname, d))
+    );
   });
 }
 

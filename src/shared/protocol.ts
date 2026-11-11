@@ -1,4 +1,5 @@
 import type { GuardedPlan, UnsavedTab } from '../core/ask';
+import type { LaneSummary } from '../core/lane-registry';
 import type { Account, AppDef, DetectorSpec, Identity, Settings, StorageKinds, Workspace } from '../core/types';
 
 /** Fields a page may set when adding or editing an app. */
@@ -50,6 +51,8 @@ export type Probe = {
   /** The saved account the live identity belongs to. */
   matchId: string | null;
   status: ProbeStatus;
+  /** The tab is a separate tab (its own sign-in, apart from the browser's). */
+  lane?: LaneSummary;
 };
 
 export type SwitchOutcome = {
@@ -85,6 +88,8 @@ export type WorkspaceOutcome = {
 
 export type BackupSummary = {
   encrypted: boolean;
+  /** A file made to send one account or workspace: it can only be added (merge). */
+  shared: boolean;
   createdAt: number;
   apps: number;
   accounts: number;
@@ -141,7 +146,8 @@ type Api = {
   'vault.disable': { req: { passphrase: string }; res: true };
   'vault.reset': { req: Record<string, never>; res: true };
   'backup.export': {
-    req: { password: string | null; includeSessions: boolean };
+    /** `only`: a file to send someone with just this account or workspace (and its sign-ins). */
+    req: { password: string | null; includeSessions: boolean; only?: { accountId?: string; workspaceId?: string } };
     res: { text: string; unreadable: string[] };
   };
   'backup.inspect': { req: { text: string; password?: string }; res: BackupSummary };
@@ -151,6 +157,27 @@ type Api = {
     res: { apps: number; accounts: number; sessions: number; workspaces: number; skipped: string[]; syncOff: boolean };
   };
   'history.clear': { req: Record<string, never>; res: true };
+  /**
+   * Opens an account (null: a scratch sign-in) in a separate tab, next to `tabId`; an account
+   * already open in one gets another tab there. `url`: a page of the app to open.
+   */
+  'lane.open': {
+    req: { appId: string; accountId: string | null; tabId?: number; url?: string; background?: boolean };
+    res: { token: string; tabId: number; created: boolean };
+  };
+  /** Closes a separate tab's tabs (an account's session is saved first). */
+  'lane.close': { req: { token: string }; res: true };
+  'lane.focus': { req: { token: string }; res: true };
+  /**
+   * Saves a sign-in exported by another tool (cookie JSON, cookies.txt, Playwright storage state,
+   * a Cookie header) as an account of the app.
+   */
+  'session.import': {
+    req: { appId: string; text: string; target?: 'new' | string };
+    res: SaveOutcome & { cookies: number; skipped: number };
+  };
+  /** Saves a separate tab's sign-in as an account (by who it is, or `target`). */
+  'lane.save': { req: { token: string; target?: 'new' | string }; res: SaveOutcome };
   'data.wipe': { req: Record<string, never>; res: true };
 };
 

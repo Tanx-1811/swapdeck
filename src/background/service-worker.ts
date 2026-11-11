@@ -11,11 +11,17 @@ import { setupOmnibox } from './omnibox';
 import { listen } from './router';
 import { activeTab, getTab, tabUrl } from './tabs';
 import { syncNow } from './sync';
+import { forgetLanesForTest, initLanes, onLaneTabUpdated, openLane, restoreLanes } from './lanes';
 import { onTabUpdated } from './watcher';
 import { workspaceStatus } from '../core/workspaces';
 
 listen();
 setupOmnibox();
+initLanes();
+
+declare const __SWAPDECK_E2E__: boolean;
+// The e2e build lets tests run what Chrome only does on a restart (bringing separate tabs back).
+if (__SWAPDECK_E2E__) Object.assign(globalThis, { swapdeckTest: { restoreLanes, forgetLanesForTest } });
 // No switch can be running while the worker starts: rules left by an interrupted one go, and a
 // swap it left halfway (journal in session storage) is undone.
 void clearStaleRules()
@@ -55,6 +61,8 @@ async function nextWorkspace(tabId: number | undefined): Promise<void> {
 
 chrome.runtime.onInstalled.addListener((details) => {
   void clearStaleRules();
+  // An update or reload drops the separate tabs' rules: bring them back in their tab groups.
+  if (details.reason === 'update') void restoreLanes().catch((error: unknown) => console.warn('Swapdeck:', error));
   void applyActionBehavior();
   scheduleMenuRebuild(0);
   void chrome.storage.local.set({ [KEYS.meta]: { schema: 1 } });
@@ -63,6 +71,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 
 chrome.runtime.onStartup.addListener(() => {
   void clearStaleRules();
+  void restoreLanes().catch((error: unknown) => console.warn('Swapdeck: separate tabs not restored', error));
   void applyActionBehavior();
   scheduleMenuRebuild(0);
   void scheduleAutoLock();
@@ -70,6 +79,7 @@ chrome.runtime.onStartup.addListener(() => {
 
 chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
   void onTabUpdated(tabId, info, tab);
+  void onLaneTabUpdated(tabId, info, tab).catch((error: unknown) => console.warn('Swapdeck: separate tab', error));
 });
 
 chrome.tabs.onActivated.addListener(({ tabId }) => {
@@ -141,6 +151,14 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     void runGuarded({ kind: 'account', appId: action.appId, accountId: action.accountId, tabId }).then(settle, failed);
   } else if (action.kind === 'linkAs') {
     if (info.linkUrl) void openLinkAs(action.appId, action.accountId, info.linkUrl, tabId).catch(report);
+  } else if (action.kind === 'lane' || action.kind === 'laneLink' || action.kind === 'scratch') {
+    // A separate tab never reloads or switches the browser's other tabs: nothing to ask first.
+    void openLane({
+      appId: action.appId,
+      accountId: action.kind === 'scratch' ? null : action.accountId,
+      besideTabId: tabId,
+      ...(action.kind === 'laneLink' && info.linkUrl ? { url: info.linkUrl } : {}),
+    }).catch(report);
   } else if (action.kind === 'fresh') {
     void runGuarded({ kind: 'fresh', appId: action.appId, tabId }).catch(report);
   } else if (action.kind === 'save') {
@@ -169,6 +187,12 @@ chrome.commands.onCommand.addListener(async (command, commandTab) => {
   }
   if (command === 'switch-workspace-next') {
     await nextWorkspace(tab?.id).catch(report);
+    return;
+  }
+  if (command === 'open-scratch-tab') {
+    const state = await readState();
+    const app = appForUrl(state.apps, tabUrl(tab));
+    if (app) await openLane({ appId: app.id, accountId: null, besideTabId: tab?.id }).catch(report);
     return;
   }
   if (command === 'new-login') {

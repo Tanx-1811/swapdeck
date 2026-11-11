@@ -11,6 +11,7 @@ const COMMAND_LABELS: Record<string, MessageKey> = {
   'switch-workspace-next': 'shortcut.workspaceNext',
   'open-side-panel': 'shortcut.sidePanel',
   'open-manager': 'shortcut.manager',
+  'open-scratch-tab': 'shortcut.scratch',
 };
 
 /** The suggested keys from the manifest, shown until Chrome answers (or when it can't). */

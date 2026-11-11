@@ -22,6 +22,8 @@ export type BackupFile = {
   version: 1;
   createdAt: number;
   encrypted: boolean;
+  /** Made to send one account or workspace to someone: only ever added to what is there (never "replace"). */
+  shared?: boolean;
   payload: BackupPayload | PasswordBox;
 };
 
@@ -55,6 +57,7 @@ export function parseBackupFile(text: string): BackupFile {
     version: 1,
     createdAt: typeof file.createdAt === 'number' ? file.createdAt : 0,
     encrypted,
+    ...(file.shared === true ? { shared: true } : {}),
     payload: file.payload as BackupPayload | PasswordBox,
   };
 }

@@ -6,6 +6,8 @@
  * to page loads in that tab (and in the app's other tabs parked on the same
  * page), for as long as the swap takes.
  */
+import { LANE_RULE_BASE } from '../core/lanes';
+
 const FIRST_RULE_ID = 1000;
 let nextRuleId = FIRST_RULE_ID;
 /** Rules added by this run of the worker (a switch still needs them). */
@@ -18,8 +20,10 @@ export async function blockPageScripts(
   tabIds: number | readonly number[],
   domains: readonly string[],
 ): Promise<number> {
-  const existing = await chrome.declarativeNetRequest.getSessionRules();
+  // Separate tabs (lanes.ts) keep their own rules from LANE_RULE_BASE up: stay below them.
+  const existing = (await chrome.declarativeNetRequest.getSessionRules()).filter((rule) => rule.id < LANE_RULE_BASE);
   nextRuleId = Math.max(nextRuleId, ...existing.map((rule) => rule.id + 1));
+  if (nextRuleId >= LANE_RULE_BASE) nextRuleId = FIRST_RULE_ID;
   const id = nextRuleId++;
   ownRules.add(id);
   await chrome.declarativeNetRequest.updateSessionRules({
@@ -48,10 +52,13 @@ export async function unblockPageScripts(ruleId: number): Promise<void> {
   await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [ruleId] }).catch(() => undefined);
 }
 
-/** Rules left behind by a switch interrupted when the worker stopped (not those of a switch running now). */
+/**
+ * Rules left behind by a switch interrupted when the worker stopped (not those of a switch running
+ * now, nor those of separate tabs, which outlive the worker on purpose).
+ */
 export async function clearStaleRules(): Promise<void> {
   const stale = (await chrome.declarativeNetRequest.getSessionRules())
     .map((rule) => rule.id)
-    .filter((id) => !ownRules.has(id));
+    .filter((id) => id < LANE_RULE_BASE && !ownRules.has(id));
   if (stale.length) await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: stale });
 }

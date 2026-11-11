@@ -97,6 +97,7 @@ type View = { kind: 'current' } | { kind: 'app'; appId: string } | { kind: 'apps
 
 type Retry =
   | { kind: 'account'; app: AppDef; account: Account; options: SwitchOptions }
+  | { kind: 'lane'; app: AppDef; account: Account }
   | { kind: 'workspace'; workspace: Workspace; open: boolean };
 
 export function Switcher({ data, mode }: { data: Snapshot | null; mode: Mode }) {
@@ -124,6 +125,7 @@ export function Switcher({ data, mode }: { data: Snapshot | null; mode: Mode }) 
         data.state.accounts.length,
         data.state.active,
         data.unlocked,
+        data.lanes.map((lane) => [lane.token, lane.accountId, lane.tabIds.length, lane.status]),
       ])
     : '';
   useEffect(() => {
@@ -200,7 +202,11 @@ export function Switcher({ data, mode }: { data: Snapshot | null; mode: Mode }) 
     [close],
   );
 
-  const onCurrentTab = useCallback((app: AppDef) => probe?.appId === app.id && probe.tabId !== null, [probe]);
+  // A separate tab has its own sign-in: switches act on the browser's other tabs, never on it.
+  const onCurrentTab = useCallback(
+    (app: AppDef) => probe?.appId === app.id && probe.tabId !== null && !probe.lane,
+    [probe],
+  );
 
   const switchAccount = useCallback(
     async (app: AppDef, account: Account, options: SwitchOptions & { justUnlocked?: boolean } = {}) => {
@@ -292,6 +298,46 @@ export function Switcher({ data, mode }: { data: Snapshot | null; mode: Mode }) 
       refresh();
     },
     [run, onCurrentTab, probe, notify, t],
+  );
+
+  const openLane = useCallback(
+    async (app: AppDef, account: Account | null, justUnlocked = false) => {
+      if (!state || busy) return;
+      if (account && locked && !justUnlocked) {
+        retry.current = { kind: 'lane', app, account };
+        setNeedsUnlock(true);
+        return;
+      }
+      if (account?.important) {
+        // The same care as a switch to it; nothing of the browser's own tabs reloads.
+        const go = await askBeforeSwitch({
+          kind: 'account',
+          label: account.label,
+          app: app.name,
+          important: [`${app.name}: ${account.label}`],
+          confirmAll: false,
+          appIds: [],
+        });
+        if (!go) return;
+      }
+      setBusy(account ? `lane:${account.id}` : `lane:${app.id}`);
+      const result = await send('lane.open', {
+        appId: app.id,
+        accountId: account?.id ?? null,
+        ...(probe?.tabId !== null && probe?.tabId !== undefined ? { tabId: probe.tabId } : {}),
+      });
+      setBusy(null);
+      if (!result.ok) {
+        if (result.error === 'LOCKED' && account) {
+          retry.current = { kind: 'lane', app, account };
+          setNeedsUnlock(true);
+        }
+        notify(errorText(t, result), 'error');
+        return;
+      }
+      close();
+    },
+    [state, busy, locked, askBeforeSwitch, probe, notify, t, close],
   );
 
   const switchWorkspace = useCallback(
@@ -417,10 +463,12 @@ export function Switcher({ data, mode }: { data: Snapshot | null; mode: Mode }) 
       retry.current = null;
       if (next?.kind === 'account') void switchAccount(next.app, next.account, { ...next.options, justUnlocked: true });
       if (next?.kind === 'workspace') void switchWorkspace(next.workspace, next.open, true);
+      if (next?.kind === 'lane') void openLane(next.app, next.account, true);
     },
     switchAccount,
     freshLogin,
     saveSession,
+    openLane,
     switchWorkspace,
     addPreset,
     addSite,

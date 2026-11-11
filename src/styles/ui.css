@@ -1170,6 +1170,7 @@ button.chip:hover {
 
 .menu {
   position: fixed;
+  transform-origin: top right;
   z-index: 50;
   min-width: 220px;
   max-width: 300px;
@@ -1226,10 +1227,25 @@ button.chip:hover {
   background: var(--border);
 }
 
+/*
+ * Menus, dialogs and toasts move into place; their text never fades (axe, and some screen
+ * magnifiers, read it mid-animation). Only a dialog's backdrop, which holds no text, fades in.
+ */
 @keyframes pop-in {
   from {
+    transform: translateY(-4px) scale(0.97);
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    transform: translateY(8px) scale(0.97);
+  }
+}
+
+@keyframes backdrop-in {
+  from {
     opacity: 0;
-    transform: translateY(-4px) scale(0.98);
   }
 }
 
@@ -1249,7 +1265,11 @@ button.chip:hover {
 }
 
 .dialog[open] {
-  animation: pop-in 0.16s var(--ease);
+  animation: dialog-in 0.18s var(--ease);
+}
+
+.dialog[open]::backdrop {
+  animation: backdrop-in 0.18s var(--ease);
 }
 
 .dialog__form {
@@ -1370,8 +1390,7 @@ button.chip:hover {
 
 @keyframes toast-in {
   from {
-    opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(10px) scale(0.97);
   }
 }
 
@@ -1528,5 +1547,13 @@ html:not([data-ready]) *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+  }
+
+  /* Pop-ins appear in place, backdrop included (a pseudo-element `*` doesn't reach). */
+  .menu,
+  .toast,
+  .dialog[open],
+  .dialog[open]::backdrop {
+    animation: none;
   }
 }

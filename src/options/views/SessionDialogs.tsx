@@ -1,9 +1,11 @@
-import { FileUp, Send, Upload } from 'lucide-react';
+import { Download, FileUp, Upload } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import type { AppDef } from '../../core/types';
 import { MAX_IMPORT_LENGTH } from '../../core/session-import';
+import { send } from '../../shared/protocol';
 import { Callout, Dialog, Field, Spinner, useToast } from '../../ui/controls';
 import { downloadText } from '../../ui/download';
+import { errorText } from '../../ui/hooks';
 import { useI18n } from '../../ui/i18n';
 import { useManager } from '../context';
 
@@ -25,6 +27,7 @@ function slug(text: string): string {
 /**
  * Sends one account (or a workspace) to someone: a password-locked file with only that, which they
  * add with Backup → Import ("add to what I have"; it can never replace their data). No server.
+ * Errors show in the dialog: a toast would sit under the modal's backdrop.
  */
 export function ShareDialog({
   open,
@@ -39,40 +42,62 @@ export function ShareDialog({
 }) {
   const { t } = useI18n();
   const notify = useToast();
-  const { run, pending } = useManager();
+  const { requireUnlock } = useManager();
   const [password, setPassword] = useState('');
   const [again, setAgain] = useState('');
+  // The length is checked once the first field is left (or on submit), not on every key.
+  const [checked, setChecked] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const id = useId();
-  const short = password.length > 0 && password.length < 8;
+  const workspace = 'workspaceId' in scope;
+  const short = checked && password.length < 8;
   const mismatch = again.length > 0 && again !== password;
   const ready = password.length >= 8 && again === password;
   const close = () => {
     setPassword('');
     setAgain('');
+    setChecked(false);
+    setError(null);
     onClose();
   };
   return (
-    <Dialog open={open} onClose={close} title={t('share.title', { name })}>
+    <Dialog open={open} onClose={close} title={t('share.title')}>
       <form
         className="form"
         onSubmit={async (event) => {
           event.preventDefault();
-          if (!ready) return;
-          const result = await run('backup.export', { password, includeSessions: true, only: scope }, 'share');
-          if (!result) return;
-          downloadText(result.text, `swapdeck-share-${slug(name)}.json`);
+          setChecked(true);
+          if (!ready || busy) return;
+          // The file carries sign-ins: a locked passphrase is asked for first.
+          if (!(await requireUnlock())) return;
+          setBusy(true);
+          setError(null);
+          const result = await send('backup.export', { password, includeSessions: true, only: scope });
+          setBusy(false);
+          if (!result.ok) {
+            setError(errorText(t, result));
+            return;
+          }
+          downloadText(result.data.text, `swapdeck-share-${slug(name)}.json`);
           notify(
-            result.unreadable.length
-              ? t('backup.downloadedUnreadable', { names: result.unreadable.join(', ') })
+            result.data.unreadable.length
+              ? t('backup.downloadedUnreadable', { names: result.data.unreadable.join(', ') })
               : t('share.done'),
-            result.unreadable.length ? 'error' : 'success',
+            result.data.unreadable.length ? 'error' : 'success',
           );
           close();
         }}
       >
-        <p className="muted">{t('share.lead')}</p>
-        <Callout tone="warning">{t('share.warning')}</Callout>
-        <Field label={t('share.password')} htmlFor={`${id}-pw`} hint={t('share.passwordHint')}>
+        <p className="share-target">{name}</p>
+        <p className="dialog__text">{t(workspace ? 'share.leadWorkspace' : 'share.lead')}</p>
+        <Callout tone="warning">{t(workspace ? 'share.warningWorkspace' : 'share.warning')}</Callout>
+        <Field
+          label={t('backup.password')}
+          htmlFor={`${id}-pw`}
+          hint={t('share.passwordHint')}
+          error={short ? t('share.passwordShort') : undefined}
+        >
           <input
             id={`${id}-pw`}
             className="input"
@@ -81,13 +106,14 @@ export function ShareDialog({
             data-autofocus
             value={password}
             onChange={(event) => setPassword(event.target.value)}
+            onBlur={() => setChecked(password.length > 0)}
             aria-invalid={short || undefined}
           />
         </Field>
         <Field
-          label={t('share.passwordAgain')}
+          label={t('backup.passwordConfirm')}
           htmlFor={`${id}-again`}
-          error={mismatch ? t('share.mismatch') : short ? t('error.INVALID.password') : undefined}
+          error={mismatch ? t('backup.passwordMismatch') : undefined}
         >
           <input
             id={`${id}-again`}
@@ -99,12 +125,13 @@ export function ShareDialog({
             aria-invalid={mismatch || undefined}
           />
         </Field>
+        {error && <Callout tone="danger">{error}</Callout>}
         <div className="form__actions">
           <button type="button" className="btn" onClick={close}>
             {t('common.cancel')}
           </button>
-          <button type="submit" className="btn btn--primary" disabled={!ready || pending === 'share'}>
-            {pending === 'share' ? <Spinner /> : <Send />} {t('share.download')}
+          <button type="submit" className="btn btn--primary" disabled={!ready || busy}>
+            {busy ? <Spinner /> : <Download />} {t('share.download')}
           </button>
         </div>
       </form>
@@ -115,16 +142,20 @@ export function ShareDialog({
 /**
  * Saves a sign-in exported by another tool as an account: Cookie-Editor / EditThisCookie JSON,
  * Playwright storage state, Netscape cookies.txt or a Cookie header — pasted or from a file.
+ * Errors (a format it doesn't know, no cookie of the app) show in the dialog, next to the text.
  */
 export function ImportSessionDialog({ open, onClose, app }: { open: boolean; onClose: () => void; app: AppDef }) {
   const { t } = useI18n();
   const notify = useToast();
-  const { run, pending, data } = useManager();
+  const { data } = useManager();
   const [text, setText] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const id = useId();
   const close = () => {
     setText('');
+    setError(null);
     onClose();
   };
   return (
@@ -133,15 +164,21 @@ export function ImportSessionDialog({ open, onClose, app }: { open: boolean; onC
         className="form"
         onSubmit={async (event) => {
           event.preventDefault();
-          const result = await run('session.import', { appId: app.id, text }, 'session.import');
-          if (!result) return;
-          const label = data.state.accounts.find((account) => account.id === result.accountId)?.label;
+          if (busy) return;
+          setBusy(true);
+          setError(null);
+          const result = await send('session.import', { appId: app.id, text });
+          setBusy(false);
+          if (!result.ok) {
+            setError(errorText(t, result));
+            return;
+          }
+          const { accountId, created, skipped } = result.data;
+          const label = data.state.accounts.find((account) => account.id === accountId)?.label ?? '';
           notify(
             [
-              result.created
-                ? t('importSession.created', { label: label ?? '' })
-                : t('importSession.updated', { label: label ?? '' }),
-              result.skipped ? t('importSession.skipped', { n: result.skipped }) : '',
+              created ? t('importSession.created', { label }) : t('importSession.updated', { label }),
+              skipped ? t('importSession.skipped', { n: skipped }) : '',
             ]
               .filter(Boolean)
               .join(' '),
@@ -149,7 +186,7 @@ export function ImportSessionDialog({ open, onClose, app }: { open: boolean; onC
           close();
         }}
       >
-        <p className="muted">{t('importSession.lead')}</p>
+        <p className="dialog__text">{t('importSession.lead')}</p>
         <Field label={t('importSession.paste')} htmlFor={`${id}-text`} hint={t('importSession.formats')}>
           <textarea
             id={`${id}-text`}
@@ -159,7 +196,12 @@ export function ImportSessionDialog({ open, onClose, app }: { open: boolean; onC
             data-autofocus
             value={text}
             maxLength={MAX_IMPORT_LENGTH}
-            onChange={(event) => setText(event.target.value)}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? `${id}-error` : undefined}
+            onChange={(event) => {
+              setText(event.target.value);
+              setError(null);
+            }}
           />
         </Field>
         <div className="row">
@@ -174,17 +216,29 @@ export function ImportSessionDialog({ open, onClose, app }: { open: boolean; onC
             onChange={async (event) => {
               const file = event.target.files?.[0];
               event.target.value = '';
-              if (file && file.size <= MAX_IMPORT_LENGTH) setText(await file.text());
+              if (!file) return;
+              if (file.size > MAX_IMPORT_LENGTH) {
+                setError(t('importSession.tooLarge'));
+                return;
+              }
+              setText(await file.text());
+              setError(null);
             }}
           />
         </div>
-        <Callout tone="info">{t('importSession.privacy')}</Callout>
+        {error ? (
+          <div id={`${id}-error`}>
+            <Callout tone="danger">{error}</Callout>
+          </div>
+        ) : (
+          <Callout tone="info">{t('importSession.privacy')}</Callout>
+        )}
         <div className="form__actions">
           <button type="button" className="btn" onClick={close}>
             {t('common.cancel')}
           </button>
-          <button type="submit" className="btn btn--primary" disabled={!text.trim() || pending === 'session.import'}>
-            {pending === 'session.import' ? <Spinner /> : <Upload />} {t('importSession.button')}
+          <button type="submit" className="btn btn--primary" disabled={!text.trim() || busy}>
+            {busy ? <Spinner /> : <Upload />} {t('importSession.button')}
           </button>
         </div>
       </form>

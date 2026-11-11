@@ -2,8 +2,9 @@ import { Download, FileJson, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { parseBackupFile } from '../../core/backup';
 import { formatDateTime, relativeTime } from '../../i18n/translate';
-import type { BackupSummary } from '../../shared/protocol';
+import { send, type BackupSummary } from '../../shared/protocol';
 import { Callout, Field, Spinner, useConfirm, useToast } from '../../ui/controls';
+import { errorText } from '../../ui/hooks';
 import { useI18n } from '../../ui/i18n';
 import { backupFileName, downloadText } from '../../ui/download';
 import { useManager } from '../context';
@@ -146,11 +147,14 @@ function ImportCard() {
   const [mode, setMode] = useState<'merge' | 'replace'>('merge');
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [unlocking, setUnlocking] = useState(false);
+  const [wrongPassword, setWrongPassword] = useState(false);
 
   const load = async (picked: File | undefined) => {
     setSummary(null);
     setError(null);
     setPassword('');
+    setWrongPassword(false);
     if (!picked) return;
     const text = await picked.text();
     try {
@@ -204,11 +208,21 @@ function ImportCard() {
             className="row"
             onSubmit={async (event) => {
               event.preventDefault();
-              const result = await run('backup.inspect', { text: file.text, password }, 'inspect');
-              if (result) setSummary(result);
+              if (unlocking) return;
+              // A wrong password is said next to the field (it is the file's, not the passphrase).
+              setUnlocking(true);
+              const result = await send('backup.inspect', { text: file.text, password });
+              setUnlocking(false);
+              if (result.ok) setSummary(result.data);
+              else if (result.error === 'BAD_PASSPHRASE') setWrongPassword(true);
+              else notify(errorText(t, result), 'error');
             }}
           >
-            <Field label={t('backup.encrypted')} htmlFor="import-password">
+            <Field
+              label={t('backup.encrypted')}
+              htmlFor="import-password"
+              error={wrongPassword ? t('backup.wrongPassword') : null}
+            >
               <div className="row">
                 <input
                   id="import-password"
@@ -216,10 +230,14 @@ function ImportCard() {
                   type="password"
                   autoComplete="off"
                   value={password}
-                  onChange={(event) => setPassword(event.target.value)}
+                  aria-invalid={wrongPassword || undefined}
+                  onChange={(event) => {
+                    setPassword(event.target.value);
+                    setWrongPassword(false);
+                  }}
                 />
-                <button type="submit" className="btn" disabled={!password || pending === 'inspect'}>
-                  {pending === 'inspect' ? <Spinner /> : null} {t('common.unlock')}
+                <button type="submit" className="btn" disabled={!password || unlocking}>
+                  {unlocking ? <Spinner /> : null} {t('common.unlock')}
                 </button>
               </div>
             </Field>
@@ -236,24 +254,28 @@ function ImportCard() {
                 date: summary.createdAt ? formatDateTime(summary.createdAt, language) : '—',
               })}
             </Callout>
-            {summary.shared && <Callout tone="info">{t('share.sharedFile')}</Callout>}
-            <fieldset className="fieldset" hidden={summary.shared}>
-              <legend className="visually-hidden">{t('backup.import')}</legend>
-              <label className="checkbox-row">
-                <input type="radio" name="mode" checked={mode === 'merge'} onChange={() => setMode('merge')} />
-                <span>
-                  <strong>{t('backup.merge')}</strong>
-                  <span className="field__hint block">{t('backup.mergeHint')}</span>
-                </span>
-              </label>
-              <label className="checkbox-row">
-                <input type="radio" name="mode" checked={mode === 'replace'} onChange={() => setMode('replace')} />
-                <span>
-                  <strong>{t('backup.replace')}</strong>
-                  <span className="field__hint block">{t('backup.replaceHint')}</span>
-                </span>
-              </label>
-            </fieldset>
+            {/* A file someone sent is only ever added: no choice to offer. */}
+            {summary.shared ? (
+              <Callout tone="info">{t('share.sharedFile')}</Callout>
+            ) : (
+              <fieldset className="fieldset">
+                <legend className="visually-hidden">{t('backup.import')}</legend>
+                <label className="checkbox-row">
+                  <input type="radio" name="mode" checked={mode === 'merge'} onChange={() => setMode('merge')} />
+                  <span>
+                    <strong>{t('backup.merge')}</strong>
+                    <span className="field__hint block">{t('backup.mergeHint')}</span>
+                  </span>
+                </label>
+                <label className="checkbox-row">
+                  <input type="radio" name="mode" checked={mode === 'replace'} onChange={() => setMode('replace')} />
+                  <span>
+                    <strong>{t('backup.replace')}</strong>
+                    <span className="field__hint block">{t('backup.replaceHint')}</span>
+                  </span>
+                </label>
+              </fieldset>
+            )}
             <div className="form__actions form__actions--start">
               <button
                 type="button"

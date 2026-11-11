@@ -1725,6 +1725,17 @@ body {
 
 /* --- Backup ------------------------------------------------------------------------------ */
 
+/* "Send to someone": what goes in the file, as it is named in the list. */
+.share-target {
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--bg);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
 .dropzone {
   display: flex;
   align-items: center;

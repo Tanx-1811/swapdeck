@@ -813,14 +813,16 @@ export const en = {
 
   // Sending an account, importing a sign-in
   'share.menu': 'Send to someone…',
-  'share.title': 'Send "{name}" to someone',
+  'share.title': 'Send to someone',
   'share.lead':
-    'Makes a file with only this and its sign-in, locked with a password. They add it in Swapdeck with Backup → Import; it never replaces what they have.',
+    'A file with only this account and its sign-in, locked with a password. They add it to their Swapdeck with Backup → Import; it never replaces what they have.',
+  'share.leadWorkspace':
+    'A file with only this workspace, its accounts and their sign-ins, locked with a password. They add it to their Swapdeck with Backup → Import; it never replaces what they have.',
   'share.warning': 'Whoever has the file and the password can sign in as this account. Send the password another way.',
-  'share.password': 'Password for the file',
+  'share.warningWorkspace':
+    'Whoever has the file and the password can sign in as these accounts. Send the password another way.',
   'share.passwordHint': 'At least 8 characters.',
-  'share.passwordAgain': 'Password again',
-  'share.mismatch': 'The passwords are different.',
+  'share.passwordShort': 'Use at least 8 characters.',
   'share.download': 'Download the file',
   'share.done': 'File downloaded. Send the password separately.',
   'share.sharedFile': 'Someone sent you this file: it is added to what you have.',
@@ -828,7 +830,7 @@ export const en = {
   'importSession.menu': 'Import a sign-in…',
   'importSession.title': 'Import a sign-in into {app}',
   'importSession.lead':
-    'Paste a sign-in exported by another tool. It is saved as an account (the one it belongs to, when Swapdeck recognises who it is); nothing in your browser changes.',
+    'Paste a sign-in exported by another tool, or choose its file. Swapdeck saves it as an account (into the matching one when it recognises who it is); nothing in your browser changes.',
   'importSession.paste': 'Exported sign-in',
   'importSession.formats':
     'Cookie-Editor or EditThisCookie (JSON), Playwright storage state, cookies.txt, or a Cookie header.',
@@ -838,8 +840,11 @@ export const en = {
   'importSession.created': 'Saved as a new account: "{label}".',
   'importSession.updated': 'Saved into "{label}".',
   'importSession.skipped': 'Left out {n} cookies of other sites or expired ones.',
+  'importSession.skipped.one': 'Left out {n} cookie of another site or an expired one.',
+  'importSession.tooLarge': 'This file is too large to be an exported sign-in.',
   'error.INVALID.import': "Swapdeck doesn't recognise this format.",
-  'error.NO_SESSION.import': 'There is no cookie of this app in it.',
+  'error.NO_SESSION.import': "It has no cookies for this app's sites.",
+  'backup.wrongPassword': 'Wrong password for this file.',
 } as const;
 
 export type MessageKey = keyof typeof en;

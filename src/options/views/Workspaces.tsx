@@ -251,7 +251,10 @@ export function Workspaces() {
                           onSelect: () => void run('workspace.reorder', { ids: moveId(ids, index, index + 1) }),
                         },
                         ...(liveMembers(workspace, state.apps, state.accounts).length
-                          ? [{ label: t('share.menu'), icon: <Send />, onSelect: () => setSharing(workspace) }]
+                          ? [
+                              { kind: 'separator' as const },
+                              { label: t('share.menu'), icon: <Send />, onSelect: () => setSharing(workspace) },
+                            ]
                           : []),
                         { kind: 'separator' },
                         {

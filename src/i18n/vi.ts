@@ -818,14 +818,16 @@ export const vi: Record<MessageKey, string> = {
 
   // Sending an account, importing a sign-in
   'share.menu': 'Gửi cho người khác…',
-  'share.title': 'Gửi “{name}” cho người khác',
+  'share.title': 'Gửi cho người khác',
   'share.lead':
-    'Tạo một tệp chỉ chứa mục này và phiên đăng nhập của nó, khóa bằng mật khẩu. Người nhận thêm vào Swapdeck bằng Sao lưu → Nhập; tệp không bao giờ thay thế dữ liệu của họ.',
+    'Một tệp chỉ chứa tài khoản này và phiên đăng nhập của nó, khóa bằng mật khẩu. Người nhận thêm vào Swapdeck của họ bằng Sao lưu → Nhập; tệp không bao giờ thay thế dữ liệu của họ.',
+  'share.leadWorkspace':
+    'Một tệp chỉ chứa bên này, các tài khoản và phiên đăng nhập của chúng, khóa bằng mật khẩu. Người nhận thêm vào Swapdeck của họ bằng Sao lưu → Nhập; tệp không bao giờ thay thế dữ liệu của họ.',
   'share.warning': 'Ai có tệp và mật khẩu đều đăng nhập được bằng tài khoản này. Hãy gửi mật khẩu theo đường khác.',
-  'share.password': 'Mật khẩu cho tệp',
+  'share.warningWorkspace':
+    'Ai có tệp và mật khẩu đều đăng nhập được bằng các tài khoản này. Hãy gửi mật khẩu theo đường khác.',
   'share.passwordHint': 'Ít nhất 8 ký tự.',
-  'share.passwordAgain': 'Nhập lại mật khẩu',
-  'share.mismatch': 'Hai mật khẩu không khớp.',
+  'share.passwordShort': 'Hãy dùng ít nhất 8 ký tự.',
   'share.download': 'Tải tệp xuống',
   'share.done': 'Đã tải tệp xuống. Hãy gửi mật khẩu riêng.',
   'share.sharedFile': 'Tệp này do người khác gửi: sẽ được thêm vào dữ liệu hiện có.',
@@ -833,7 +835,7 @@ export const vi: Record<MessageKey, string> = {
   'importSession.menu': 'Nhập phiên đăng nhập…',
   'importSession.title': 'Nhập phiên đăng nhập vào {app}',
   'importSession.lead':
-    'Dán phiên đăng nhập đã xuất từ công cụ khác. Phiên được lưu thành tài khoản (đúng tài khoản của người đó nếu Swapdeck nhận ra); trình duyệt của bạn không thay đổi gì.',
+    'Dán phiên đăng nhập đã xuất từ công cụ khác, hoặc chọn tệp của nó. Swapdeck lưu phiên thành tài khoản (vào đúng tài khoản đó nếu nhận ra là ai); trình duyệt của bạn không thay đổi gì.',
   'importSession.paste': 'Phiên đã xuất',
   'importSession.formats':
     'Cookie-Editor hoặc EditThisCookie (JSON), storage state của Playwright, cookies.txt, hoặc header Cookie.',
@@ -843,6 +845,9 @@ export const vi: Record<MessageKey, string> = {
   'importSession.created': 'Đã lưu thành tài khoản mới: “{label}”.',
   'importSession.updated': 'Đã lưu vào “{label}”.',
   'importSession.skipped': 'Đã bỏ qua {n} cookie của trang khác hoặc đã hết hạn.',
+  'importSession.skipped.one': 'Đã bỏ qua {n} cookie của trang khác hoặc đã hết hạn.',
+  'importSession.tooLarge': 'Tệp này quá lớn, không phải một phiên đăng nhập đã xuất.',
   'error.INVALID.import': 'Swapdeck không nhận ra định dạng này.',
-  'error.NO_SESSION.import': 'Trong đó không có cookie nào của ứng dụng này.',
+  'error.NO_SESSION.import': 'Trong đó không có cookie nào của các trang thuộc ứng dụng này.',
+  'backup.wrongPassword': 'Sai mật khẩu của tệp này.',
 };

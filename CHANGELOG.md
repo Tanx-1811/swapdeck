@@ -2,7 +2,7 @@
 
 All notable changes to Swapdeck are listed here. Versions follow [Semantic Versioning](https://semver.org/).
 
-## 1.8.0 — 2026-11-08
+## 1.8.0 — 2026-11-11
 
 Two accounts of the same site, side by side: **separate tabs**.
 

@@ -5,10 +5,10 @@ body {
 
 .manager {
   display: grid;
-  grid-template-columns: 248px minmax(0, 1fr);
+  grid-template-columns: 264px minmax(0, 1fr);
   min-height: 100vh;
   /* Keeps the lacquer column filled however long the page gets. */
-  background: linear-gradient(to right, var(--lacquer) 248px, transparent 248px);
+  background: linear-gradient(to right, var(--lacquer) 264px, transparent 264px);
 }
 
 .manager--loading {

@@ -1,5 +1,7 @@
+import { createHash } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import type { Duplex } from 'node:stream';
 
 /**
  * A fake web app with a real sign-in, used to test switching end to end.
@@ -160,6 +162,36 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
     response.end('{}');
     return;
   }
+  if (url.pathname === '/api/cors') {
+    // An API on another origin of the site that allows the app's pages with credentials and the one
+    // header its client sends (content-type); a preflight asking for any other header is refused.
+    const origin = request.headers.origin;
+    if (request.method === 'OPTIONS') {
+      const asked = String(request.headers['access-control-request-headers'] ?? '')
+        .split(',')
+        .map((name) => name.trim().toLowerCase())
+        .filter(Boolean);
+      if (!origin || asked.some((name) => name !== 'content-type')) {
+        response.writeHead(403);
+        response.end();
+        return;
+      }
+      response.writeHead(204, {
+        'access-control-allow-origin': origin,
+        'access-control-allow-credentials': 'true',
+        'access-control-allow-methods': 'GET, POST',
+        'access-control-allow-headers': 'content-type',
+      });
+      response.end();
+      return;
+    }
+    response.writeHead(200, {
+      'content-type': 'application/json',
+      ...(origin ? { 'access-control-allow-origin': origin, 'access-control-allow-credentials': 'true' } : {}),
+    });
+    response.end(JSON.stringify({ user: serverUser ?? 'nobody', cookie: request.headers.cookie ?? '' }));
+    return;
+  }
   if (url.pathname === '/api/logout' && request.method === 'POST') {
     response.writeHead(204, { 'set-cookie': 'acme_sid=; Path=/; Max-Age=0' });
     response.end();
@@ -237,11 +269,35 @@ export async function startTestServer(): Promise<TestServer> {
       response.end(String(error));
     });
   });
+  // A WebSocket that says who its handshake was signed in as (sites authenticate sockets by cookie).
+  const sockets = new Set<Duplex>();
+  server.on('upgrade', (request: IncomingMessage, socket: Duplex) => {
+    sockets.add(socket);
+    socket.on('close', () => sockets.delete(socket));
+    const key = request.headers['sec-websocket-key'];
+    if (typeof key !== 'string') {
+      socket.destroy();
+      return;
+    }
+    const accept = createHash('sha1').update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest('base64');
+    const text = Buffer.from(cookies(request).acme_sid ?? 'nobody');
+    socket.write(
+      'HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n' +
+        `Sec-WebSocket-Accept: ${accept}\r\n\r\n`,
+    );
+    // One unmasked text frame (short), then close.
+    socket.write(Buffer.concat([Buffer.from([0x81, text.length]), text]));
+    socket.end(Buffer.from([0x88, 0x00]));
+  });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   const { port } = server.address() as AddressInfo;
   return {
     port,
     url: (host, path = '/') => `http://${host}:${port}${path}`,
-    close: () => new Promise((resolve) => server.close(() => resolve())),
+    close: () =>
+      new Promise((resolve) => {
+        for (const socket of sockets) socket.destroy();
+        server.close(() => resolve());
+      }),
   };
 }

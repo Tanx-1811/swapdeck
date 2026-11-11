@@ -234,6 +234,171 @@ test.describe('separate tabs', () => {
   });
 });
 
+test.describe('pages in and beside separate tabs keep working', () => {
+  test('native Storage methods and site wrappers of them work on localStorage', async ({ context, server, call }) => {
+    const acme = await addAcme(call, server);
+    const { site, alice } = await aliceAndBob(context, acme);
+    const lane = await openLane(context, call as Call, { appId: acme.id, accountId: alice.id });
+    // The site's own tab, loaded again now that the lane's keys exist on the origin.
+    await site.reload();
+
+    for (const page of [lane.page, site]) {
+      const result = await page.evaluate(() => {
+        const proto = Storage.prototype as Storage & Record<string, unknown>;
+        // What consent managers and analytics do: wrap a method, and add one that calls the original.
+        const seen: string[] = [];
+        const originalSet = proto.setItem;
+        proto.setItem = function (this: Storage, key: string, value: string) {
+          seen.push(key);
+          return originalSet.call(this, key, value);
+        };
+        const originalRemove = proto.removeItem;
+        proto.siteRemove = function (this: Storage, key: string) {
+          return originalRemove.call(this, key);
+        };
+        try {
+          localStorage.setItem('probe', '1');
+          const out = {
+            seen: [...seen],
+            got: proto.getItem.call(localStorage, 'probe'),
+            length: Object.getOwnPropertyDescriptor(Storage.prototype, 'length')!.get!.call(localStorage),
+            keys: [0, 1].map((index) => proto.key.call(localStorage, index)).sort(),
+            removed: (localStorage as unknown as { siteRemove: (key: string) => void }).siteRemove('probe'),
+            after: localStorage.getItem('probe'),
+            session: proto.getItem.call(sessionStorage, 'nothing-here'),
+            names: [proto.getItem.name, proto.setItem.length, proto.removeItem.length],
+          };
+          return out;
+        } catch (error) {
+          return String(error);
+        } finally {
+          proto.setItem = originalSet;
+          delete proto.siteRemove;
+        }
+      });
+      expect(result).toEqual({
+        seen: ['probe'],
+        got: '1',
+        length: 2,
+        keys: ['probe', 'sb-acme-auth-token'],
+        removed: undefined,
+        after: null,
+        session: null,
+        names: ['getItem', 2, 1],
+      });
+    }
+    // Each saw its own: the lane's probe never showed in the browser's tab, nor the other way round.
+    expect(await whoIsSignedIn(lane.page)).toEqual(signedInAs('alice@acme.test'));
+    expect(await reloadAndRead(site)).toEqual(signedInAs('bob@acme.test'));
+  });
+
+  test("calls the app's other origins with CORS like any tab, with the lane's cookies", async ({
+    context,
+    server,
+    call,
+    worker,
+  }) => {
+    const acme = await addAcme(call, server);
+    const { site, alice } = await aliceAndBob(context, acme);
+    const lane = await openLane(context, call as Call, { appId: acme.id, accountId: alice.id });
+    // A cookie for the whole site, set by the lane's page: the API on another origin gets it.
+    await lane.page.evaluate(() => (document.cookie = 'acme_api=lane; domain=acme.test; path=/'));
+    const api = server.url('api.acme.test', '/api/cors');
+    const calls = (page: Page) =>
+      page.evaluate(async (url) => {
+        try {
+          const post = await fetch(url, { method: 'POST', credentials: 'include', body: 'x' }).then((r) => r.json());
+          // A JSON call: preflighted, and the API allows only content-type.
+          const json = await fetch(url, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: '{}',
+          }).then((r) => r.json());
+          const get = await fetch(url, { credentials: 'include' }).then((r) => r.json());
+          const xhr = await new Promise((resolve, reject) => {
+            const request = new XMLHttpRequest();
+            request.open('POST', url);
+            request.withCredentials = true;
+            request.onload = () => resolve(JSON.parse(request.responseText));
+            request.onerror = () => reject(new Error('xhr failed'));
+            request.send('x');
+          });
+          return [post, json, get, xhr] as { cookie: string }[];
+        } catch (error) {
+          return String(error);
+        }
+      }, api);
+    const inLane = await calls(lane.page);
+    expect(Array.isArray(inLane), String(inLane)).toBe(true);
+    for (const answer of inLane as { cookie: string }[]) expect(answer.cookie).toBe('acme_api=lane');
+    const inSite = await calls(site);
+    expect(Array.isArray(inSite), String(inSite)).toBe(true);
+    for (const answer of inSite as { cookie: string }[]) expect(answer.cookie).toBe('');
+    expect((await browserCookies(worker)).some((cookie) => cookie.startsWith('acme_api='))).toBe(false);
+  });
+
+  test("signs the site's WebSockets in as the lane's account", async ({ context, server, call }) => {
+    const acme = await addAcme(call, server);
+    const { site, alice } = await aliceAndBob(context, acme);
+    const lane = await openLane(context, call as Call, { appId: acme.id, accountId: alice.id });
+    const socket = (url: string) =>
+      new Promise<string>((resolve, reject) => {
+        const ws = new WebSocket(url);
+        ws.onmessage = (event) => resolve(String(event.data));
+        ws.onerror = () => reject(new Error('socket failed'));
+      });
+    const url = server.url('acme.test', '/socket').replace(/^http/, 'ws');
+    expect(await lane.page.evaluate(socket, url)).toBe('alice@acme.test');
+    expect(await site.evaluate(socket, url)).toBe('bob@acme.test');
+  });
+
+  test('document.cookie reads like a browser after writes; requests keep their semantics', async ({
+    context,
+    server,
+    call,
+  }) => {
+    const acme = await addAcme(call, server);
+    const { alice } = await aliceAndBob(context, acme);
+    const lane = await openLane(context, call as Call, { appId: acme.id, accountId: alice.id });
+    await lane.page.goto(`${acme.origin}/project/abc123`);
+    const written = await lane.page.evaluate(() => {
+      document.cookie = 'dup=root; path=/';
+      document.cookie = 'dup=deep; path=/project';
+      // What a browser ignores: Secure from an http page, a broken prefix, another site's domain.
+      document.cookie = 'sec=1; Secure';
+      document.cookie = '__Host-h=1; path=/';
+      document.cookie = 'other=1; domain=other.test';
+      return document.cookie.split('; ');
+    });
+    // At once: the page's last write shows, and nothing a browser would ignore.
+    expect(written).toContain('dup=deep');
+    expect(written.some((item) => /^(sec|__Host-h|other)=/.test(item))).toBe(false);
+    // Once the lane has them, still the same (two cookies of one name, the longer path first).
+    await expect
+      .poll(() => lane.page.evaluate(() => document.cookie.split('; ').filter((item) => item.startsWith('dup='))))
+      .toEqual(['dup=deep', 'dup=root']);
+
+    const xhr = await lane.page.evaluate(() => {
+      document.cookie = 'pending=1; path=/';
+      // A synchronous request has its answer when send() returns, even with a cookie write pending.
+      const sync = new XMLHttpRequest();
+      sync.open('GET', '/api/cors', false);
+      sync.send();
+      // send() before open() throws, as it always does.
+      document.cookie = 'pending=2; path=/';
+      let thrown = 'nothing';
+      try {
+        new XMLHttpRequest().send();
+      } catch (error) {
+        thrown = (error as DOMException).name;
+      }
+      return { status: sync.status, thrown };
+    });
+    expect(xhr).toEqual({ status: 200, thrown: 'InvalidStateError' });
+  });
+});
+
 test.describe('separate tabs in the popup', () => {
   test('opens an account in a separate tab from its menu and explains the tab there', async ({
     context,

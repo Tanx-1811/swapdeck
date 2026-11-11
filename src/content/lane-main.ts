@@ -12,7 +12,8 @@
  * It must not throw, and it never sends anything anywhere but to the extension's relay
  * (content/lane-relay.ts) through DOM events on this document.
  */
-import { LANE_PREFIX, LANE_TIMING, laneNamespace, parseLaneTiming, pathMatches } from '../core/lanes';
+import { registrableDomain } from '../core/domains';
+import { LANE_PREFIX, LANE_TIMING, laneNamespace, parseCookie, parseLaneTiming, pathMatches } from '../core/lanes';
 
 type LaneView = { token: string; cookies: string };
 
@@ -47,6 +48,11 @@ const FROM_RELAY = 'swapdeck-lane-ack';
   const lane = findLane();
   Object.defineProperty(window, STATE, { value: lane ?? undefined, configurable: false, enumerable: false });
 
+  // Captured before the page's own scripts run: they may replace these later.
+  const apply = Reflect.apply;
+  const weakGet = WeakMap.prototype.get;
+  const weakSet = WeakMap.prototype.set;
+
   const realLocal = (() => {
     try {
       return window.localStorage;
@@ -57,77 +63,178 @@ const FROM_RELAY = 'swapdeck-lane-ack';
 
   // --- Web storage -------------------------------------------------------------
 
+  type StorageMethod = 'getItem' | 'setItem' | 'removeItem' | 'clear' | 'key';
+  /** The browser's own Storage methods: the views call these, so a site's wrappers never see lane names. */
+  const native = (() => {
+    try {
+      const proto = Storage.prototype;
+      const length = Object.getOwnPropertyDescriptor(proto, 'length')?.get;
+      if (!length) return null;
+      return {
+        proto,
+        length: length as (this: Storage) => number,
+        getItem: proto.getItem,
+        setItem: proto.setItem,
+        removeItem: proto.removeItem,
+        clear: proto.clear,
+        key: proto.key,
+      };
+    } catch {
+      return null;
+    }
+  })();
+
+  const lengthOf = (storage: Storage): number => apply(native!.length, storage, []);
+  const keyAt = (storage: Storage, index: number): string | null => apply(native!.key, storage, [index]);
+
   function hasLaneKeys(storage: Storage): boolean {
-    for (let i = 0; i < storage.length; i++) if (storage.key(i)?.startsWith(LANE_PREFIX)) return true;
+    for (let i = 0; i < lengthOf(storage); i++) if (keyAt(storage, i)?.startsWith(LANE_PREFIX)) return true;
     return false;
+  }
+
+  /** What one of our Storage views does, with the real Storage under it. */
+  type View = {
+    real: Storage;
+    getItem: (key: unknown) => string | null;
+    setItem: (key: unknown, value: unknown) => void;
+    removeItem: (key: unknown) => void;
+    clear: () => void;
+    key: (index: unknown) => string | null;
+    length: () => number;
+  };
+  const views = new WeakMap<object, View>();
+  const viewOf = (value: unknown): View | undefined =>
+    value !== null && (typeof value === 'object' || typeof value === 'function')
+      ? (apply(weakGet, views, [value]) as View | undefined)
+      : undefined;
+
+  /**
+   * Storage.prototype's methods and `length`, as wrappers that act on our view when called on one
+   * (Storage.prototype.getItem.call(localStorage, …), or a method a site added to the prototype)
+   * and are the browser's own otherwise. Same names, lengths and property attributes.
+   */
+  let prototypeWrapped = false;
+  function wrapPrototype(): void {
+    if (prototypeWrapped || !native) return;
+    prototypeWrapped = true;
+    const { proto } = native;
+    const arity: Record<StorageMethod, number> = { getItem: 1, setItem: 2, removeItem: 1, clear: 0, key: 1 };
+    for (const name of Object.keys(arity) as StorageMethod[]) {
+      const descriptor = Object.getOwnPropertyDescriptor(proto, name);
+      const original = native[name] as (...args: unknown[]) => unknown;
+      if (!descriptor || typeof original !== 'function') continue;
+      const wrapper = {
+        [name](this: unknown, ...args: unknown[]): unknown {
+          const view = viewOf(this);
+          // Too few arguments: the browser's own error, as it would throw it.
+          if (!view || args.length < arity[name]) return apply(original, view ? view.real : this, args);
+          return (view[name] as (...values: unknown[]) => unknown)(...args);
+        },
+      }[name]!;
+      Object.defineProperty(wrapper, 'length', { value: arity[name] });
+      Object.defineProperty(proto, name, { ...descriptor, value: wrapper });
+    }
+    const lengthDescriptor = Object.getOwnPropertyDescriptor(proto, 'length');
+    const nativeLength = native.length;
+    const getter = Object.getOwnPropertyDescriptor(
+      {
+        get length(): number {
+          const view = viewOf(this);
+          return view ? view.length() : (apply(nativeLength, this, []) as number);
+        },
+      },
+      'length',
+    )!.get!;
+    if (lengthDescriptor) Object.defineProperty(proto, 'length', { ...lengthDescriptor, get: getter });
   }
 
   /** A Storage that shows the page only its own keys: the lane's (prefix stripped), or everything but the lanes'. */
   function scopedStorage(real: Storage, prefix: string | null): Storage {
+    const { proto, getItem, setItem, removeItem } = native!;
     const stored = (key: string) => (prefix ? prefix + key : key);
     const shown = (raw: string): string | null =>
       prefix ? (raw.startsWith(prefix) ? raw.slice(prefix.length) : null) : raw.startsWith(LANE_PREFIX) ? null : raw;
     const keys = (): string[] => {
       const out: string[] = [];
-      for (let i = 0; i < real.length; i++) {
-        const raw = real.key(i);
+      for (let i = 0; i < lengthOf(real); i++) {
+        const raw = keyAt(real, i);
         const key = raw === null ? null : shown(raw);
         if (key !== null) out.push(key);
       }
       return out;
     };
-    const api: Record<string, unknown> = {
-      getItem: (key: unknown) => real.getItem(stored(String(key))),
-      setItem: (key: unknown, value: unknown) => real.setItem(stored(String(key)), String(value)),
-      removeItem: (key: unknown) => real.removeItem(stored(String(key))),
+    const view: View = {
+      real,
+      getItem: (key) => apply(getItem, real, [stored(String(key))]) as string | null,
+      setItem: (key, value) => void apply(setItem, real, [stored(String(key)), String(value)]),
+      removeItem: (key) => void apply(removeItem, real, [stored(String(key))]),
       clear: () => {
-        for (const key of keys()) real.removeItem(stored(key));
+        for (const key of keys()) apply(removeItem, real, [stored(key)]);
       },
-      key: (index: unknown) => keys()[Number(index)] ?? null,
+      // As the browser converts it (an unsigned long).
+      key: (index) => keys()[Number(index) >>> 0] ?? null,
+      length: () => keys().length,
     };
-    const target = Object.create(Storage.prototype) as Storage;
-    return new Proxy(target, {
-      get(_target, prop) {
-        if (prop === 'length') return keys().length;
-        if (typeof prop === 'string' && Object.prototype.hasOwnProperty.call(api, prop)) return api[prop];
-        if (typeof prop === 'string') {
-          const value = real.getItem(stored(prop));
-          if (value !== null) return value;
-        }
-        // Everything else a Storage has (constructor, hasOwnProperty, toString, Symbol.toStringTag…).
-        return Reflect.get(Storage.prototype, prop);
+    // A real Storage keeps symbol-keyed properties as ordinary ones: so does the target.
+    const target = Object.create(proto) as Storage;
+    const proxy = new Proxy(target, {
+      get(_target, prop, receiver) {
+        // Methods and `length` come from the prototype, as on a real Storage (a site may have wrapped them).
+        if (prop in proto) return Reflect.get(proto, prop, receiver);
+        if (typeof prop === 'symbol') return Reflect.get(target, prop);
+        return view.getItem(prop) ?? undefined;
       },
       set(_target, prop, value) {
-        if (typeof prop !== 'string') return false;
-        real.setItem(stored(prop), String(value));
+        if (typeof prop === 'symbol') return Reflect.set(target, prop, value);
+        view.setItem(prop, value);
         return true;
       },
       has(_target, prop) {
-        if (typeof prop === 'string' && (prop in api || real.getItem(stored(prop)) !== null)) return true;
-        return prop in Storage.prototype;
+        if (prop in proto) return true;
+        if (typeof prop === 'symbol') return prop in target;
+        return view.getItem(prop) !== null;
       },
       deleteProperty(_target, prop) {
-        if (typeof prop === 'string') real.removeItem(stored(prop));
+        if (typeof prop === 'symbol') return Reflect.deleteProperty(target, prop);
+        // A name the prototype has isn't an item there (as on a real Storage).
+        if (!(prop in proto)) view.removeItem(prop);
         return true;
       },
       ownKeys() {
-        return keys();
+        return [...keys(), ...Reflect.ownKeys(target).filter((key) => typeof key === 'symbol')];
       },
       getOwnPropertyDescriptor(_target, prop) {
-        if (typeof prop !== 'string') return undefined;
-        const value = real.getItem(stored(prop));
+        if (typeof prop === 'symbol') return Reflect.getOwnPropertyDescriptor(target, prop);
+        const value = view.getItem(prop);
         return value === null ? undefined : { value, writable: true, enumerable: true, configurable: true };
       },
+      defineProperty(_target, prop, descriptor) {
+        if (typeof prop === 'symbol') return Reflect.defineProperty(target, prop, descriptor);
+        // Like a real Storage: a value is stored, anything else is refused.
+        if (!('value' in descriptor) || descriptor.configurable === false) return false;
+        view.setItem(prop, descriptor.value);
+        return true;
+      },
+      // A Storage can't be frozen or sealed.
+      preventExtensions: () => false,
     });
+    apply(weakSet, views, [proxy, view]);
+    return proxy;
   }
 
   function installStorage(prefix: string | null): void {
-    if (!realLocal) return;
-    const view = scopedStorage(realLocal, prefix);
+    if (!realLocal || !native) return;
+    let view: Storage;
     try {
+      view = scopedStorage(realLocal, prefix);
       Object.defineProperty(window, 'localStorage', { configurable: true, enumerable: true, get: () => view });
     } catch {
       return;
+    }
+    try {
+      wrapPrototype();
+    } catch {
+      // The view works without them (only calls through Storage.prototype don't).
     }
     // Other tabs' changes arrive as "storage" events: pass on only this view's, under its names.
     const synthetic = new WeakSet<Event>();
@@ -163,7 +270,7 @@ const FROM_RELAY = 'swapdeck-lane-ack';
 
   if (!lane) {
     // Not a separate tab: only keep the lanes' keys out of the page's sight (and out of its clear()).
-    if (realLocal && hasLaneKeys(realLocal)) installStorage(null);
+    if (realLocal && native && hasLaneKeys(realLocal)) installStorage(null);
     return;
   }
 
@@ -174,26 +281,30 @@ const FROM_RELAY = 'swapdeck-lane-ack';
 
   let nextId = 0;
   const waiting = new Map<number, () => void>();
+  /** Cookie writes of the page the worker hasn't answered yet. */
+  const writes = new Set<number>();
   document.addEventListener(FROM_RELAY, (event) => {
     const detail = (event as CustomEvent<unknown>).detail;
     if (typeof detail !== 'string') return;
     try {
       const { id, cookies } = JSON.parse(detail) as { id?: unknown; cookies?: unknown };
-      // What document.cookie reads now in the lane (cookies the site's responses set included).
-      if (typeof cookies === 'string' && !pendingCount) readJar(cookies);
       if (typeof id === 'number') {
+        writes.delete(id);
         waiting.get(id)?.();
         waiting.delete(id);
       }
+      // What document.cookie reads now in the lane (cookies the site's responses set included, and
+      // what the lane made of the page's own writes), once none of them is still on its way.
+      if (typeof cookies === 'string' && !writes.size) readJar(cookies);
     } catch {
       // Not ours.
     }
   });
   /** Sends to the extension; resolves when it has acted, or after a short while regardless. */
-  function tell(kind: string, extra: Record<string, unknown> = {}, timeoutMs = 1500): Promise<void> {
-    const id = ++nextId;
+  function tell(kind: string, extra: Record<string, unknown> = {}, timeoutMs = 1500, id = ++nextId): Promise<void> {
     return new Promise<void>((resolve) => {
       const timer = setTimeout(() => {
+        writes.delete(id);
         waiting.delete(id);
         resolve();
       }, timeoutMs);
@@ -207,18 +318,17 @@ const FROM_RELAY = 'swapdeck-lane-ack';
 
   // --- document.cookie ---------------------------------------------------------
 
-  const jar = new Map<string, string>();
+  /** What document.cookie reads, in the browser's order: a name can come more than once (two paths or domains). */
+  let jar: [string, string][] = [];
   function readJar(text: string): void {
-    jar.clear();
+    jar = [];
     for (const part of text ? text.split('; ') : []) {
       const eq = part.indexOf('=');
-      if (eq === -1) jar.set('', part);
-      else jar.set(part.slice(0, eq), part.slice(eq + 1));
+      jar.push(eq === -1 ? ['', part] : [part.slice(0, eq), part.slice(eq + 1)]);
     }
   }
   readJar(lane.cookies);
   let pending: Promise<void> = Promise.resolve();
-  let pendingCount = 0;
 
   const cookieDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'cookie');
   try {
@@ -227,7 +337,7 @@ const FROM_RELAY = 'swapdeck-lane-ack';
       enumerable: true,
       get(this: Document) {
         if (this !== document) return cookieDescriptor?.get?.call(this) ?? '';
-        return [...jar].map(([name, value]) => (name ? `${name}=${value}` : value)).join('; ');
+        return jar.map(([name, value]) => (name ? `${name}=${value}` : value)).join('; ');
       },
       set(this: Document, input: unknown) {
         if (this !== document) {
@@ -235,32 +345,27 @@ const FROM_RELAY = 'swapdeck-lane-ack';
           return;
         }
         const line = String(input);
-        const [pair = '', ...attributes] = line.split(';');
-        const eq = pair.indexOf('=');
-        const name = (eq === -1 ? '' : pair.slice(0, eq)).trim();
-        const value = (eq === -1 ? pair : pair.slice(eq + 1)).trim();
-        let removed = false;
-        let applies = true;
-        for (const attribute of attributes) {
-          const [rawKey = '', ...rest] = attribute.split('=');
-          const key = rawKey.trim().toLowerCase();
-          const attributeValue = rest.join('=').trim();
-          if (key === 'httponly') return;
-          if (key === 'max-age' && /^-?\d+$/.test(attributeValue) && Number(attributeValue) <= 0) removed = true;
-          if (key === 'expires') {
-            const at = Date.parse(attributeValue);
-            if (Number.isFinite(at) && at <= Date.now()) removed = true;
-          }
-          if (key === 'path' && attributeValue.startsWith('/') && !pathMatches(location.pathname, attributeValue))
-            applies = false;
+        let parsed: ReturnType<typeof parseCookie>;
+        try {
+          parsed = parseCookie(line, new URL(location.href), 'script');
+        } catch {
+          parsed = null;
         }
-        if (!name && !value) return;
-        if (applies) {
-          if (removed) jar.delete(name);
-          else jar.set(name, value);
+        // What a browser ignores (HttpOnly from a script, Secure from an insecure page, a broken
+        // prefix, another site's domain, an oversized cookie) changes nothing here either.
+        if (!parsed) return;
+        const { cookie, expired } = parsed;
+        if (pathMatches(location.pathname || '/', cookie.path)) {
+          // Until the lane answers: the cookie of that name this page sees (the lane's answer is exact).
+          const at = jar.findIndex(([name]) => name === cookie.name);
+          if (expired) {
+            if (at !== -1) jar.splice(at, 1);
+          } else if (at !== -1) jar[at] = [cookie.name, cookie.value];
+          else jar.push([cookie.name, cookie.value]);
         }
-        pendingCount++;
-        const sent = tell('cookie', { line }).finally(() => pendingCount--);
+        const id = ++nextId;
+        writes.add(id);
+        const sent = tell('cookie', { line }, 1500, id);
         pending = Promise.all([pending, sent]).then(() => undefined);
       },
     });
@@ -276,21 +381,46 @@ const FROM_RELAY = 'swapdeck-lane-ack';
 
   // --- Requests wait for cookies written just before them ------------------------
 
+  const site = registrableDomain(location.hostname);
   const sameSite = (target: string): boolean => {
     try {
-      const host = new URL(target, location.href).hostname;
-      const base = location.hostname.split('.').slice(-2).join('.');
-      return host === base || host.endsWith(`.${base}`);
+      const host = new URL(target, location.href).hostname.toLowerCase();
+      return host === site || host.endsWith(`.${site}`);
     } catch {
       return false;
     }
   };
+  const sameOrigin = (target: string): boolean => {
+    try {
+      return new URL(target, document.baseURI).origin === location.origin;
+    } catch {
+      return false;
+    }
+  };
+  const isPlain = (value: unknown): value is Record<string, unknown> =>
+    Boolean(value) &&
+    typeof value === 'object' &&
+    (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
+
   const realFetch = window.fetch;
   if (typeof realFetch === 'function') {
-    const laneFetch = function (this: unknown, input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-      const run = () => realFetch.call(window, input, init);
-      const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
-      const started = pendingCount ? pending.then(run) : run();
+    const laneFetch = function fetch(this: unknown, input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+      let options = init;
+      let method = 'GET';
+      try {
+        const request = input instanceof Request ? input : null;
+        method = String(init?.method ?? request?.method ?? 'GET').toUpperCase();
+        // The browser's cache may hold the site's answers to its own account: the lane's calls to
+        // its site don't use it (rules can't ask for that without a header CORS would preflight).
+        const url = request ? request.url : input instanceof URL ? input.href : String(input);
+        const cache = init?.cache ?? request?.cache ?? 'default';
+        if (cache === 'default' && (init === undefined || isPlain(init)) && sameSite(url))
+          options = { ...init, cache: 'no-store' };
+      } catch {
+        options = init;
+      }
+      const run = () => apply(realFetch, window, [input, options]) as Promise<Response>;
+      const started = writes.size ? pending.then(run) : run();
       // A sign-in or refresh (POST) may set cookies: let the lane take them before the page goes on.
       if (method === 'GET' || method === 'HEAD') return started;
       return started.then(async (response) => {
@@ -298,14 +428,58 @@ const FROM_RELAY = 'swapdeck-lane-ack';
         return response;
       });
     };
-    Object.defineProperty(laneFetch, 'name', { value: 'fetch' });
+    Object.defineProperty(laneFetch, 'length', { value: 1 });
     window.fetch = laneFetch as typeof fetch;
   }
-  const realSend = XMLHttpRequest.prototype.send;
-  XMLHttpRequest.prototype.send = function (this: XMLHttpRequest, body?: Document | XMLHttpRequestBodyInit | null) {
-    if (!pendingCount) return realSend.call(this, body);
-    void pending.then(() => realSend.call(this, body));
-  };
+
+  try {
+    const xhr = XMLHttpRequest.prototype;
+    const realOpen = xhr.open;
+    const realSend = xhr.send;
+    const realAbort = xhr.abort;
+    const realHeader = xhr.setRequestHeader;
+    /** Each request as last opened: its address, whether it is asynchronous, and which opening it is. */
+    const opened = new WeakMap<XMLHttpRequest, { url: string; async: boolean; at: number }>();
+    let openings = 0;
+    xhr.open = function open(this: XMLHttpRequest, ...args: unknown[]) {
+      const result = apply(realOpen, this, args) as void;
+      // open(method, url) is asynchronous; open(method, url, async, …) is what `async` says.
+      opened.set(this, { url: String(args[1]), async: args.length < 3 || Boolean(args[2]), at: ++openings });
+      return result;
+    } as typeof xhr.open;
+    Object.defineProperty(xhr.open, 'length', { value: 2 });
+    xhr.abort = function abort(this: XMLHttpRequest) {
+      opened.delete(this);
+      return apply(realAbort, this, []) as void;
+    };
+    xhr.send = function send(this: XMLHttpRequest, ...args: unknown[]) {
+      const request = opened.get(this);
+      if (request && this.readyState === XMLHttpRequest.OPENED && sameOrigin(request.url)) {
+        // As for fetch: no answer from the browser's cache (a same-origin call, so no CORS to mind).
+        try {
+          apply(realHeader, this, ['Cache-Control', 'no-cache']);
+        } catch {
+          // Sent already: send() throws below, as it always does.
+        }
+      }
+      // Synchronous requests, and anything send() would refuse, go as they are (errors included).
+      if (!writes.size || !request?.async || this.readyState !== XMLHttpRequest.OPENED)
+        return apply(realSend, this, args) as void;
+      // Cookies written just before go along: send once they are in place, unless the page
+      // opened the request again or aborted it meanwhile.
+      const at = request.at;
+      void pending.then(() => {
+        if (opened.get(this)?.at !== at || this.readyState !== XMLHttpRequest.OPENED) return;
+        try {
+          apply(realSend, this, args);
+        } catch {
+          // Sent meanwhile.
+        }
+      });
+    };
+  } catch {
+    // No XMLHttpRequest here.
+  }
 
   // --- IndexedDB, BroadcastChannel, Web Locks -----------------------------------
 

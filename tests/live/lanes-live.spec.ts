@@ -29,13 +29,20 @@ type Look = {
   errors: string[];
   /** Requests to the app's own sites that failed (method + address without the query). */
   failed: string[];
+  /** Requests to the app's own sites that got an answer. */
+  answered: string[];
   lane: boolean | null;
 };
-type Watch = { errors: string[]; stacks: string[]; failed: string[] };
+type Watch = { errors: string[]; stacks: string[]; failed: string[]; answered: string[] };
+
+const requestKey = (method: string, address: string) => {
+  const url = new URL(address);
+  return `${method} ${url.origin}${url.pathname}`;
+};
 
 /** Collects what goes wrong on a page from now on. */
 function watch(page: Page, domains: string[]): Watch {
-  const seen: Watch = { errors: [], stacks: [], failed: [] };
+  const seen: Watch = { errors: [], stacks: [], failed: [], answered: [] };
   page.on('pageerror', (error) => {
     seen.errors.push(error.message);
     seen.stacks.push((error.stack ?? error.message).split('\n').slice(0, 4).join(' ← '));
@@ -44,8 +51,10 @@ function watch(page: Page, domains: string[]): Watch {
     if (!onAppDomain(request.url(), domains)) return;
     // Aborted on purpose (navigations, the page's own cancels) is not a failure.
     if (/ERR_ABORTED/.test(request.failure()?.errorText ?? '')) return;
-    const url = new URL(request.url());
-    seen.failed.push(`${request.method()} ${url.origin}${url.pathname}`);
+    seen.failed.push(requestKey(request.method(), request.url()));
+  });
+  page.on('requestfinished', (request) => {
+    if (onAppDomain(request.url(), domains)) seen.answered.push(requestKey(request.method(), request.url()));
   });
   return seen;
 }
@@ -89,7 +98,13 @@ async function look(page: Page, seen0: Watch): Promise<Look> {
       };
     })
     .catch(() => ({ title: '', text: 0, lane: null }));
-  return { url: page.url(), ...seen, errors: [...seen0.errors], failed: [...new Set(seen0.failed)] };
+  return {
+    url: page.url(),
+    ...seen,
+    errors: [...seen0.errors],
+    failed: [...new Set(seen0.failed)],
+    answered: [...new Set(seen0.answered)],
+  };
 }
 
 async function ordinary(context: BrowserContext, url: string, domains: string[]) {
@@ -109,21 +124,26 @@ for (let start = 0; start < presets.length; start += BATCH) {
       ok: boolean;
       problems: string[];
       notes: string[];
-      plain?: Omit<Look, 'errors'> & { errors: number };
-      lane?: Omit<Look, 'errors'> & { errors: number; newErrors: string[]; stacks: string[]; newFailures: string[] };
+      plain?: Omit<Look, 'errors' | 'answered'> & { errors: number };
+      lane?: Omit<Look, 'errors' | 'answered'> & {
+        errors: number;
+        newErrors: string[];
+        stacks: string[];
+        newFailures: string[];
+      };
     };
-    const report: Line[] = [];
-    for (const preset of batch) {
+    /** Opens the preset in an ordinary tab, then in a scratch separate tab, and compares. */
+    const check = async (preset: (typeof presets)[number]): Promise<Line> => {
       const line: Line = { id: preset.id, ok: false, problems: [], notes: [] };
-      report.push(line);
       const added = await call<{ id: string }>('app.add', { app: presetToInput(preset) });
       if (!added.ok) {
         line.problems.push(`add: ${added.error}`);
-        continue;
+        return line;
       }
       const appId = added.data!.id;
       const plain = await ordinary(context, preset.homeUrl, preset.domains);
-      line.plain = { ...plain.seen, errors: plain.seen.errors.length };
+      const { answered: _plainAnswered, ...plainSeen } = plain.seen;
+      line.plain = { ...plainSeen, errors: plain.seen.errors.length };
 
       const opened = context.waitForEvent('page', { timeout: 30_000 });
       const result = await call<{ token: string; tabId: number }>('lane.open', {
@@ -148,10 +168,13 @@ for (let start = 0; start < presets.length; start += BATCH) {
           const newErrors = seen.errors.filter(
             (message) => !message.includes(SW_REFUSED) && !before.has(normalize(message)),
           );
-          // Requests to the app that worked in the ordinary tab but failed here (CORS, blocked…).
-          const worked = new Set(plain.seen.failed);
-          const newFailures = seen.failed.filter((request) => !worked.has(request));
-          line.lane = { ...seen, errors: seen.errors.length, newErrors, stacks: watched.stacks, newFailures };
+          // Requests to the app that were answered in the ordinary tab but failed here (CORS,
+          // blocked…). A request that fails in both, or that the ordinary tab never made, says
+          // nothing about separate tabs.
+          const worked = new Set(plain.seen.answered.filter((request) => !plain.seen.failed.includes(request)));
+          const newFailures = seen.failed.filter((request) => worked.has(request));
+          const { answered: _answered, ...laneSeen } = seen;
+          line.lane = { ...laneSeen, errors: seen.errors.length, newErrors, stacks: watched.stacks, newFailures };
 
           if (!/^https?:/.test(plain.seen.url) && !/^https?:/.test(seen.url))
             line.notes.push('site unreachable in both tabs');
@@ -171,6 +194,20 @@ for (let start = 0; start < presets.length; start += BATCH) {
       await plain.page.close().catch(() => undefined);
       await call('app.remove', { id: appId });
       line.ok = line.problems.length === 0;
+      return line;
+    };
+
+    const report: Line[] = [];
+    for (const preset of batch) {
+      let line = await check(preset);
+      // Live sites have bad moments (a slow redirect, a flaky endpoint): a problem counts when it
+      // shows up twice in a row.
+      if (!line.ok) {
+        const first = line.problems.join('; ');
+        line = await check(preset);
+        if (line.ok) line.notes.push(`passed on a second try (first: ${first})`);
+      }
+      report.push(line);
     }
     const file = resolve(import.meta.dirname, `../../test-results/lanes-live-${start + 1}.json`);
     writeFileSync(file, JSON.stringify(report, null, 2));

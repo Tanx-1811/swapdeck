@@ -440,6 +440,32 @@ test.describe('separate tabs in the popup', () => {
   });
 });
 
+test.describe('separate tabs when the worker restarts', () => {
+  test("keep taking the cookies their site sets after Swapdeck's worker started again", async ({
+    context,
+    server,
+    call,
+    worker,
+  }) => {
+    const acme = await addAcme(call, server);
+    const { alice } = await aliceAndBob(context, acme);
+    const lane = await openLane(context, call as Call, { appId: acme.id, accountId: alice.id });
+
+    // Chrome stops an extension's worker now and then: the lanes' rules and record stay, its memory goes.
+    await worker.evaluate(() =>
+      (
+        globalThis as unknown as { swapdeckTest: { restartWorkerForTest: () => Promise<void> } }
+      ).swapdeckTest.restartWorkerForTest(),
+    );
+
+    await lane.page.evaluate(() => fetch('/api/csrf'));
+    await expect
+      .poll(() => lane.page.evaluate(() => document.cookie))
+      .toContain(`acme_csrf=${encodeURIComponent('alice@acme.test')}`);
+    expect(await reloadAndRead(lane.page)).toEqual(signedInAs('alice@acme.test'));
+  });
+});
+
 test.describe('separate tabs after a restart', () => {
   test('come back in their tab groups with their account', async ({ context, server, call, worker }) => {
     const acme = await addAcme(call, server);

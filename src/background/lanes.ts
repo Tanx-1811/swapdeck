@@ -1258,16 +1258,25 @@ export async function refreshLaneBadge(tabId: number, known?: State): Promise<bo
 
 // --- Start-up ------------------------------------------------------------------------------
 
-/** Drops tabs that closed while the worker was stopped; ends lanes left without tabs. */
+/**
+ * Drops tabs that closed while the worker was stopped; ends lanes left without tabs; and applies
+ * the others' rules again: a worker that starts doesn't know since when its lanes' tabs were
+ * covered, and until it does it would ignore every cookie their site sets (`coveredAt`).
+ */
 async function pruneClosedTabs(): Promise<void> {
   for (const lane of allLanes()) {
     const tabs = await Promise.all(lane.tabIds.map((tabId) => getTab(tabId)));
     const gone = lane.tabIds.filter((_, index) => !tabs[index]);
     for (const tabId of gone) removeTabFromLane(tabId);
     if (!lane.tabIds.length) await endLane(lane.token, { capture: lane.kind === 'account' }).catch(() => undefined);
-    else if (gone.length) await syncRules(lane.token).catch(() => undefined);
+    else await syncRules(lane.token).catch(() => undefined);
   }
   await saveLanes();
+}
+
+/** What the worker does with lanes when it starts (they outlive it while Chrome runs). */
+function startLanes(): Promise<void> {
+  return lanesReady().then(pruneClosedTabs).then(removeOrphanRules).then(refreshMachinery);
 }
 
 /**
@@ -1313,6 +1322,19 @@ export async function forgetLanesForTest(): Promise<void> {
   await refreshMachinery();
 }
 
+/**
+ * For the e2e build: what a stopped and started worker has of lanes — their record (session
+ * storage) and rules, nothing in memory — then its start-up.
+ */
+export async function restartWorkerForTest(): Promise<void> {
+  resetLaneState();
+  coveredAt.clear();
+  uncovered.clear();
+  reloadedAt.clear();
+  welcomed.clear();
+  await startLanes();
+}
+
 /** Registers the lane listeners (call once, synchronously, when the worker starts). */
 export function initLanes(): void {
   setLaneReleaser(releaseLane);
@@ -1329,5 +1351,5 @@ export function initLanes(): void {
   chrome.tabs.onReplaced.addListener(
     (added, removed) => void onTabReplaced(added, removed).catch(warn('separate tab')),
   );
-  void lanesReady().then(pruneClosedTabs).then(removeOrphanRules).then(refreshMachinery).catch(warn('separate tabs'));
+  void startLanes().catch(warn('separate tabs'));
 }

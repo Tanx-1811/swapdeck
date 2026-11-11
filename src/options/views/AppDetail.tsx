@@ -39,6 +39,7 @@ import { Card } from '../Options';
 import { navigate } from '../router';
 import { moveId } from './Apps';
 import { AppForm } from './AppForm';
+import { SeparateTabsCard } from './SeparateTabs';
 import { ImportSessionDialog, ShareDialog } from './SessionDialogs';
 
 /** With more accounts than this, an app's page offers a filter box. */
@@ -179,7 +180,10 @@ export function AppDetail({ id, tab }: { id: string; tab: 'accounts' | 'settings
       </div>
 
       {tab === 'accounts' ? (
-        <AccountsPanel app={app} accounts={accounts} activeId={active?.id ?? null} canSwitch={granted === true} />
+        <>
+          <SeparateTabsCard appId={app.id} />
+          <AccountsPanel app={app} accounts={accounts} activeId={active?.id ?? null} canSwitch={granted === true} />
+        </>
       ) : (
         <Card
           title={t('apps.access')}

@@ -16,6 +16,7 @@ import { navigate } from '../router';
 import { HistoryLine } from './History';
 import { GettingStarted } from './GettingStarted';
 import { ReloginCard } from './Relogin';
+import { SeparateTabsCard } from './SeparateTabs';
 import { useWorkspaceSwitch } from './Workspaces';
 import { WorkspaceBadge } from '../../popup/WorkspaceBar';
 import { suggestWorkspaces, workspaceStatus } from '../../core/workspaces';
@@ -88,6 +89,7 @@ export function Overview() {
         />
       )}
       <ReloginCard />
+      <SeparateTabsCard />
 
       <GettingStarted force={welcome} hasSupabase={hasSupabase} onAddSupabase={() => void addSupabase()} />
 

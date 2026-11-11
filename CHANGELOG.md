@@ -28,6 +28,9 @@ Two accounts of the same site, side by side: **separate tabs**.
   data, and a sign-in in any imported file only goes into an account it belongs to.
 - Closing a scratch tab where someone signed in and wasn't saved asks first; separate tabs wear their own indigo mark
   (never the red "in use" seal), and long names or emails no longer widen the popup.
+- **The manager lists your separate tabs** (Overview, and an app's page): each one's account or "Scratch n", the app,
+  how many tabs and who is signed in there, with **Show**, **Save as account** (a scratch tab, or someone else signed
+  in to an account's tab) and **Close**. The list follows them as they open, change and close.
 - **Close separate tab** asks first when its tabs hold unsaved work (an edited form, text being typed, a page that
   warns before you leave), as a switch does — from the popup, an account's ⋯ menu and the manager's list.
 - New permission `webRequest` (no install warning): separate tabs read the cookies your added sites set there, so they

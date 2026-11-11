@@ -2155,6 +2155,13 @@ body {
     padding-left: 0;
   }
 
+  /* A separate tab's buttons go under its text, as an account card's do. */
+  .lane-row .lane-row__actions {
+    width: 100%;
+    margin-left: 0;
+    padding-left: 48px;
+  }
+
   .list-row__accounts .avatar-stack {
     display: none;
   }
@@ -2282,4 +2289,135 @@ body {
   color: var(--accent-text);
   font-family: var(--display);
   font-weight: 600;
+}
+
+/* --- Separate tabs open now (Overview, an app's page) ------------------------------- */
+
+.lane-rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lane-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 0;
+}
+
+.lane-row + .lane-row {
+  border-top: 1px solid var(--border);
+}
+
+.lane-row__icons {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+}
+
+/* The app, as a small tab on the account's corner (the overview lists every app's). */
+.lane-row__app {
+  position: absolute;
+  right: -6px;
+  bottom: -5px;
+  display: inline-grid;
+  padding: 2px;
+  border-radius: 7px;
+  background: var(--bg-elev);
+}
+
+.lane-row__app .app-icon--sm {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  font-size: 10px;
+}
+
+/* A scratch sign-in nobody saved: a blank card, outlined with dashes. */
+.lane-row__scratch {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: 9px;
+  color: var(--text-2);
+}
+
+.lane-row__scratch svg {
+  width: 18px;
+  height: 18px;
+}
+
+.lane-row__text {
+  display: grid;
+  flex: 1 1 220px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.lane-row__text strong {
+  font-weight: 600;
+}
+
+/* "Alice · Acme · 2 tabs" on one line; who is signed in there on the next. */
+.lane-row__name {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.lane-row__name strong {
+  flex: 0 1 auto;
+}
+
+.lane-row__where {
+  flex: 0 10 auto;
+  color: var(--text-2);
+  font-size: 12.5px;
+}
+
+.lane-row__where::before {
+  content: '· ';
+}
+
+.lane-row__status {
+  color: var(--text-2);
+  font-size: 12.5px;
+}
+
+.lane-row__status--ok {
+  color: var(--success);
+}
+
+.lane-row__status--warning {
+  color: var(--warning);
+  font-weight: 600;
+}
+
+.lane-row__warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 2px;
+  color: var(--warning);
+  font-size: 12px;
+}
+
+.lane-row__warning svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+}
+
+.lane-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
 }

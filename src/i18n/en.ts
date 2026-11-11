@@ -814,6 +814,15 @@ export const en = {
   // Separate tabs: the manager's list, closing them, the popup in one (lane-ui)
   'lane.closeUnsavedBody': "Closing the separate tab closes these tabs; what isn't saved there may be lost:",
   'lane.closeAnyway': 'Close anyway',
+  'lanes.title': 'Separate tabs',
+  'lanes.lead': 'Open now, each with its own sign-in; your other tabs keep theirs.',
+  'lanes.signedInAs': 'Signed in as {who}',
+  'lanes.nobody': 'Nobody signed in yet',
+  'lanes.otherPerson': '{who} is signed in, not this account',
+  'lanes.someoneElse': 'Someone else is signed in',
+  'lanes.signedOut': 'Signed out',
+  'lanes.show': 'Show',
+  'lanes.close': 'Close',
 
   // Sending an account, importing a sign-in
   'share.menu': 'Send to someone…',

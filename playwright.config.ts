@@ -17,9 +17,10 @@ export default defineConfig<ExtensionOptions>({
   reporter: process.env.CI ? [['github'], ['list']] : 'list',
   use: { trace: 'retain-on-failure' },
   projects: [
-    { name: 'e2e', testIgnore: /store-build|store-screenshots/, use: { extensionDir: 'dist-e2e' } },
+    { name: 'e2e', testIgnore: /store-build|store-screenshots|store-video/, use: { extensionDir: 'dist-e2e' } },
     { name: 'store-build', testMatch: /store-build/, use: { extensionDir: 'dist' } },
     { name: 'screenshots', testMatch: /store-screenshots/, use: { extensionDir: 'dist-e2e' } },
+    { name: 'video', testMatch: /store-video/, timeout: 600_000, use: { extensionDir: 'dist-e2e' } },
     // Real sites over the network; run by hand (npm run test:live), never in CI.
     { name: 'live', testDir: 'tests/live', retries: 0, use: { extensionDir: 'dist-e2e' } },
   ],

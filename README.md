@@ -13,6 +13,8 @@
 
 ## Tiếng Việt
 
+<p align="center"><img src="brand/video/swapdeck-demo-vi.gif" alt="Swapdeck: chuyển tài khoản trong một cú nhấp, chuyển cả một bên, hai tài khoản cạnh nhau trong tab riêng" width="100%"></p>
+
 **Swapdeck** là tiện ích Chrome (Manifest V3) giúp bạn dùng nhiều tài khoản trên cùng một trang web — Supabase, Vercel,
 GitHub, Netlify, ChatGPT… hay bất kỳ trang nào bạn đăng nhập — và chuyển qua lại chỉ với một cú nhấp. Quản lý nhiều
 khách hàng, công ty hay dự án? Gom tài khoản của mỗi **bên** lại, rồi một cú nhấp đổi **mọi ứng dụng** sang bên đó.
@@ -170,6 +172,8 @@ cài, Swapdeck không có quyền trên trang web nào; mỗi ứng dụng bạn
 `npm run package` (đóng gói `release/swapdeck-<version>.zip`). Xem đầy đủ ở [Development](#development).
 
 ## English
+
+<p align="center"><img src="brand/video/swapdeck-demo-en.gif" alt="Swapdeck: switch accounts in one click, switch a whole client at once, two accounts side by side in separate tabs" width="100%"></p>
 
 **Swapdeck** is a Chrome extension (Manifest V3) for using several accounts on the same website — Supabase, Vercel,
 GitHub, Netlify, ChatGPT… or any site you sign in to — and switching between them in one click. Working for many

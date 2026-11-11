@@ -18,8 +18,8 @@ tests, demo data and screenshots (use `*.example`/`*.test` addresses). Contribut
 - `npm run test:e2e` — builds `dist` and `dist-e2e` (host access granted up front), runs Playwright on Chrome for
   Testing (`npx playwright install chromium` once).
 - `npm run package` — zips `dist/` into `release/` (refuses builds with install-time host permissions).
-- `npm run icons`, `npm run brand`, `npm run screenshots` — toolbar icons, brand kit (offline, any OS), store
-  screenshots.
+- `npm run icons`, `npm run brand`, `npm run screenshots`, `npm run video` — toolbar icons, brand kit (offline, any
+  OS), store screenshots, the demo video (needs ffmpeg; see `brand/README.md`).
 - `node scripts/verify-presets.mjs [ids…]` — checks the built-in presets against the live sites (network; imports
   `src/core/presets.ts` with Node's type stripping).
 
@@ -179,6 +179,9 @@ tests, demo data and screenshots (use `*.example`/`*.test` addresses). Contribut
   `liveMembers` ignores members that no longer exist. Suggestions (`suggestWorkspaces`) group accounts by email domain
   and skip domains that already have a workspace.
 - The switching page falls back to `/favicon.ico`, `/robots.txt`, `/` when it redirects off the main origin
-  (`stagingCandidates` in `engine.ts`). `npm run test:live` checks every preset on the real site (network; not in CI).
+  (`stagingCandidates` in `engine.ts`). `npm run test:live` checks every preset on the real site (network; not in CI);
+  `npx playwright test --project=live lanes-live` opens every preset in a scratch separate tab and compares it with an
+  ordinary tab (new page errors, failed requests to the app, a page that renders much less) — run it after touching
+  `lane-main.ts` or the lane rules.
 - Avoid common words for the omnibox keyword and keep shortcuts clear of Penmark (`Alt+Shift+N/K/H/C`) and Breakpointer
   (`Alt+Shift+V/P`); new commands get no default key (Chrome allows four suggested keys).

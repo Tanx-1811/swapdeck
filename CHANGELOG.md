@@ -24,8 +24,11 @@ Two accounts of the same site, side by side: **separate tabs**.
 - **Send to someone** (⋯ of an account or a workspace): a file with just that account or workspace and its sign-ins,
   always locked with a password. Whoever receives it adds it with Backup → Import; such a file can never replace their
   data.
+- Closing a scratch tab where someone signed in and wasn't saved asks first; separate tabs wear their own indigo mark
+  (never the red "in use" seal), and long names or emails no longer widen the popup.
 - New permission `webRequest` (no install warning): separate tabs read the cookies your added sites set there, so they
   stay in that tab instead of Chrome's cookie store. Privacy policy and store listing updated.
+- Store screenshots and a 21-second demo video (`npm run video`) show separate tabs; the README shows the demo.
 
 ## 1.7.0 — 2026-11-06
 

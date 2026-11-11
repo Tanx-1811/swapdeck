@@ -28,6 +28,7 @@
     "icons": "node scripts/generate-icons.mjs",
     "package": "node scripts/third-party-notices.mjs && npm run build && node scripts/package-extension.mjs",
     "screenshots": "npm run build:e2e && playwright test --project=screenshots",
+    "video": "npm run build:e2e && playwright test --project=video",
     "test:live": "npm run build:e2e && playwright test --project=live",
     "brand": "node scripts/brand/render.mjs",
     "notices": "node scripts/third-party-notices.mjs"

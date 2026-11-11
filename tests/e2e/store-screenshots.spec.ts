@@ -10,6 +10,7 @@ import { backgroundCss, FONTS, fontFacesCss, PALETTE } from '../../brand/templat
 import { PRESETS } from '../../src/core/presets';
 import { seedDemo } from './demo-data';
 import { test } from './fixtures';
+import { PEOPLE, sceneCss, splitWindowHtml } from './store-scenes';
 
 const OUT = resolve(import.meta.dirname, '../../brand/store/screenshots');
 const MARK = readFileSync(resolve(import.meta.dirname, '../../brand/logo/mark.svg'), 'utf8');
@@ -23,7 +24,10 @@ const CAPTIONS = {
       'Switch a whole client at once',
       'Workspaces remember which account each app uses for every client, company or project.',
     ],
-    ['Each account keeps its own places', 'Recent Supabase projects, pinned pages, notes and colors per account.'],
+    [
+      'Two accounts side by side',
+      'Open an account in a separate tab — same window, each tab keeps its own sign-in, no extra profile.',
+    ],
     [`${SITES} sites ready — or add any other`, 'Swapdeck only gets access to the sites you add, one by one.'],
     ['Private by design', 'Everything stays on your computer. Lock saved sessions with a passphrase.'],
   ],
@@ -37,8 +41,8 @@ const CAPTIONS = {
       'Mỗi bên nhớ tài khoản dùng trên từng ứng dụng cho khách hàng, công ty hay dự án.',
     ],
     [
-      'Mỗi tài khoản giữ chỗ làm việc riêng',
-      'Dự án Supabase gần đây, trang đã ghim, ghi chú và màu sắc cho từng tài khoản.',
+      'Hai tài khoản cạnh nhau',
+      'Mở một tài khoản trong tab riêng — cùng cửa sổ, mỗi tab giữ đăng nhập riêng, không cần thêm hồ sơ.',
     ],
     [
       `${SITES} trang có sẵn — thêm trang khác cũng được`,
@@ -48,7 +52,7 @@ const CAPTIONS = {
   ],
 } as const;
 
-function frame(lang: 'en' | 'vi', index: number, inner: string): string {
+function frame(lang: 'en' | 'vi', index: number, inner: string, extraCss = ''): string {
   const [title, sub] = CAPTIONS[lang][index]!;
   // Black lacquer around the warm-paper product, captions in the brand faces.
   return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><style>
@@ -81,6 +85,7 @@ function frame(lang: 'en' | 'vi', index: number, inner: string): string {
   .site .main .wide { grid-column: 1 / -1; height: 46px; background: ${PALETTE.hairline}; }
   .popup { position: absolute; top: 46px; right: 16px; width: 720px; border-radius: 12px; overflow: hidden;
     box-shadow: 0 24px 60px rgba(26, 23, 20, .35), 0 0 0 1px rgba(26, 23, 20, .14); }
+  ${extraCss}
   </style></head><body>
   <div class="bg"></div>
   <div class="cap">${MARK}<div><h1>${title}</h1><p>${sub}</p></div></div>
@@ -132,21 +137,52 @@ for (const lang of ['en', 'vi'] as const) {
       `${lang}-1-popup.png`,
     );
 
-    // 2–5. Manager pages.
+    // 2, 4, 5. Manager pages.
     const manager = await context.newPage();
-    const pages: [string, string, 'light' | 'dark'][] = [
-      ['#/workspaces', `${lang}-2-workspaces.png`, 'light'],
-      ['#/apps/app_supabase', `${lang}-3-accounts.png`, 'light'],
-      ['#/add', `${lang}-4-gallery.png`, 'light'],
-      ['#/security', `${lang}-5-private.png`, 'dark'],
+    const pages: [number, string, string, 'light' | 'dark'][] = [
+      [1, '#/workspaces', `${lang}-2-workspaces.png`, 'light'],
+      [3, '#/add', `${lang}-4-gallery.png`, 'light'],
+      [4, '#/security', `${lang}-5-private.png`, 'dark'],
     ];
-    for (const [index, [hash, file, theme]] of pages.entries()) {
+    for (const [index, hash, file, theme] of pages) {
       await seedDemo(page, { language: lang, theme });
       await open(manager, `${base}/options/options.html${hash}`, 1136, 620);
       if (hash === '#/add') await manager.locator('input[type=search]').blur();
       const shot = await manager.screenshot();
       const body = `<div class="body"><img src="${toDataUrl(shot)}" width="1136"></div>`;
-      await compose(page, frame(lang, index + 1, browser('Swapdeck', body)), file);
+      await compose(page, frame(lang, index, browser('Swapdeck', body)), file);
     }
+
+    // 3. Separate tabs: the account's ⋯ menu in the popup, and the two tabs side by side.
+    await seedDemo(page, { language: lang, theme: 'light' });
+    await page.evaluate(async () => {
+      const settings = (await chrome.storage.local.get('sd:settings'))['sd:settings'] as object;
+      await chrome.storage.local.set({ 'sd:settings': { ...settings, popupLayout: 'compact' } });
+    });
+    const menuPopup = await context.newPage();
+    await open(menuPopup, `${base}/popup/popup.html?tab=-1&app=app_supabase`, 380, 600);
+    const row = menuPopup.locator('.account', { hasText: PEOPLE[lang].personal.email }).first();
+    await row.locator('[aria-haspopup="menu"]').click();
+    const menu = menuPopup.getByRole('menu');
+    await menu.waitFor();
+    // Point at the entry the screenshot is about.
+    await menu.getByRole('menuitem', { name: lang === 'vi' ? 'Mở trong tab riêng' : 'Open in a separate tab' }).hover();
+    await menuPopup.waitForTimeout(400);
+    const rowBox = (await row.boundingBox())!;
+    const menuBox = (await menu.boundingBox())!;
+    const top = Math.max(0, rowBox.y - 10);
+    const clip = {
+      x: 0,
+      y: top,
+      width: 380,
+      height: Math.max(rowBox.y + rowBox.height, menuBox.y + menuBox.height) + 12 - top,
+    };
+    const callout = await menuPopup.screenshot({ clip, animations: 'disabled' });
+    const tabsScene = `${splitWindowHtml(lang)}<div class="callout"><img src="${toDataUrl(callout)}" width="380"></div>`;
+    const tabsCss = `${sceneCss(lang)}
+      .tag { opacity: 1; }
+      .callout { position: absolute; left: 118px; bottom: 96px; width: 380px; border-radius: 12px; overflow: hidden;
+        box-shadow: 0 24px 60px rgba(26, 23, 20, .4), 0 0 0 1px rgba(26, 23, 20, .16); }`;
+    await compose(page, frame(lang, 2, tabsScene, tabsCss), `${lang}-3-tabs.png`);
   });
 }

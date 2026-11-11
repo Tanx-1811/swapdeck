@@ -91,3 +91,7 @@ node scripts/brand/render.mjs --html /tmp/brand     # also write the composed HT
 ```
 
 Both run offline on any OS. Copy lives in `brand/templates/shared.mjs` (`COPY`, `DECK`) with English and Vietnamese side by side.
+
+## Store screenshots and the demo video
+
+`npm run screenshots` captures the five store screenshots (`brand/store/screenshots/`, 1280 × 800, EN and VI) from the real extension with the demo data of `tests/e2e/demo-data.ts`. `npm run video` makes the 21-second demo (`brand/video/swapdeck-demo-{en,vi}.mp4`, 1920 × 1200, no sound, for the store's promo video and social posts; `.gif`, 880 px wide, for the README): the real popup's screens, a pretend browser and site (`tests/e2e/store-scenes.ts`, shared with screenshot 3) and a pointer, drawn frame by frame from a timeline in `tests/e2e/store-video.spec.ts`, then encoded with ffmpeg. `VIDEO_AT=2.7,9 npx playwright test --project=video` writes a few stills to `test-results/video/` instead, to check the layout.

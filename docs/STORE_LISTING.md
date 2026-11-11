@@ -5,17 +5,18 @@ checked with a script (characters, NFC).
 
 ## Basics
 
-| Field                      | Value                                                                                                                                                               |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Name (from `_locales`)     | EN: **Swapdeck — Multi-Account Switcher** (33) · VI: **Swapdeck — Đổi nhiều tài khoản** (30) — limit 75                                                             |
-| Category                   | Productivity (alternative: Developer Tools)                                                                                                                         |
-| Languages                  | English (default), Vietnamese                                                                                                                                       |
-| Store icon                 | `brand/store/store-icon-128.png` (96 × 96 artwork, 16 px transparent padding)                                                                                       |
-| Small promo tile (440×280) | `brand/store/promo-small-440x280.png` · VI: `brand/store/promo-small-440x280-vi.png`                                                                                |
-| Marquee (1400×560)         | `brand/store/promo-marquee-1400x560.png` · VI: `brand/store/promo-marquee-1400x560-vi.png`                                                                          |
-| Screenshots (1280×800)     | `brand/store/screenshots/{en,vi}-N-*.png` (`npm run screenshots`), in this order: 1 `popup` (wide switcher), 2 `workspaces`, 3 `accounts`, 4 `gallery`, 5 `private` |
-| Privacy policy URL         | Public URL of `docs/PRIVACY.md` (needs a public repository or page)                                                                                                 |
-| Support                    | Website: https://github.com/Tanx-1811/swapdeck · Support: https://github.com/Tanx-1811/swapdeck/issues                                                              |
+| Field                      | Value                                                                                                                                                                           |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Name (from `_locales`)     | EN: **Swapdeck — Multi-Account Switcher** (33) · VI: **Swapdeck — Đổi nhiều tài khoản** (30) — limit 75                                                                         |
+| Category                   | Productivity (alternative: Developer Tools)                                                                                                                                     |
+| Languages                  | English (default), Vietnamese                                                                                                                                                   |
+| Store icon                 | `brand/store/store-icon-128.png` (96 × 96 artwork, 16 px transparent padding)                                                                                                   |
+| Small promo tile (440×280) | `brand/store/promo-small-440x280.png` · VI: `brand/store/promo-small-440x280-vi.png`                                                                                            |
+| Marquee (1400×560)         | `brand/store/promo-marquee-1400x560.png` · VI: `brand/store/promo-marquee-1400x560-vi.png`                                                                                      |
+| Screenshots (1280×800)     | `brand/store/screenshots/{en,vi}-N-*.png` (`npm run screenshots`), in this order: 1 `popup` (wide switcher), 2 `workspaces`, 3 `tabs` (separate tabs), 4 `gallery`, 5 `private` |
+| Promo video (YouTube URL)  | `brand/video/swapdeck-demo-en.mp4` (VI: `swapdeck-demo-vi.mp4`, `npm run video`): upload to YouTube (unlisted is enough) and paste the link                                     |
+| Privacy policy URL         | Public URL of `docs/PRIVACY.md` (needs a public repository or page)                                                                                                             |
+| Support                    | Website: https://github.com/Tanx-1811/swapdeck · Support: https://github.com/Tanx-1811/swapdeck/issues                                                                          |
 
 ## Short description (≤ 132 characters)
 
@@ -209,6 +210,18 @@ Recommended answers — re-check against the form's current wording:
 - Certify: not sold to third parties; not used or transferred for purposes unrelated to the single purpose; not used or
   transferred to determine creditworthiness or for lending.
 
+## Notes for the reviewer
+
+For Edge's "Notes for certification" (Chrome has no such field; the same text can go in a support reply if a reviewer
+asks):
+
+> Swapdeck asks for no site access at install. To try it: open the Swapdeck window (it opens on first install), add a
+> site you have two accounts on (Add app → e.g. GitHub), and allow access when Chrome asks — for that site only. Sign
+> in, click "Save this session" in the toolbar popup, then "Sign in with another account", sign in again and save:
+> the popup now switches between the two in one click. Without two accounts: popup → "Scratch tab" opens the site in a
+> separate tab with nobody signed in, next to the tab that keeps the current sign-in. Everything stays on the device;
+> there is no server, no account and no analytics. Source code: https://github.com/Tanx-1811/swapdeck
+
 ## Pre-submission checklist
 
 - [x] License: MIT (open source). Privacy policy: https://github.com/Tanx-1811/swapdeck/blob/main/docs/PRIVACY.md.
@@ -219,9 +232,12 @@ Recommended answers — re-check against the form's current wording:
 - [ ] `npm run package` → `release/swapdeck-<version>.zip` (the script refuses builds with install-time host access).
 - [ ] Load the zip's contents unpacked in Chrome stable; add Supabase; save two real accounts; switch both ways; sign in
       with another account; lock/unlock; export and import a backup.
+- [ ] Separate tabs on a real site: open the second account in a separate tab next to the first; both stay signed in
+      as themselves after reloads; close it and the browser's tabs are unchanged; a scratch tab, saved as an account.
 - [ ] Workspaces on real sites: make two workspaces over two or three apps (one tab open, one app closed); switch
       between them from the popup, the side panel and the toolbar button's right-click menu; "Open workspace".
-- [ ] `node scripts/verify-presets.mjs` reports no problems.
+- [ ] `node scripts/verify-presets.mjs` reports no problems; `npm run test:live` (every preset switches) and
+      `npx playwright test --project=live lanes-live` (every preset loads in a separate tab) pass.
 - [ ] Screenshots (1280 × 800, EN and VI) regenerated with `npm run screenshots` into `brand/store/screenshots/`.
 - [ ] Promo tiles and store icon from `brand/store/`.
 - [ ] Listing text (EN default + VI), category, single purpose, permission justifications, data usage, privacy URL.

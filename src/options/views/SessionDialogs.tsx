@@ -91,6 +91,7 @@ export function ShareDialog({
       >
         <p className="share-target">{name}</p>
         <p className="dialog__text">{t(workspace ? 'share.leadWorkspace' : 'share.lead')}</p>
+        <p className="dialog__text">{t('share.staysWithYou')}</p>
         <Callout tone="warning">{t(workspace ? 'share.warningWorkspace' : 'share.warning')}</Callout>
         <Field
           label={t('backup.password')}

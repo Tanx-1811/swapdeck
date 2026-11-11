@@ -56,10 +56,27 @@ const FROM_RELAY = 'swapdeck-lane-ack';
   const lane = findLane();
   Object.defineProperty(window, STATE, { value: lane ?? undefined, configurable: false, enumerable: false });
 
-  // Captured before the page's own scripts run: they may replace these later.
+  // Captured before the page's own scripts run: they may replace these later. Instrumentation
+  // (New Relic, Sentry…) wraps timers, promises and events once it loads: the shim's own work goes
+  // through the browser's originals, so it never shows up there (nor trips it up).
   const apply = Reflect.apply;
   const weakGet = WeakMap.prototype.get;
   const weakSet = WeakMap.prototype.set;
+  const NativePromise = Promise;
+  const NativeCustomEvent = CustomEvent;
+  const NativeStorageEvent = window.StorageEvent;
+  const nativeSetTimeout = window.setTimeout;
+  const nativeClearTimeout = window.clearTimeout;
+  const nativeDispatch = EventTarget.prototype.dispatchEvent;
+  const nativeListen = EventTarget.prototype.addEventListener;
+  const toJson = JSON.stringify;
+  const fromJson = JSON.parse;
+  const later = (run: () => void, ms: number): number =>
+    apply(nativeSetTimeout, window, [run, ms]) as unknown as number;
+  const cancel = (timer: number): void => void apply(nativeClearTimeout, window, [timer]);
+  const dispatch = (target: EventTarget, event: Event): void => void apply(nativeDispatch, target, [event]);
+  const listen = (target: EventTarget, type: string, run: (event: Event) => void, capture = false): void =>
+    void apply(nativeListen, target, [type, run, capture]);
 
   const realLocal = (() => {
     try {
@@ -246,9 +263,11 @@ const FROM_RELAY = 'swapdeck-lane-ack';
     }
     // Other tabs' changes arrive as "storage" events: pass on only this view's, under its names.
     const synthetic = new WeakSet<Event>();
-    window.addEventListener(
+    listen(
+      window,
       'storage',
-      (event) => {
+      (raw) => {
+        const event = raw as StorageEvent;
         if (synthetic.has(event) || event.storageArea !== realLocal) return;
         event.stopImmediatePropagation();
         let key: string | null = null;
@@ -262,7 +281,7 @@ const FROM_RELAY = 'swapdeck-lane-ack';
               : event.key;
           if (key === null) return;
         }
-        const copy = new StorageEvent('storage', {
+        const copy = new NativeStorageEvent('storage', {
           key,
           oldValue: event.oldValue,
           newValue: event.newValue,
@@ -270,7 +289,7 @@ const FROM_RELAY = 'swapdeck-lane-ack';
         });
         Object.defineProperty(copy, 'storageArea', { value: view });
         synthetic.add(copy);
-        window.dispatchEvent(copy);
+        dispatch(window, copy);
       },
       true,
     );
@@ -291,13 +310,30 @@ const FROM_RELAY = 'swapdeck-lane-ack';
   const waiting = new Map<number, () => void>();
   /** Cookie writes of the page the worker hasn't answered yet. */
   const writes = new Set<number>();
-  document.addEventListener(FROM_RELAY, (event) => {
+  /** Requests waiting for the writes made before them. */
+  const writeWaiters: { ids: number[]; resolve: () => void }[] = [];
+  function writeSettled(id: number): void {
+    if (!writes.delete(id)) return;
+    for (let i = writeWaiters.length - 1; i >= 0; i--) {
+      const waiter = writeWaiters[i]!;
+      if (waiter.ids.some((pending) => writes.has(pending))) continue;
+      writeWaiters.splice(i, 1);
+      waiter.resolve();
+    }
+  }
+  /** Resolves once the cookie writes made so far are in the lane (or given up on). */
+  function writesDone(): Promise<void> {
+    const ids = [...writes];
+    if (!ids.length) return NativePromise.resolve();
+    return new NativePromise<void>((resolve) => writeWaiters.push({ ids, resolve }));
+  }
+  listen(document, FROM_RELAY, (event) => {
     const detail = (event as CustomEvent<unknown>).detail;
     if (typeof detail !== 'string') return;
     try {
-      const { id, cookies } = JSON.parse(detail) as { id?: unknown; cookies?: unknown };
+      const { id, cookies } = fromJson(detail) as { id?: unknown; cookies?: unknown };
       if (typeof id === 'number') {
-        writes.delete(id);
+        writeSettled(id);
         waiting.get(id)?.();
         waiting.delete(id);
       }
@@ -310,17 +346,17 @@ const FROM_RELAY = 'swapdeck-lane-ack';
   });
   /** Sends to the extension; resolves when it has acted, or after a short while regardless. */
   function tell(kind: string, extra: Record<string, unknown> = {}, timeoutMs = 1500, id = ++nextId): Promise<void> {
-    return new Promise<void>((resolve) => {
-      const timer = setTimeout(() => {
-        writes.delete(id);
+    return new NativePromise<void>((resolve) => {
+      const timer = later(() => {
         waiting.delete(id);
+        writeSettled(id);
         resolve();
       }, timeoutMs);
       waiting.set(id, () => {
-        clearTimeout(timer);
+        cancel(timer);
         resolve();
       });
-      document.dispatchEvent(new CustomEvent(TO_RELAY, { detail: JSON.stringify({ kind, id, ...extra }) }));
+      dispatch(document, new NativeCustomEvent(TO_RELAY, { detail: toJson({ kind, id, ...extra }) }));
     });
   }
 
@@ -336,7 +372,6 @@ const FROM_RELAY = 'swapdeck-lane-ack';
     }
   }
   readJar(lane.cookies);
-  let pending: Promise<void> = Promise.resolve();
 
   const cookieDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'cookie');
   try {
@@ -373,18 +408,25 @@ const FROM_RELAY = 'swapdeck-lane-ack';
         }
         const id = ++nextId;
         writes.add(id);
-        const sent = tell('cookie', { line }, 1500, id);
-        pending = Promise.all([pending, sent]).then(() => undefined);
+        void tell('cookie', { line }, 1500, id);
       },
     });
   } catch {
     // Leave document.cookie as it is rather than break the page.
   }
 
+  // cookieStore would read and write the browser's own cookies: in a lane it isn't there at all, so
+  // `'cookieStore' in window` is false and libraries (universal-cookie…) take their fallback.
   try {
-    Object.defineProperty(window, 'cookieStore', { configurable: true, enumerable: true, get: () => undefined });
+    for (let owner: object | null = window; owner; owner = Object.getPrototypeOf(owner)) {
+      if (Object.prototype.hasOwnProperty.call(owner, 'cookieStore'))
+        delete (owner as { cookieStore?: unknown }).cookieStore;
+    }
+    if ('cookieStore' in window) {
+      Object.defineProperty(window, 'cookieStore', { configurable: true, enumerable: false, get: () => undefined });
+    }
   } catch {
-    // Not there.
+    // Leave it.
   }
 
   // --- Requests wait for cookies written just before them ------------------------
@@ -428,13 +470,15 @@ const FROM_RELAY = 'swapdeck-lane-ack';
         options = init;
       }
       const run = () => apply(realFetch, window, [input, options]) as Promise<Response>;
-      const started = writes.size ? pending.then(run) : run();
-      // A sign-in or refresh (POST) may set cookies: let the lane take them before the page goes on.
-      if (method === 'GET' || method === 'HEAD') return started;
-      return started.then(async (response) => {
-        if (sameSite(response.url)) await tell('flush', {}, 800);
+      // Nothing to wait for: the browser's own promise, untouched.
+      if ((method === 'GET' || method === 'HEAD') && !writes.size) return run();
+      return (async () => {
+        if (writes.size) await writesDone();
+        const response = await run();
+        // A sign-in or refresh (POST) may set cookies: let the lane take them before the page goes on.
+        if (method !== 'GET' && method !== 'HEAD' && sameSite(response.url)) await tell('flush', {}, 800);
         return response;
-      });
+      })();
     };
     Object.defineProperty(laneFetch, 'length', { value: 1 });
     window.fetch = laneFetch as typeof fetch;
@@ -478,14 +522,15 @@ const FROM_RELAY = 'swapdeck-lane-ack';
       // Cookies written just before go along: send once they are in place, unless the page
       // opened the request again or aborted it meanwhile.
       const at = request.at;
-      void pending.then(() => {
+      void (async () => {
+        await writesDone();
         if (opened.get(this)?.at !== at || this.readyState !== XMLHttpRequest.OPENED) return;
         try {
           apply(realSend, this, args);
         } catch {
           // Sent meanwhile.
         }
-      });
+      })();
     };
   } catch {
     // No XMLHttpRequest here.

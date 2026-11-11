@@ -391,6 +391,84 @@ test.describe('pages in and beside separate tabs keep working', () => {
     }
   });
 
+  test('cookieStore is absent in a lane (libraries take their fallback), and kept in other tabs', async ({
+    context,
+    server,
+    call,
+  }) => {
+    // localhost: a secure context, where Chrome has cookieStore.
+    const acme = await addAcme(call, server, { host: 'localhost' });
+    const { site, alice } = await aliceAndBob(context, acme);
+    const lane = await openLane(context, call as Call, { appId: acme.id, accountId: alice.id });
+    const probe = () => {
+      // universal-cookie's addChangeListener.
+      let listened: string;
+      try {
+        if ('cookieStore' in window)
+          (window as unknown as { cookieStore: EventTarget }).cookieStore.addEventListener('change', () => undefined);
+        listened = 'cookieStore' in window ? 'cookieStore' : 'poll';
+      } catch (error) {
+        listened = String(error);
+      }
+      return {
+        present: 'cookieStore' in window,
+        type: typeof (window as { cookieStore?: unknown }).cookieStore,
+        listened,
+      };
+    };
+    expect(await lane.page.evaluate(probe)).toEqual({ present: false, type: 'undefined', listened: 'poll' });
+    await site.reload();
+    expect(await site.evaluate(probe)).toEqual({ present: true, type: 'object', listened: 'cookieStore' });
+    expect(await whoIsSignedIn(lane.page)).toEqual(signedInAs('alice@acme.test'));
+  });
+
+  test("the page's instrumentation never sees the lane's own timers, promises and events", async ({
+    context,
+    server,
+    call,
+  }) => {
+    const acme = await addAcme(call, server);
+    const { alice } = await aliceAndBob(context, acme);
+    const lane = await openLane(context, call as Call, { appId: acme.id, accountId: alice.id });
+    const seen = await lane.page.evaluate(async () => {
+      // What New Relic's SPA agent and the like do once they load: wrap timers, promises and events.
+      const counts = { timers: 0, thens: 0, events: 0, promises: 0 };
+      const realTimeout = window.setTimeout;
+      const realThen = Promise.prototype.then;
+      const realDispatch = EventTarget.prototype.dispatchEvent;
+      const RealPromise = window.Promise;
+      window.setTimeout = ((...args: Parameters<typeof setTimeout>) => {
+        counts.timers++;
+        return realTimeout(...args);
+      }) as typeof setTimeout;
+      EventTarget.prototype.dispatchEvent = function (this: EventTarget, event: Event) {
+        counts.events++;
+        return realDispatch.call(this, event);
+      };
+      window.Promise = function (this: unknown, ...args: ConstructorParameters<typeof Promise>) {
+        counts.promises++;
+        return new RealPromise(...args);
+      } as unknown as PromiseConstructor;
+      Promise.prototype.then = function (this: Promise<unknown>, ...args: Parameters<typeof realThen>) {
+        counts.thens++;
+        return realThen.apply(this, args);
+      } as typeof realThen;
+      try {
+        document.cookie = 'traced=1; path=/';
+        const response = await fetch('/api/csrf', { method: 'POST', body: 'x' });
+        await response.text();
+        await fetch('/api/csrf');
+        return { counts, cookie: document.cookie.includes('traced=1') };
+      } finally {
+        window.setTimeout = realTimeout;
+        EventTarget.prototype.dispatchEvent = realDispatch;
+        window.Promise = RealPromise;
+        Promise.prototype.then = realThen;
+      }
+    });
+    expect(seen).toEqual({ counts: { timers: 0, thens: 0, events: 0, promises: 0 }, cookie: true });
+  });
+
   test('document.cookie reads like a browser after writes; requests keep their semantics', async ({
     context,
     server,

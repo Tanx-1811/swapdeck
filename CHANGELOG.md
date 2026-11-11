@@ -37,6 +37,7 @@ Two accounts of the same site, side by side: **separate tabs**.
   **Another account in a scratch tab** takes the place of "Sign in with another account" (this tab and your other tabs
   stay as they are), and opening the app says it opens an ordinary tab. "Open in a separate tab" explains itself on
   hover.
+- **Import a sign-in:** a paste over 2 MB is reported as too large instead of being cut short without a word.
 - New permission `webRequest` (no install warning): separate tabs read the cookies your added sites set there, so they
   stay in that tab instead of Chrome's cookie store. Privacy policy and store listing updated.
 - Store screenshots and a 21-second demo video (`npm run video`) show separate tabs; the README shows the demo.

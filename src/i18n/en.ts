@@ -830,6 +830,7 @@ export const en = {
   'lanes.signedOut': 'Signed out',
   'lanes.show': 'Show',
   'lanes.close': 'Close',
+  'importSession.tooLargeText': 'This text is too large to be an exported sign-in.',
 
   // Sending an account, importing a sign-in
   'share.menu': 'Send to someone…',

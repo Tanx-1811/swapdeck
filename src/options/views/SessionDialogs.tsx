@@ -195,10 +195,15 @@ export function ImportSessionDialog({ open, onClose, app }: { open: boolean; onC
             spellCheck={false}
             data-autofocus
             value={text}
-            maxLength={MAX_IMPORT_LENGTH}
             aria-invalid={error ? true : undefined}
             aria-describedby={error ? `${id}-error` : undefined}
             onChange={(event) => {
+              // Too long to be an export: said so, as for a file, rather than cut short in silence
+              // (the text there stays as it was).
+              if (event.target.value.length > MAX_IMPORT_LENGTH) {
+                setError(t('importSession.tooLargeText'));
+                return;
+              }
               setText(event.target.value);
               setError(null);
             }}

@@ -282,3 +282,23 @@ test.describe('the popup in a separate tab', () => {
     );
   });
 });
+
+test.describe('importing a sign-in', () => {
+  test('says a paste is too large instead of cutting it short', async ({ call, server, openExtensionPage }) => {
+    const acme = await addAcme(call, server);
+    const manager = await openExtensionPage(`options/options.html#/apps/${acme.id}`);
+    await manager.locator('.app-header button[aria-haspopup]').click();
+    await manager.getByRole('menuitem', { name: 'Import a sign-in…' }).click();
+    const dialog = manager.getByRole('dialog', { name: 'Import a sign-in into Acme' });
+    const text = dialog.locator('textarea');
+    await expect(text).not.toHaveAttribute('maxlength');
+    await text.fill('[{"name":"sid","value":"x"}]');
+    await text.fill(`[${'x'.repeat(2_000_001)}]`);
+    await expect(dialog.locator('.callout--danger')).toHaveText('This text is too large to be an exported sign-in.');
+    // What was there before stays, whole.
+    await expect(text).toHaveValue('[{"name":"sid","value":"x"}]');
+    await expect(text).toHaveAttribute('aria-invalid', 'true');
+    await text.fill('[]');
+    await expect(dialog.locator('.callout--danger')).toHaveCount(0);
+  });
+});

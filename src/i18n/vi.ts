@@ -834,6 +834,7 @@ export const vi: Record<MessageKey, string> = {
   'lanes.signedOut': 'Đã đăng xuất',
   'lanes.show': 'Xem',
   'lanes.close': 'Đóng',
+  'importSession.tooLargeText': 'Nội dung này quá lớn, không phải một phiên đăng nhập đã xuất.',
 
   // Sending an account, importing a sign-in
   'share.menu': 'Gửi cho người khác…',

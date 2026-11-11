@@ -13,7 +13,7 @@
  * Everything here is pure: parsing cookies (RFC 6265, the parts browsers follow), the jar, and the
  * rules for a lane. The worker side is `background/lanes.ts`; the page side `content/lane-main.ts`.
  */
-import { hostMatchesDomain, isIpOrLocal } from './domains';
+import { hostMatchesDomain, isIpOrLocal, registrableDomain } from './domains';
 import type { CookieRecord } from './types';
 
 /** Prefix of a lane's localStorage keys, IndexedDB names, broadcast channels and locks. */
@@ -146,6 +146,8 @@ export function parseCookie(
         : sameSiteValue === 'none'
           ? 'no_restriction'
           : 'unspecified';
+  // Chrome rejects SameSite=None without Secure.
+  if (sameSite === 'no_restriction' && !secure) return null;
 
   const expiry = expiryOf(attributes, nowSeconds);
   const cookie: CookieRecord = {
@@ -253,9 +255,81 @@ export function cookieHeader(cookies: readonly CookieRecord[]): string {
     .join('; ');
 }
 
-/** What `document.cookie` reads on a page at `url`. */
-export function scriptCookies(jar: readonly CookieRecord[], url: URL, nowSeconds = Date.now() / 1000): string {
-  return cookieHeader(jar.filter((cookie) => !cookie.httpOnly && cookieApplies(cookie, url, nowSeconds)));
+// --- SameSite --------------------------------------------------------------------
+
+/**
+ * How a cookie's SameSite works, as Chrome treats it: Strict, Lax (also a cookie that says nothing:
+ * Lax by default, and None without Secure, which Chrome never keeps), or None.
+ */
+export function sameSiteKind(cookie: Pick<CookieRecord, 'sameSite' | 'secure'>): 'strict' | 'lax' | 'none' {
+  if (cookie.sameSite === 'strict') return 'strict';
+  return cookie.sameSite === 'no_restriction' && cookie.secure ? 'none' : 'lax';
+}
+
+/** A host's site (its registrable domain), as SameSite compares them. */
+export const siteOf = (host: string): string => registrableDomain(host);
+
+/** Whether two hosts are on the same site. */
+export function sameSite(a: string, b: string): boolean {
+  return siteOf(a) === siteOf(b);
+}
+
+/**
+ * Whether a cookie may be set (by a response or a script) in a cross-site context — a frame or a
+ * request of a page of another site: only SameSite=None cookies, as Chrome does.
+ */
+export function settableCrossSite(cookie: Pick<CookieRecord, 'sameSite' | 'secure'>): boolean {
+  return sameSiteKind(cookie) === 'none';
+}
+
+/**
+ * What `document.cookie` reads on a page at `url`; a frame embedded in another site's page (a
+ * cross-site context) reads only the SameSite=None cookies.
+ */
+export function scriptCookies(
+  jar: readonly CookieRecord[],
+  url: URL,
+  nowSeconds = Date.now() / 1000,
+  crossSite = false,
+): string {
+  return cookieHeader(
+    jar.filter(
+      (cookie) =>
+        !cookie.httpOnly && cookieApplies(cookie, url, nowSeconds) && (!crossSite || settableCrossSite(cookie)),
+    ),
+  );
+}
+
+/** How long Chrome sends a Lax-by-default cookie on a cross-site top-level POST after it was set (2 minutes). */
+export const LAX_ALLOWING_UNSAFE_SECONDS = 120;
+
+/**
+ * The cookie headers a lane sends to one address, per kind of request (RFC 6265bis, as Chrome):
+ * `full` on same-site requests (and the browser's own navigations: address bar, bookmarks),
+ * `topGet` on a top-level GET navigation from another site (Strict cookies stay behind), `topUnsafe`
+ * on a top-level POST… from another site (None, plus Lax-by-default cookies set in the last two
+ * minutes), `cross` on everything else from another site (None only).
+ */
+export type CookieSets = {
+  full: CookieRecord[];
+  topGet: CookieRecord[];
+  topUnsafe: CookieRecord[];
+  cross: CookieRecord[];
+};
+
+export function cookieSets(
+  cookies: readonly CookieRecord[],
+  young: (cookie: CookieRecord) => boolean = () => false,
+): CookieSets {
+  const cross = cookies.filter((cookie) => sameSiteKind(cookie) === 'none');
+  return {
+    full: [...cookies],
+    topGet: cookies.filter((cookie) => sameSiteKind(cookie) !== 'strict'),
+    topUnsafe: cookies.filter(
+      (cookie) => sameSiteKind(cookie) === 'none' || (cookie.sameSite === 'unspecified' && young(cookie)),
+    ),
+    cross,
+  };
 }
 
 // --- Rules ---------------------------------------------------------------------
@@ -311,6 +385,10 @@ const NAVIGATIONS = ['main_frame', 'sub_frame'] as chrome.declarativeNetRequest.
  * of the cache instead (fetch: no-store; same-origin XHR: the If-Range guard).
  */
 const CALLS = ['xmlhttprequest', 'other'] as chrome.declarativeNetRequest.ResourceType[];
+const GET = ['get'] as chrome.declarativeNetRequest.RequestMethod[];
+/** The request's initiator is on the same site as its address (or isn't: another site, an opaque origin, none). */
+const FIRST_PARTY = 'firstParty' as chrome.declarativeNetRequest.DomainType;
+const THIRD_PARTY = 'thirdParty' as chrome.declarativeNetRequest.DomainType;
 
 export type LaneRule = Omit<chrome.declarativeNetRequest.Rule, 'id'>;
 
@@ -343,6 +421,11 @@ export function parseLaneTiming(description: string): { token: string; cookies: 
   }
 }
 
+/** Priority of the rule that keeps a lane's cookies off calls from other sites' pages: above every other. */
+const FOREIGN_CALLS_PRIORITY = 1_000_000;
+/** SameSite levels of the cookie rules of one scope and path (cross, top-level, same-site, browser's own). */
+const PRIORITY_LEVELS = 4;
+
 /**
  * The session rules that make `tabIds` a lane over `domains` with cookie jar `jar`:
  *
@@ -351,10 +434,22 @@ export function parseLaneTiming(description: string): { token: string; cookies: 
  *   no cached copy of another account's page answers the lane, and the lane's pages aren't kept
  *   (calls only lose their conditional headers: rules never add an unsafe header where CORS applies);
  * - one names the lane to its frames (without cookies: see below);
+ * - one keeps every cookie off calls (fetch, XHR) that pages of other sites make to the app's: a
+ *   rule can't see whether such a call asks for credentials, and an answer with
+ *   `Access-Control-Allow-Origin: *` to one that doesn't would be readable there;
  * - per scope (each app domain with its subdomains, each cookie's host or domain), per cookie path
- *   and per scheme when Secure cookies need it: the `Cookie` header (removed when no cookie of the
- *   lane applies — the browser's own cookies never go along), and for top-level pages the
+ *   and per scheme when Secure cookies need it: the `Cookie` header, following SameSite as Chrome
+ *   does (`cookieSets`) — all of the lane's cookies on same-site requests (an initiator of the same
+ *   site and, from Chrome 145, a top-level page of that site), Lax and None on a top-level GET from
+ *   another site, None only on anything else from another site; the header is removed where none of
+ *   the lane's cookies goes, so the browser's own never go along; and for top-level pages the
  *   Server-Timing entry naming the lane, with what document.cookie reads there.
+ *
+ * Declarative rules can't tell a navigation the browser started itself (address bar, bookmark,
+ * Swapdeck) from one another site started: both count as third-party and get the top-level GET set.
+ * `navTabIds` are tabs whose next navigation is the browser's own (Swapdeck is about to navigate
+ * them, or one went out without the lane's Strict cookies and is loaded again): they get every
+ * cookie, as Chrome sends them.
  *
  * More specific scopes and paths have a higher priority: declarativeNetRequest applies the highest
  * rule that sets a header.
@@ -365,9 +460,16 @@ export function laneRules(options: {
   domains: readonly string[];
   jar: readonly CookieRecord[];
   nowSeconds?: number;
+  /** Tabs whose next top-level navigation is the browser's own (see above). */
+  navTabIds?: readonly number[];
+  /** Chrome 145+: same-site also needs a top-level page of the site (`topDomains`). */
+  topDomains?: boolean;
+  /** Lax-by-default cookies set less than two minutes ago (Chrome sends them on a cross-site top-level POST). */
+  young?: (cookie: CookieRecord) => boolean;
 }): LaneRule[] {
   const { token, domains } = options;
   const tabIds = [...options.tabIds];
+  const navTabIds = (options.navTabIds ?? []).filter((tabId) => tabIds.includes(tabId));
   const now = options.nowSeconds ?? Date.now() / 1000;
   const jar = laneJar(options.jar, domains, now);
   const rules: LaneRule[] = [
@@ -417,6 +519,18 @@ export function laneRules(options: {
       },
       condition: { tabIds, requestDomains: [...domains], resourceTypes: FRAMES },
     },
+    {
+      // Calls from pages of other sites (not the app's own): no cookie at all, the lane's or the browser's.
+      priority: FOREIGN_CALLS_PRIORITY,
+      action: { type: MODIFY, requestHeaders: [{ header: 'cookie', operation: HEADER.remove }] },
+      condition: {
+        tabIds,
+        requestDomains: [...domains],
+        excludedInitiatorDomains: [...domains],
+        domainType: THIRD_PARTY,
+        resourceTypes: CALLS,
+      },
+    },
   ];
 
   const scopes = new Map<string, Scope>();
@@ -424,10 +538,30 @@ export function laneRules(options: {
   for (const domain of domains) addScope({ host: domain.toLowerCase(), exact: false });
   for (const cookie of jar) addScope({ host: bareDomain(cookie), exact: cookie.hostOnly });
 
+  const cookieRule = (
+    priority: number,
+    cookies: readonly CookieRecord[],
+    condition: chrome.declarativeNetRequest.RuleCondition,
+  ): LaneRule => {
+    const value = cookieHeader(cookies);
+    return {
+      priority,
+      action: {
+        type: MODIFY,
+        requestHeaders: [
+          value ? { header: 'cookie', operation: HEADER.set, value } : { header: 'cookie', operation: HEADER.remove },
+        ],
+      },
+      condition,
+    };
+  };
+  const same = (a: readonly CookieRecord[], b: readonly CookieRecord[]) => cookieHeader(a) === cookieHeader(b);
+
   for (const scope of scopes.values()) {
     const inScope = jar.filter((cookie) => cookieInScope(cookie, scope));
     const paths = new Set(['/', ...inScope.map((cookie) => cookie.path || '/')]);
     const specificity = scope.host.split('.').length * 2 + (scope.exact ? 1 : 0);
+    const site = siteOf(scope.host);
     for (const path of paths) {
       const sends = inScope.filter((cookie) => pathMatches(path, cookie.path || '/'));
       // Local addresses count as secure over http too (as Chrome treats them): one rule for both.
@@ -439,24 +573,45 @@ export function laneRules(options: {
               { scheme: 'http', cookies: sends.filter((cookie) => !cookie.secure) },
             ]
           : [{ scheme: 'any', cookies: sends }];
-      const priority = 10 + specificity * 1000 + Math.min(path.length, 999);
+      // Room for the SameSite levels of this scope and path, all below the next more specific one.
+      const base = (10 + specificity * 1000 + Math.min(path.length, 999)) * PRIORITY_LEVELS;
       for (const variant of variants) {
         const regexFilter = scopeRegex(scope, path, variant.scheme);
-        const header = cookieHeader(variant.cookies);
+        const where = { tabIds, regexFilter, isUrlFilterCaseSensitive: true };
+        const sets = cookieSets(variant.cookies, options.young);
+        // Anything from another site: SameSite=None cookies only.
+        rules.push(cookieRule(base, sets.cross, { ...where, resourceTypes: ALL_TYPES }));
+        if (!same(sets.full, sets.cross)) {
+          // A top-level navigation from another site: a GET carries Lax cookies too; a POST… only
+          // None (and Lax-by-default cookies set in the last two minutes, as Chrome allows).
+          if (!same(sets.topGet, sets.cross))
+            rules.push(cookieRule(base + 1, sets.topGet, { ...where, resourceTypes: PAGES, requestMethods: GET }));
+          if (!same(sets.topUnsafe, sets.cross))
+            rules.push(
+              cookieRule(base + 1, sets.topUnsafe, { ...where, resourceTypes: PAGES, excludedRequestMethods: GET }),
+            );
+          // Same-site: every cookie (for a top-level page, its top-level frame is the page itself).
+          rules.push(
+            cookieRule(base + 2, sets.full, {
+              ...where,
+              resourceTypes: ALL_TYPES,
+              domainType: FIRST_PARTY,
+              ...(options.topDomains ? { topDomains: [site] } : {}),
+            }),
+          );
+          // The browser's own navigation of these tabs (Swapdeck's, or one loaded again): every cookie.
+          if (navTabIds.length && !same(sets.full, sets.topGet))
+            rules.push(
+              cookieRule(base + 3, sets.full, {
+                ...where,
+                tabIds: navTabIds,
+                resourceTypes: PAGES,
+                requestMethods: GET,
+              }),
+            );
+        }
         rules.push({
-          priority,
-          action: {
-            type: MODIFY,
-            requestHeaders: [
-              header
-                ? { header: 'cookie', operation: HEADER.set, value: header }
-                : { header: 'cookie', operation: HEADER.remove },
-            ],
-          },
-          condition: { tabIds, regexFilter, isUrlFilterCaseSensitive: true, resourceTypes: ALL_TYPES },
-        });
-        rules.push({
-          priority,
+          priority: base,
           action: {
             type: MODIFY,
             responseHeaders: [
@@ -467,7 +622,7 @@ export function laneRules(options: {
               },
             ],
           },
-          condition: { tabIds, regexFilter, isUrlFilterCaseSensitive: true, resourceTypes: PAGES },
+          condition: { ...where, resourceTypes: PAGES },
         });
       }
     }
@@ -475,8 +630,8 @@ export function laneRules(options: {
   return rules;
 }
 
-/** Rules of a lane that cover all its sites (no regex): Set-Cookie, the two cache rules, the frames' timing. */
-export const LANE_WIDE_RULES = 4;
+/** Rules of a lane that cover all its sites (no regex): Set-Cookie, the two cache rules, the frames' timing, foreign calls. */
+export const LANE_WIDE_RULES = 5;
 
 /** How many of a lane's rules use a regex (Chrome counts those separately). */
 export const regexCount = (rules: readonly LaneRule[]) => rules.filter((rule) => rule.condition.regexFilter).length;

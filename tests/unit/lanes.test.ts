@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   cookieApplies,
   cookieHeader,
+  cookieSets,
   defaultPath,
   LANE_CACHE_GUARD,
   laneJar,
@@ -15,8 +16,11 @@ import {
   pathMatches,
   purgeExpired,
   regexCount,
+  sameSite,
+  sameSiteKind,
   scopeRegex,
   scriptCookies,
+  settableCrossSite,
   storeCookie,
   type LaneRule,
 } from '../../src/core/lanes';
@@ -38,23 +42,68 @@ function jarOf(...lines: [string, string?][]): CookieRecord[] {
   return jar;
 }
 
-/** Which rule's header a request gets: the highest-priority matching rule, as Chrome applies it. */
+/** A request as declarativeNetRequest sees it (defaults: a same-site call of the app's page, in the lane's first tab). */
+type Request = {
+  /** The initiator's origin; null when the browser started it (address bar, bookmark, an extension). */
+  initiator?: string | null;
+  method?: string;
+  tabId?: number;
+  /** The top-level page (for a top-level page: itself). */
+  top?: string;
+};
+
+const domainListed = (host: string, list: readonly string[]) =>
+  list.some((domain) => host === domain || host.endsWith(`.${domain}`));
+
+/**
+ * Which rule's header a request gets: the highest-priority matching rule, as Chrome applies it —
+ * with its conditions as Chrome evaluates them (tabs, types, methods, initiator domains, first or
+ * third party by site, top-level domains).
+ */
 function headerFor(
   rules: LaneRule[],
   requestUrl: string,
   header: string,
   type = 'xmlhttprequest',
   side: 'request' | 'response' | 'any' = 'any',
+  request: Request = {},
 ): string | null {
+  const url = new URL(requestUrl);
+  // null: no initiator; 'null': an opaque one (a sandboxed frame, a data: page).
+  const initiator =
+    request.initiator === undefined
+      ? new URL(url.origin)
+      : request.initiator === null || request.initiator === 'null'
+        ? null
+        : new URL(request.initiator);
+  const initiatorHost = initiator ? initiator.hostname : null;
+  const top = type === 'main_frame' ? url : new URL(request.top ?? (initiatorHost ? initiator!.origin : url.origin));
+  const method = (request.method ?? 'GET').toLowerCase();
+  // By default, the lane's first tab.
+  const tabId = request.tabId ?? rules[0]?.condition.tabIds?.[0] ?? -1;
   const matching = rules
     .filter((rule) => {
       const condition = rule.condition;
+      if (condition.tabIds && !condition.tabIds.includes(tabId)) return false;
       if (condition.resourceTypes && !condition.resourceTypes.includes(type as never)) return false;
+      if (condition.requestMethods && !condition.requestMethods.includes(method as never)) return false;
+      if (condition.excludedRequestMethods?.includes(method as never)) return false;
       if (condition.regexFilter && !new RegExp(condition.regexFilter).test(requestUrl)) return false;
-      if (condition.requestDomains) {
-        const host = new URL(requestUrl).hostname;
-        if (!condition.requestDomains.some((domain) => host === domain || host.endsWith(`.${domain}`))) return false;
+      if (condition.requestDomains && !domainListed(url.hostname, condition.requestDomains)) return false;
+      // An opaque initiator, or none, only matches rules without a list of initiator domains.
+      if (condition.initiatorDomains && !(initiatorHost && domainListed(initiatorHost, condition.initiatorDomains)))
+        return false;
+      if (
+        condition.excludedInitiatorDomains &&
+        initiatorHost &&
+        domainListed(initiatorHost, condition.excludedInitiatorDomains)
+      )
+        return false;
+      if (condition.domainType) {
+        const firstParty = Boolean(initiatorHost) && sameSite(initiatorHost!, url.hostname);
+        if ((condition.domainType === 'firstParty') !== firstParty) return false;
       }
+      if (condition.topDomains && !domainListed(top.hostname, condition.topDomains)) return false;
       return true;
     })
     .sort((a, b) => (b.priority ?? 1) - (a.priority ?? 1));
@@ -329,6 +378,117 @@ describe('lane rules', () => {
     expect(regexCount(rules)).toBe(rules.length - LANE_WIDE_RULES);
     expect(rules.length).toBeLessThan(30);
     expect(regexCount(rules)).toBeLessThan(28);
+  });
+});
+
+describe('SameSite in a lane (as Chrome applies it)', () => {
+  const token = 'abcdefghijkl';
+  const app = 'https://app.acme.test';
+  const jar = jarOf(
+    ['strict=1; Path=/; SameSite=Strict', `${app}/`],
+    ['lax=1; Path=/; SameSite=Lax', `${app}/`],
+    ['plain=1; Path=/', `${app}/`],
+    ['none=1; Path=/; SameSite=None; Secure', `${app}/`],
+  );
+  const options = { token, tabIds: [7, 9], domains: ['acme.test'], jar, nowSeconds: NOW, topDomains: true };
+  const rules = laneRules(options);
+  const cookie = (type: string, request: Parameters<typeof headerFor>[5] = {}, url = `${app}/x`) =>
+    headerFor(rules, url, 'cookie', type, 'request', request);
+  const all = 'strict=1; lax=1; plain=1; none=1';
+  const evil = 'https://evil.test';
+
+  it('reads the kinds as Chrome does: no SameSite is Lax, None needs Secure', () => {
+    expect(jar.map((item) => sameSiteKind(item))).toEqual(['strict', 'lax', 'lax', 'none']);
+    expect(parse('x=1; SameSite=None')).toBeNull();
+    expect(parse('x=1; SameSite=None', 'http://localhost/')).toBeNull();
+    expect(parse('x=1; SameSite=None; Secure', 'http://localhost/')).not.toBeNull();
+    expect(sameSiteKind({ sameSite: 'no_restriction', secure: false })).toBe('lax');
+    expect(sameSite('app.acme.test', 'api.acme.test')).toBe(true);
+    expect(sameSite('acme.test', 'evil.test')).toBe(false);
+    expect(settableCrossSite(jar[3]!)).toBe(true);
+    expect(jar.slice(0, 3).some(settableCrossSite)).toBe(false);
+    const sets = cookieSets(jar, (item) => item.name === 'plain');
+    expect(sets.topGet.map((item) => item.name)).toEqual(['lax', 'plain', 'none']);
+    expect(sets.topUnsafe.map((item) => item.name)).toEqual(['plain', 'none']);
+    expect(sets.cross.map((item) => item.name)).toEqual(['none']);
+  });
+
+  it("sends every cookie on the app's own requests", () => {
+    for (const type of ['main_frame', 'sub_frame', 'xmlhttprequest', 'script', 'image', 'websocket'])
+      expect(cookie(type), type).toBe(all);
+    // A page of another origin of the same site counts as the same site.
+    expect(cookie('xmlhttprequest', { initiator: 'https://www.acme.test' })).toBe(all);
+    expect(cookie('main_frame', { initiator: app, method: 'POST' })).toBe(all);
+  });
+
+  it('follows SameSite for what another site starts', () => {
+    // A link from another site: Lax goes, Strict stays behind.
+    expect(cookie('main_frame', { initiator: evil })).toBe('lax=1; plain=1; none=1');
+    // A form posted from another site: only None.
+    expect(cookie('main_frame', { initiator: evil, method: 'POST' })).toBe('none=1');
+    // Its frames, images and scripts: only None.
+    for (const type of ['sub_frame', 'image', 'script', 'websocket'])
+      expect(cookie(type, { initiator: evil, top: evil }), type).toBe('none=1');
+  });
+
+  it("keeps every cookie off calls other sites' pages make (they could read an answer allowed to any origin)", () => {
+    for (const initiator of [evil, 'null'])
+      expect(cookie('xmlhttprequest', { initiator, top: evil }), initiator).toBe('<removed>');
+    // The app's own other sites keep calling it cross-site, with its None cookies.
+    const twoSites = laneRules({ ...options, domains: ['acme.test', 'acme-api.test'] });
+    expect(
+      headerFor(twoSites, `${app}/x`, 'cookie', 'xmlhttprequest', 'request', {
+        initiator: 'https://app.acme-api.test',
+        top: 'https://app.acme-api.test',
+      }),
+    ).toBe('none=1');
+  });
+
+  it("treats a frame of the app inside another site's page as cross-site (Chrome 145+: topDomains)", () => {
+    const fromFrame = { initiator: app, top: evil };
+    expect(cookie('xmlhttprequest', fromFrame)).toBe('none=1');
+    expect(cookie('sub_frame', fromFrame)).toBe('none=1');
+    // Older Chrome can't see the top-level page: the frame's requests count as the app's own.
+    const older = laneRules({ ...options, topDomains: false });
+    expect(headerFor(older, `${app}/x`, 'cookie', 'xmlhttprequest', 'request', fromFrame)).toBe(all);
+    expect(older.some((rule) => rule.condition.topDomains)).toBe(false);
+    expect(rules.some((rule) => rule.condition.topDomains?.[0] === 'acme.test')).toBe(true);
+  });
+
+  it("gives the browser's own navigations every cookie once the tab is marked for them", () => {
+    // Address bar, bookmark, Swapdeck: no initiator. Rules can't tell them from another site's link…
+    expect(cookie('main_frame', { initiator: null })).toBe('lax=1; plain=1; none=1');
+    // …so a tab Swapdeck is about to navigate (or loads again) gets them all, GET only.
+    const marked = laneRules({ ...options, navTabIds: [9, 12] });
+    const nav = (request: Parameters<typeof headerFor>[5]) =>
+      headerFor(marked, `${app}/x`, 'cookie', 'main_frame', 'request', request);
+    expect(nav({ initiator: null, tabId: 9 })).toBe(all);
+    expect(nav({ initiator: null, tabId: 7 })).toBe('lax=1; plain=1; none=1');
+    expect(nav({ initiator: evil, tabId: 9, method: 'POST' })).toBe('none=1');
+    // A tab that isn't the lane's never gets a rule.
+    expect(marked.some((rule) => rule.condition.tabIds?.includes(12))).toBe(false);
+  });
+
+  it('sends a Lax-by-default cookie on a cross-site top-level POST for two minutes after it was set', () => {
+    const young = laneRules({ ...options, young: (item) => item.name === 'plain' || item.name === 'lax' });
+    expect(
+      headerFor(young, `${app}/callback`, 'cookie', 'main_frame', 'request', { initiator: evil, method: 'POST' }),
+    ).toBe('plain=1; none=1');
+  });
+
+  it('needs no SameSite rules for a jar without Lax or Strict cookies', () => {
+    const none = jarOf(['n=1; Path=/; SameSite=None; Secure', `${app}/`]);
+    const plain = laneRules({ ...options, jar: none });
+    // Per scope and scheme: the cookie rule and the page timing only.
+    expect(plain.filter((rule) => rule.condition.regexFilter && rule.action.requestHeaders).length).toBe(
+      plain.filter((rule) => rule.condition.regexFilter && rule.action.responseHeaders).length,
+    );
+    expect(headerFor(plain, `${app}/x`, 'cookie', 'image', 'request', { initiator: evil, top: evil })).toBe('n=1');
+  });
+
+  it('stays within the budget for a typical sign-in', () => {
+    expect(rules.length).toBeLessThan(30);
+    expect(regexCount(rules)).toBe(rules.length - LANE_WIDE_RULES);
   });
 });
 

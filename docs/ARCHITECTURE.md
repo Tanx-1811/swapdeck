@@ -302,11 +302,15 @@ in the worker (`lane-state.ts`: in memory, written through to `sd:lanes` in sess
 - **Cookies never reach Chrome's store.** Each lane has a jar (`CookieRecord[]`, seeded from the account's snapshot).
   `laneRules` turns it into declarativeNetRequest session rules limited to the lane's `tabIds` (ids from
   `LANE_RULE_BASE` = 100 000 up; `clearStaleRules` never touches them): per scope (each app domain with its subdomains,
-  each cookie's host or domain), cookie path and — when Secure cookies need it — scheme, a rule **sets** the `Cookie`
-  header (or removes it, so the browser's own cookies never go along); one rule drops `Set-Cookie` from every response
-  of the lane's sites; one keeps private responses (documents, XHR) out of the HTTP cache both ways (conditional
-  headers removed, `no-cache` asked, `no-store` answered). More specific rules have higher priority (Chrome applies the
-  highest rule that sets a header). The worker reads `Set-Cookie` through `webRequest.onHeadersReceived` with
+  each cookie's host or domain), cookie path and — when Secure cookies need it — scheme (WebSocket handshakes
+  included: ws like http, wss like https), a rule **sets** the `Cookie` header (or removes it, so the browser's own
+  cookies never go along); one rule drops `Set-Cookie` from every response of the lane's sites; two keep private
+  responses out of Chrome's HTTP cache both ways. Response headers a rule sets come too late for that cache, so pages
+  and frames get `If-Range` (`LANE_CACHE_GUARD`: the cache neither reads nor stores such a request; servers ignore it
+  without `Range`) and `no-cache`; calls (XHR, fetch), where CORS applies, only lose their conditional headers — a
+  rule never adds a header that isn't CORS-safelisted there (a cross-origin call would need a preflight) — and the
+  page script keeps them out of the cache (fetch: `cache: 'no-store'`; same-origin XHR: the If-Range guard). More
+  specific rules have higher priority (Chrome applies the highest rule that sets a header). The worker reads `Set-Cookie` through `webRequest.onHeadersReceived` with
   `extraHeaders` (it sees the headers before the rule drops them), parses them (`parseCookie`, RFC 6265: domain,
   path, Secure on secure origins only, prefixes, Max-Age over Expires) into the jar (`storeCookie`) and re-applies the
   rules (`syncRules`: one at a time, coalesced). Listeners are added only while lanes exist, filtered to their apps'
@@ -328,11 +332,15 @@ in the worker (`lane-state.ts`: in memory, written through to `sd:lanes` in sess
   starts and whenever the site sets cookies in the lane (`changed`, sent to the lane's tabs), and every answer to a write
   or flush carries it too, so cookies set by responses (CSRF tokens) show up. In a lane it redefines `document.cookie` (reads the lane's non-HttpOnly
   cookies; writes go to the worker through `lane-relay.ts` → `runtime.sendMessage`, parsed as a script would, never
-  over an HttpOnly cookie), hides `cookieStore`, makes `fetch`/XHR wait for pending cookie writes and, after non-GET
+  over an HttpOnly cookie), removes `cookieStore` (`'cookieStore' in window` is false), makes `fetch`/XHR wait for
+  pending cookie writes and, after non-GET
   requests, for the response's `Set-Cookie` ("flush"), and keeps `localStorage`, IndexedDB names, BroadcastChannel names
   and Web Locks under `__sdl:<token>:` (storage events translated). Service workers can't be registered there; a page
   a service worker controls is reported (`workerWarning`). In other tabs, when lane keys exist, it only hides them
-  (and keeps them out of the page's `clear()`). The relay also says hello with the token it saw: a lane page without it
+  (and keeps them out of the page's `clear()`). Its `localStorage` views are Proxies: `Storage.prototype`'s methods
+  and `length` are wrapped to act on a view when called with one as `this` (and are the browser's own otherwise), and
+  the views use the natives captured at `document_start`. Its own timers, promises and events use the originals
+  captured then too, so page instrumentation (New Relic, Sentry) never sees them. The relay also says hello with the token it saw: a lane page without it
   (served from cache, or before the tab joined) is reloaded bypassing the cache. The worker checks every relay message
   against the sender tab's lane and the app's domains (`onRelay`).
 - **Page scripts and normal switches leave lanes alone.** `readPageStorage`/`writePageStorage` take `lane` (only that
@@ -364,8 +372,9 @@ in the worker (`lane-state.ts`: in memory, written through to `sd:lanes` in sess
   groups come back. `restoreLanes` (on start-up and on update) re-opens account lanes in the tabs of their groups (by
   title, `sd:laneRestore`): the tabs first leave the site (their pages run the browser's account), then join the lane,
   its storage is written from the saved session, and they go back to their pages. A lane that can't come back (scratch,
-  locked vault, account in use, site unreachable) has its tabs ungrouped and back on their pages, so no group claims an
-  account its tabs don't have. `openLane` holds the app's lock (no switch changes the account in use meanwhile).
+  locked vault, account in use, site unreachable, a title two lanes shared) has its tabs ungrouped and back on their
+  pages, so no group claims an account its tabs don't have. A worker that starts while Chrome runs re-applies every
+  lane's rules (it doesn't know since when their tabs were covered, `coveredAt`). `openLane` holds the app's lock (no switch changes the account in use meanwhile).
 
 ## 7. Workspaces (`core/workspaces.ts`, `background/workspaces.ts`)
 
@@ -604,7 +613,10 @@ refuses to zip a build with install-time host permissions.
   browser's account there. Requests made by the site's service worker or shared workers carry no tab, so they use the
   browser's sign-in (Swapdeck warns when a lane page is controlled by one); dedicated workers' `indexedDB` and
   `BroadcastChannel` aren't renamed. SameSite isn't applied to the lane's cookies (they go with every request to the
-  app's sites from that tab). A page served from the HTTP cache or a service worker without its lane is reloaded once.
+  app's sites from that tab, even one asking for no credentials). A page served from a service worker without its lane
+  is reloaded once. An XHR of a lane page to another origin of the app can't be kept out of the HTTP cache (no header
+  can be added there without a CORS preflight). A page that was open before the lane's keys existed doesn't hide them
+  (its `localStorage.clear()` also removes them).
   A lane's cookies live in memory; what changed since its last save is lost if Chrome crashes.
 
 ## 14. Build and tests

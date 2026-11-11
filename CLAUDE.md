@@ -93,7 +93,9 @@ tests, demo data and screenshots (use `*.example`/`*.test` addresses). Contribut
 - Saving from a lane follows auto-sync's rule (strong identity of the lane's account, `decideSave` with it as active);
   never save a lane into another account except through `saveLane` with an explicit, identity-checked target.
 - `content/lane-main.ts` runs in the page's world on every page of a lane app while lanes exist: it must never throw,
-  never break pages outside a lane (only hide `__sdl:` keys when present) and talk only to `lane-relay.ts`. The worker
+  never break pages outside a lane (only hide `__sdl:` keys when present) and talk only to `lane-relay.ts`. Its own work
+  uses the natives it captures at `document_start` (timers, promises, events, Storage methods), never what the page
+  may have wrapped since. Lane rules never add a request header that isn't CORS-safelisted to calls (XHR/fetch). The worker
   re-checks every relay message (`onRelay`: sender tab's lane, app domain, script-set cookies only).
 - Tests: `tests/unit/lanes.test.ts` (cookie parsing, jar, rules), `tests/e2e/lanes.spec.ts` (two accounts side by side,
   scratch → account, window.open, closing, takeover by a switch, restore after restart via `swapdeckTest` in the e2e

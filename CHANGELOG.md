@@ -18,12 +18,14 @@ Two accounts of the same site, side by side: **separate tabs**.
   else signed in there is never saved into it) and once more when it closes; switching your tabs to that account takes
   the separate tab over with its latest sign-in.
 - After Chrome restarts (or Swapdeck updates), separate tabs come back in their groups; when that isn't possible (a
-  locked passphrase, a scratch tab) their group is removed rather than claim an account the tabs no longer have.
+  locked passphrase, a scratch tab, two separate tabs whose accounts have the same name) their group is removed rather
+  than claim an account the tabs no longer have.
 - **Import a sign-in** (an app's ⋯ in the manager): paste or pick an export from Cookie-Editor, EditThisCookie, Playwright
-  (`storageState`, with local storage) or a `cookies.txt`, and it is saved as the account it belongs to.
+  (`storageState`, with local storage) or a `cookies.txt`, and it is saved as the account it belongs to (never one
+  where nobody is signed in, nor into an account of someone else).
 - **Send to someone** (⋯ of an account or a workspace): a file with just that account or workspace and its sign-ins,
   always locked with a password. Whoever receives it adds it with Backup → Import; such a file can never replace their
-  data.
+  data, and a sign-in in any imported file only goes into an account it belongs to.
 - Closing a scratch tab where someone signed in and wasn't saved asks first; separate tabs wear their own indigo mark
   (never the red "in use" seal), and long names or emails no longer widen the popup.
 - New permission `webRequest` (no install warning): separate tabs read the cookies your added sites set there, so they

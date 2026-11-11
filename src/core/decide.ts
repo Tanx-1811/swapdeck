@@ -1,4 +1,4 @@
-import { hasIdentity, isSpecificDetector, sameIdentity } from './identity';
+import { detectIdentity, hasIdentity, isSpecificDetector, sameIdentity } from './identity';
 import type { Account, DetectorSpec, Identity, Snapshot } from './types';
 
 /** Where the live session should be saved before it is replaced. */
@@ -51,6 +51,24 @@ export function decideSave(options: {
   // saving now would overwrite a good session with a signed-out one.
   if (isSpecificDetector(detector)) return { kind: 'skip', reason: 'signed-out' };
   return active ? { kind: 'active', accountId: active.id } : { kind: 'new' };
+}
+
+/**
+ * Whether a session that comes from elsewhere (a backup, a file someone sent) may be saved into an
+ * account: never when it provably is someone else's, nor when a reliable detector finds nobody
+ * signed in there. What can't be told apart is allowed, as `decideSave` allows it.
+ */
+export function sessionFitsAccount(
+  account: Pick<Account, 'identityId' | 'email' | 'name'>,
+  snapshot: Pick<Snapshot, 'cookies' | 'storage'>,
+  detector: DetectorSpec,
+): boolean {
+  const identity = detectIdentity(detector, {
+    cookies: snapshot.cookies,
+    localStorage: snapshot.storage.localStorage,
+  });
+  if (identity?.confidence === 'strong') return !hasIdentity(account) || sameIdentity(account, identity);
+  return !isSpecificDetector(detector);
 }
 
 /** The account after `currentId` in display order, wrapping around. */

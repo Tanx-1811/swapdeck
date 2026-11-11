@@ -279,6 +279,76 @@ describe('backups', () => {
     });
   });
 
+  it("never merges a file's sign-in into an account of another person, nor a signed-out one", async () => {
+    const detector = { kind: 'localStorage' as const, keys: ['sb-acme-auth-token'] };
+    const app = await addApp(input({ detector }));
+    const token = (email: string) => {
+      const part = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url');
+      const jwt = `${part({ alg: 'HS256' })}.${part({ sub: `u-${email}`, email })}.sig`;
+      return JSON.stringify({ access_token: jwt, user: { id: `u-${email}`, email } });
+    };
+    const session = (email: string | null, capturedAt: number): Snapshot => ({
+      v: 1,
+      capturedAt,
+      origin: 'https://acme.test',
+      cookies: [],
+      storage: { localStorage: email ? { 'sb-acme-auth-token': token(email) } : { other: 'x' } },
+    });
+    await addAccount(app.id, 'acc_a', { label: 'Admin', email: 'a@acme.test', capturedAt: 1 });
+    await storeSnapshot('acc_a', session('a@acme.test', 1));
+    const appDef = (await readState()).apps[0]!;
+    // Files someone could send: the account named as this one, carrying another sign-in.
+    const file = (account: Record<string, unknown>, snapshot: Snapshot) =>
+      JSON.stringify({
+        format: 'swapdeck-backup',
+        version: 1,
+        createdAt: 5,
+        encrypted: false,
+        shared: true,
+        payload: {
+          apps: [appDef],
+          accounts: [
+            {
+              id: 'acc_x',
+              appId: appDef.id,
+              color: '#6d4cff',
+              pins: [],
+              recents: [],
+              order: 0,
+              createdAt: 0,
+              ...account,
+            },
+          ],
+          active: {},
+          settings: {},
+          sessions: { acc_x: snapshot },
+          workspaces: [],
+        },
+      });
+    const kept = async () => (await loadSnapshot('acc_a')).storage.localStorage?.['sb-acme-auth-token'];
+
+    // By identity: "a@acme.test", newer, holding b's session.
+    await importBackup(file({ label: 'Admin', email: 'a@acme.test' }, session('b@acme.test', 9)), undefined, 'merge');
+    expect(await kept()).toBe(token('a@acme.test'));
+    // By label (no identity in the file): b's session again.
+    await importBackup(file({ label: 'Admin' }, session('b@acme.test', 9)), undefined, 'merge');
+    expect(await kept()).toBe(token('a@acme.test'));
+    // A signed-out session (the site says who is signed in, and nobody is).
+    await importBackup(file({ label: 'Admin', email: 'a@acme.test' }, session(null, 9)), undefined, 'merge');
+    expect(await kept()).toBe(token('a@acme.test'));
+    expect((await readState()).accounts.find((item) => item.id === 'acc_a')?.capturedAt).toBe(1);
+    // A new account the file names "c@acme.test" doesn't get b's sign-in either.
+    expect(
+      await importBackup(file({ label: 'C', email: 'c@acme.test' }, session('b@acme.test', 9)), undefined, 'merge'),
+    ).toMatchObject({ accounts: 1, sessions: 0 });
+
+    // The same person's newer session is taken, as before.
+    expect(
+      await importBackup(file({ label: 'Admin', email: 'a@acme.test' }, session('a@acme.test', 9)), undefined, 'merge'),
+    ).toMatchObject({ sessions: 1 });
+    expect((await readState()).accounts.find((item) => item.id === 'acc_a')?.capturedAt).toBe(9);
+  });
+
   it('replaces everything, keeping ids', async () => {
     const app = await addApp(input());
     await addAccount(app.id, 'acc_a');

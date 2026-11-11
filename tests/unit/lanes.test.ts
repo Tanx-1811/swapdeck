@@ -162,6 +162,20 @@ describe('the jar', () => {
   });
 });
 
+describe('cookies that can go in a header', () => {
+  it('leaves out of a jar what would break the Cookie header of its rules', () => {
+    const base = { domain: 'acme.test', path: '/', secure: false, httpOnly: false, hostOnly: true, session: true };
+    const cookies: CookieRecord[] = [
+      { ...base, name: 'ok', value: 'a=b\tc', sameSite: 'lax' },
+      { ...base, name: 'inject', value: 'x; sid=evil', sameSite: 'lax' },
+      { ...base, name: 'line', value: 'x\r\ny', sameSite: 'lax' },
+      { ...base, name: 'big', value: 'x'.repeat(5000), sameSite: 'lax' },
+      { ...base, name: 'a;b', value: '1', sameSite: 'lax' },
+    ];
+    expect(laneJar(cookies, ['acme.test'], NOW).map((cookie) => cookie.name)).toEqual(['ok']);
+  });
+});
+
 describe('which cookies a request carries', () => {
   const jar = jarOf(
     ['root=1; Path=/; Domain=acme.test'],

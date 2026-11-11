@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { addApp } from '../../src/background/admin';
+import { importSession } from '../../src/background/import-session';
+import { loadSnapshot, storeSnapshot, update } from '../../src/background/state';
 import { parseSessionExport } from '../../src/core/session-import';
+import type { Snapshot } from '../../src/core/types';
+import type { AppInput } from '../../src/shared/protocol';
+import { readState } from '../../src/shared/store';
 
 const APP = { domains: ['acme.test'], origin: 'https://app.acme.test' };
 const NOW = 1_800_000_000;
@@ -106,6 +112,32 @@ describe('importing an exported sign-in', () => {
     expect(parse('[not json')).toBeNull();
   });
 
+  it("never takes a sameSite or anything else from an object's prototype", () => {
+    const result = parse(
+      JSON.stringify([
+        { domain: 'acme.test', name: 'a', value: '1', path: '/', sameSite: 'constructor' },
+        { domain: 'acme.test', name: 'b', value: '1', path: '/', sameSite: '__proto__' },
+        { domain: 'acme.test', name: 'c', value: '1', path: '/', sameSite: 'toString' },
+      ]),
+    );
+    expect(result?.cookies.map((cookie) => cookie.sameSite)).toEqual(['unspecified', 'unspecified', 'unspecified']);
+  });
+
+  it("leaves out cookies a browser can't send (separators or control characters)", () => {
+    const result = parse(
+      JSON.stringify([
+        { domain: 'acme.test', name: 'ok', value: 'fine', path: '/' },
+        { domain: 'acme.test', name: 'inject', value: 'x; sid=evil', path: '/' },
+        { domain: 'acme.test', name: 'line', value: 'x\r\nSet-Cookie: y=1', path: '/' },
+        { domain: 'acme.test', name: 'a=b', value: '1', path: '/' },
+        { domain: 'acme.test', name: 'semi;colon', value: '1', path: '/' },
+        { domain: 'acme.test', name: '', value: '', path: '/' },
+      ]),
+    );
+    expect(result?.cookies.map((cookie) => cookie.name)).toEqual(['ok']);
+    expect(result?.skipped).toBe(5);
+  });
+
   it('keeps one cookie per name, domain and path (the last wins)', () => {
     const result = parse(
       JSON.stringify([
@@ -114,5 +146,71 @@ describe('importing an exported sign-in', () => {
       ]),
     );
     expect(result?.cookies.map((cookie) => cookie.value)).toEqual(['2']);
+  });
+});
+
+describe('saving an imported sign-in', () => {
+  const appInput = (overrides: Partial<AppInput> = {}): AppInput => ({
+    name: 'Acme',
+    color: '#e8590c',
+    domains: ['acme.test'],
+    origin: 'https://app.acme.test',
+    homeUrl: 'https://app.acme.test/',
+    stagingPath: '/robots.txt',
+    storage: { cookies: true, localStorage: true, sessionStorage: false, indexedDB: false },
+    detector: { kind: 'localStorage', keys: ['sb-acme-auth-token'] },
+    ...overrides,
+  });
+  const saved: Snapshot = {
+    v: 1,
+    capturedAt: 1,
+    origin: 'https://app.acme.test',
+    cookies: [],
+    storage: { localStorage: { token: 'good' } },
+  };
+  const cookiesOnly = JSON.stringify([{ domain: 'app.acme.test', name: 'sid', value: 'abc', path: '/' }]);
+
+  beforeEach(async () => {
+    await chrome.storage.local.clear();
+    await chrome.storage.session.clear();
+  });
+
+  async function withAccount(overrides: Partial<AppInput> = {}) {
+    const app = await addApp(appInput(overrides));
+    await update((draft) => {
+      draft.accounts.push({
+        id: 'acc_a',
+        appId: app.id,
+        label: 'A',
+        email: 'a@acme.test',
+        color: '#6d4cff',
+        pins: [],
+        recents: [],
+        order: 0,
+        createdAt: 0,
+        switchCount: 0,
+        capturedAt: 1,
+      });
+    });
+    await storeSnapshot('acc_a', saved);
+    return app;
+  }
+
+  it('never puts a signed-out sign-in into a chosen account', async () => {
+    const app = await withAccount();
+    // The site says who is signed in through local storage; the export has none: nobody is.
+    await expect(importSession(app.id, cookiesOnly, 'acc_a')).rejects.toMatchObject({ code: 'NO_SESSION' });
+    await expect(importSession(app.id, cookiesOnly, 'new')).rejects.toMatchObject({ code: 'NO_SESSION' });
+    expect((await loadSnapshot('acc_a')).storage.localStorage).toEqual({ token: 'good' });
+    expect((await readState()).accounts).toHaveLength(1);
+  });
+
+  it('never saves an empty session (cookies an app does not keep)', async () => {
+    const app = await withAccount({
+      storage: { cookies: false, localStorage: true, sessionStorage: false, indexedDB: false },
+      detector: { kind: 'none' },
+    });
+    await expect(importSession(app.id, cookiesOnly, 'acc_a')).rejects.toMatchObject({ code: 'NO_SESSION' });
+    expect((await loadSnapshot('acc_a')).storage.localStorage).toEqual({ token: 'good' });
   });
 });

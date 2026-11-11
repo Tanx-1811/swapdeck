@@ -5,6 +5,7 @@
  * `Cookie:` header. Only cookies of the app's own sites are kept, and expired ones are dropped.
  */
 import { hostMatchesDomain, normalizeDomain } from './domains';
+import { sendableCookie } from './lanes';
 import type { CookieRecord } from './types';
 
 export type ImportedSession = {
@@ -19,13 +20,14 @@ export type ImportedSession = {
 /** Larger pastes aren't sign-ins. */
 export const MAX_IMPORT_LENGTH = 2_000_000;
 
-const SAME_SITE: Record<string, CookieRecord['sameSite']> = {
-  lax: 'lax',
-  strict: 'strict',
-  none: 'no_restriction',
-  no_restriction: 'no_restriction',
-  unspecified: 'unspecified',
-};
+// A Map: a value like "constructor" or "__proto__" must not find anything of an object's prototype.
+const SAME_SITE = new Map<string, CookieRecord['sameSite']>([
+  ['lax', 'lax'],
+  ['strict', 'strict'],
+  ['none', 'no_restriction'],
+  ['no_restriction', 'no_restriction'],
+  ['unspecified', 'unspecified'],
+]);
 
 function text(value: unknown, max: number): string | null {
   return typeof value === 'string' && value.length <= max ? value : null;
@@ -39,6 +41,8 @@ function fromObject(value: unknown): CookieRecord | null {
   const cookieValue = text(item.value, 16_384);
   const rawDomain = text(item.domain, 253) ?? text(item.host, 253);
   if (name === null || cookieValue === null || !rawDomain) return null;
+  // Separators or control characters would break the Cookie header (or add cookies to it).
+  if (!sendableCookie(name, cookieValue)) return null;
   const bare = normalizeDomain(rawDomain);
   if (!bare) return null;
   // Exports mark domain cookies with a leading dot, or hostOnly: false.
@@ -57,7 +61,7 @@ function fromObject(value: unknown): CookieRecord | null {
     httpOnly: item.httpOnly === true,
     hostOnly,
     session: expiry === undefined || item.session === true,
-    sameSite: SAME_SITE[sameSiteRaw] ?? 'unspecified',
+    sameSite: SAME_SITE.get(sameSiteRaw) ?? 'unspecified',
   };
   if (!cookie.session && expiry !== undefined) cookie.expirationDate = expiry;
   return cookie;

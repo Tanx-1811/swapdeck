@@ -7,6 +7,7 @@ import {
   type BackupPayload,
 } from '../core/backup';
 import { createVault, CryptoError, encryptWithPassword, isSealedBox, seal, unlockVault, unseal } from '../core/crypto';
+import { sessionFitsAccount } from '../core/decide';
 import { appForUrl, hostMatchesDomain, matchPatterns } from '../core/domains';
 import { sameIdentity } from '../core/identity';
 import { cleanLinkRules } from '../core/links';
@@ -642,14 +643,18 @@ export async function importBackup(
     }
     for (const account of payload.accounts) {
       const appId = appIdMap.get(account.appId);
-      if (!appId) continue;
+      const app = draft.apps.find((item) => item.id === appId);
+      if (!appId || !app) continue;
       const siblings = draft.accounts.filter((item) => item.appId === appId);
       const identity = { id: account.identityId, email: account.email, name: account.name };
       const existing = siblings.find((item) =>
         account.identityId || account.email ? sameIdentity(item, identity) : item.label === account.label,
       );
       // A sign-in saved for another main address can't be restored on this app's.
-      const session = otherOrigin.has(account.appId) ? undefined : payload.sessions[account.id];
+      let session = otherOrigin.has(account.appId) ? undefined : payload.sessions[account.id];
+      // The file says whose it is; the sign-in itself must agree (a file can be made by anyone):
+      // never another person's, nor a signed-out one, into an account (here or new).
+      if (session && !sessionFitsAccount(existing ?? account, session, app.detector)) session = undefined;
       if (existing) {
         accountIdMap.set(account.id, existing.id);
         if (session && session.capturedAt > (existing.capturedAt ?? 0)) {

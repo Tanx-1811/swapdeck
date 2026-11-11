@@ -206,7 +206,18 @@ export function purgeExpired(jar: readonly CookieRecord[], nowSeconds = Date.now
   return jar.filter((cookie) => !isExpired(cookie, nowSeconds));
 }
 
-/** Only the cookies of the given sites, unexpired, one per name/domain/path. */
+/**
+ * Whether a browser keeps and sends a cookie of this name and value: not empty, not too large, a
+ * name without separators or control characters, a value without ";" or control characters (tabs
+ * aside). Anything else would break a Cookie header, or add cookies to it.
+ */
+export function sendableCookie(name: string, value: string): boolean {
+  if ((!name && !value) || name.length + value.length > MAX_COOKIE_SIZE) return false;
+  // eslint-disable-next-line no-control-regex
+  return !/[;=\u0000-\u001f\u007f]/.test(name) && !/[;\u0000-\u0008\u000a-\u001f\u007f]/.test(value);
+}
+
+/** Only the cookies of the given sites, unexpired, one per name/domain/path, that can be sent. */
 export function laneJar(
   cookies: readonly CookieRecord[],
   domains: readonly string[],
@@ -214,7 +225,7 @@ export function laneJar(
 ): CookieRecord[] {
   const jar: CookieRecord[] = [];
   for (const cookie of cookies) {
-    if (isExpired(cookie, nowSeconds)) continue;
+    if (isExpired(cookie, nowSeconds) || !sendableCookie(cookie.name, cookie.value)) continue;
     if (!domains.some((domain) => hostMatchesDomain(bareDomain(cookie), domain))) continue;
     const index = jar.findIndex((item) => sameSlot(item, cookie));
     if (index === -1) jar.push(cookie);

@@ -1,4 +1,4 @@
-import type { SaveDecision } from '../core/decide';
+import { isEmptySnapshot, type SaveDecision } from '../core/decide';
 import { detectIdentity, hasIdentity, isSpecificDetector, sameIdentity } from '../core/identity';
 import { parseSessionExport } from '../core/session-import';
 import type { Snapshot } from '../core/types';
@@ -32,10 +32,15 @@ export async function importSession(
     cookies: app.storage.cookies ? parsed.cookies : [],
     storage: localStorage ? { localStorage } : {},
   };
-  const identity = detectIdentity(app.detector, { cookies: parsed.cookies, localStorage: parsed.localStorage });
+  // Who it is, from what is saved (what the app doesn't keep doesn't sign anyone in).
+  if (isEmptySnapshot(snapshot)) throw new SwapdeckError('NO_SESSION', 'import');
+  const identity = detectIdentity(app.detector, { cookies: snapshot.cookies, localStorage });
   if (identity) snapshot.identity = identity;
   const strong = identity?.confidence === 'strong' ? identity : null;
   const accounts = state.accounts.filter((account) => account.appId === app.id);
+  // A site that says who is signed in, and nobody is: not a sign-in worth saving, into any account
+  // (a chosen one would lose its working session to it).
+  if (!strong && isSpecificDetector(app.detector)) throw new SwapdeckError('NO_SESSION', 'signed-out');
 
   let decision: Exclude<SaveDecision, { kind: 'skip' }>;
   if (target === 'new') {
@@ -47,8 +52,6 @@ export async function importSession(
       throw new SwapdeckError('INVALID', 'identity');
     decision = { kind: 'existing', accountId: account.id };
   } else {
-    // A site that says who is signed in, and nobody is: not a sign-in worth saving.
-    if (!strong && isSpecificDetector(app.detector)) throw new SwapdeckError('NO_SESSION', 'signed-out');
     const owner = strong ? accounts.find((account) => sameIdentity(account, strong)) : undefined;
     decision = owner ? { kind: 'existing', accountId: owner.id } : { kind: 'new' };
   }

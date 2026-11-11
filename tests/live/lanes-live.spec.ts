@@ -23,6 +23,20 @@ const presets = only ? PRESETS.filter((preset) => only.includes(preset.id)) : PR
 const BATCH = 12;
 const SETTLE_MS = 4_000;
 const SW_REFUSED = 'Service workers are off in a separate tab';
+/**
+ * Errors a site throws by itself, from a race in its own code that a reload with different timing
+ * sets off — checked to be no fault of separate tabs. They count as notes, not problems.
+ *
+ * - Trello: react-google-recaptcha-v3 clears `___grecaptcha_cfg` while recaptcha__en.js is still
+ *   starting. It happens on a reload of a tab that loaded the page before, even once the lane is
+ *   closed and no listener, page script or rule of Swapdeck is left; reCAPTCHA still hands out
+ *   tokens afterwards.
+ */
+const SITE_RACES: { id: string; message: RegExp }[] = [
+  { id: 'trello', message: /^Missing required parameters: sitekey$/ },
+];
+const siteRace = (id: string, message: string) =>
+  SITE_RACES.some((race) => race.id === id && race.message.test(message));
 
 type Look = {
   url: string;
@@ -167,9 +181,11 @@ for (let start = 0; start < presets.length; start += BATCH) {
           // that doesn't catch the refusal logs it, which is expected.
           const refused = seen.errors.filter((message) => message.includes(SW_REFUSED));
           if (refused.length) line.notes.push('service worker refused');
-          const newErrors = seen.errors.filter(
+          const newAll = seen.errors.filter(
             (message) => !message.includes(SW_REFUSED) && !before.has(normalize(message)),
           );
+          const newErrors = newAll.filter((message) => !siteRace(preset.id, message));
+          if (newAll.length > newErrors.length) line.notes.push("the site's own race (separate tab)");
           // Requests to the app that were answered in the ordinary tab but failed here (CORS,
           // blocked…). A request that fails in both, or that the ordinary tab never made, says
           // nothing about separate tabs.
@@ -196,7 +212,9 @@ for (let start = 0; start < presets.length; start += BATCH) {
           const watchedAgain = watch(plain.page, preset.domains);
           await plain.page.reload({ waitUntil: 'domcontentloaded', timeout: 25_000 }).catch(() => undefined);
           const again = await look(plain.page, watchedAgain);
-          const againErrors = again.errors.filter((message) => !before.has(normalize(message)));
+          const againAll = again.errors.filter((message) => !before.has(normalize(message)));
+          const againErrors = againAll.filter((message) => !siteRace(preset.id, message));
+          if (againAll.length > againErrors.length) line.notes.push("the site's own race on reload (ordinary tab)");
           const againFailures = again.failed.filter((request) => worked.has(request));
           if (againErrors.length)
             line.problems.push(`ordinary tab, new errors: ${againErrors.slice(0, 3).join(' | ')}`);

@@ -961,17 +961,20 @@ kbd {
   stroke-width: 2.25;
 }
 
-/* Open in a separate tab (its own sign-in, apart from the browser's other tabs). */
+/*
+ * Open in a separate tab (its own sign-in, apart from the browser's other tabs): indigo (chàm),
+ * so it never reads as the seal of the account in use.
+ */
 .flag-lane {
   display: inline-flex;
   flex: none;
   align-items: center;
   gap: 3px;
   padding: 0 6px 0 4px;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--info);
   border-radius: var(--r-xs);
-  background: var(--accent-soft);
-  color: var(--accent-text);
+  background: var(--info-soft);
+  color: var(--info);
   font-size: 9.5px;
   font-weight: 700;
   line-height: 1.5;
@@ -1010,6 +1013,8 @@ kbd {
 
 .callout__body {
   display: grid;
+  /* Never wider than the callout, whatever a title or a name inside wants. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   min-width: 0;
 }
@@ -1023,6 +1028,16 @@ kbd {
 .callout__text {
   margin: 0;
   color: var(--text-2);
+  /* Long emails and names wrap instead of widening the popup. */
+  overflow-wrap: anywhere;
+}
+
+.callout__text > p {
+  margin: 0;
+}
+
+.callout__text > p + p {
+  margin-top: 4px;
 }
 
 .callout__actions {
@@ -1116,6 +1131,11 @@ button.chip:hover {
 .pill--warning {
   background: var(--warning-soft);
   color: var(--warning);
+}
+
+.pill--info {
+  background: var(--info-soft);
+  color: var(--info);
 }
 
 .pill--muted {
@@ -1234,6 +1254,7 @@ button.chip:hover {
 
 .dialog__form {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   padding: 20px;
 }
@@ -1259,6 +1280,8 @@ button.chip:hover {
   color: var(--text-2);
   font-size: 13.5px;
   line-height: 1.55;
+  /* A long email or name in a question wraps instead of widening the dialog. */
+  overflow-wrap: anywhere;
 }
 
 .dialog__list {

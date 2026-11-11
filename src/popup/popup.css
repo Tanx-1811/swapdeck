@@ -327,6 +327,21 @@ body {
   font-weight: 650;
 }
 
+/* The current tab is a separate tab: "Separate tab · <account>" on one line. */
+.lane-card__title {
+  display: flex;
+  gap: 5px;
+  min-width: 0;
+}
+
+.lane-card__title > span {
+  flex: none;
+}
+
+.lane-card__title > .truncate {
+  flex: 0 1 auto;
+}
+
 .account__chips {
   grid-column: 1 / -1;
   display: flex;

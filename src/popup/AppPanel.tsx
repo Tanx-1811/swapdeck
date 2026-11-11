@@ -63,14 +63,16 @@ export function AppPanel({ app, onBack }: { app: AppDef; onBack?: () => void }) 
   const accountIds = useMemo(() => accounts.map((account) => account.id), [accounts]);
   const previous = usePreviousSessions(accountIds);
 
-  // With many accounts, the one in use may sit far down the list: bring it into view once.
+  // With many accounts, the one in use may sit far down the list: bring it into view once. Not in
+  // a separate tab, whose card at the top matters more than the account of the other tabs.
+  const inLane = hereLane !== null;
   useEffect(() => {
-    if (!activeId) return;
+    if (!activeId || inLane) return;
     listRef.current
       ?.querySelector<HTMLElement>(`[data-account="${CSS.escape(activeId)}"]`)
       ?.scrollIntoView({ block: 'nearest' });
     // Only when the panel opens (or another account comes into use), not on every update.
-  }, [activeId]);
+  }, [activeId, inLane]);
 
   // Keyboard: 1–9 switch, arrows move between accounts.
   useEffect(() => {
@@ -328,7 +330,7 @@ export function AppPanel({ app, onBack }: { app: AppDef; onBack?: () => void }) 
               account={account}
               index={index}
               active={account.id === activeId}
-              busy={busy === `acc:${account.id}`}
+              busy={busy === `acc:${account.id}` || busy === `lane:${account.id}`}
               disabled={busy !== null}
               menu={accountMenu(account)}
               onSwitch={() => void switchAccount(app, account)}

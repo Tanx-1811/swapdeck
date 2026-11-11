@@ -254,8 +254,9 @@ test.describe('separate tabs in the popup', () => {
     if (process.env.SHOTS) await popup.screenshot({ path: `${process.env.SHOTS}/popup-normal-tab.png` });
 
     const inLane = await openPopup(lanePage);
-    await expect(inLane.locator('.callout--brand').first()).toContainText('Separate tab');
-    await expect(inLane.locator('.callout--brand').first()).toContainText('alice@acme.test');
+    const card = inLane.locator('.callout', { hasText: 'Separate tab' });
+    await expect(card).toContainText(alice.label);
+    await expect(card).toContainText('Signed in here as alice@acme.test');
     await expect(inLane.getByRole('button', { name: 'Use in all tabs' })).toBeVisible();
     if (process.env.SHOTS) await inLane.screenshot({ path: `${process.env.SHOTS}/popup-lane-tab.png` });
 

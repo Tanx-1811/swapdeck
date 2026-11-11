@@ -40,8 +40,11 @@ export function AppList({
     >
       {ordered.map((app) => {
         const accounts = state.accounts.filter((account) => account.appId === app.id);
-        const active = accounts.find((account) => account.id === state.active[app.id]);
         const current = app.id === probe.appId;
+        // The current tab is a separate tab: this row says whose it is, not the other tabs' account.
+        const lane = current ? probe.lane : undefined;
+        const laneAccount = lane?.accountId ? accounts.find((account) => account.id === lane.accountId) : undefined;
+        const active = lane ? laneAccount : accounts.find((account) => account.id === state.active[app.id]);
         const warn = live[app.id]?.mismatch;
         return (
           <div key={app.id} role="listitem">
@@ -55,14 +58,21 @@ export function AppList({
               <span className="app-row__text">
                 <span className="app-row__name">
                   <span className="truncate">{app.name}</span>
-                  {current && <span className="pill pill--brand">{t('popup.thisTab')}</span>}
+                  {current &&
+                    (lane ? (
+                      <span className="pill pill--info">{t('lane.tag')}</span>
+                    ) : (
+                      <span className="pill pill--brand">{t('popup.thisTab')}</span>
+                    ))}
                 </span>
                 <span className="app-row__meta truncate">
                   {active
                     ? `${active.label}${active.email && active.email !== active.label ? ` · ${active.email}` : ''}`
-                    : accounts.length
-                      ? t('apps.activeNone')
-                      : t('apps.noAccounts')}
+                    : lane
+                      ? t('lane.scratch')
+                      : accounts.length
+                        ? t('apps.activeNone')
+                        : t('apps.noAccounts')}
                 </span>
               </span>
               {warn && <TriangleAlert className="app-row__warn" aria-label={t('badge.mismatch', { app: app.name })} />}

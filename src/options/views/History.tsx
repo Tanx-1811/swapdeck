@@ -117,7 +117,8 @@ export function History() {
                     </td>
                     <td>
                       <span className="history-accounts">
-                        {entry.kind !== 'save' && entry.kind !== 'auto-save' && (
+                        {/* A save, or a separate tab opened, has no "from". */}
+                        {entry.kind !== 'save' && entry.kind !== 'auto-save' && entry.kind !== 'lane' && (
                           <>
                             <span>{entry.fromLabel ?? (entry.fromId === null ? t('history.signedOut') : '—')}</span>
                             <ArrowRight aria-hidden="true" />

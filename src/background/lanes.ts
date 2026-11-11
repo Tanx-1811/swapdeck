@@ -18,19 +18,25 @@ import { detectIdentity, hasIdentity, isSpecificDetector, sameIdentity } from '.
 import {
   cookieApplies,
   cookieHeader,
+  cookieSets,
   LANE_REGEX_BUDGET,
   LANE_RULE_BASE,
   LANE_RULE_BUDGET,
   LANE_WIDE_RULES,
+  LAX_ALLOWING_UNSAFE_SECONDS,
   laneJar,
   laneRules,
   newLaneToken,
   parseCookie,
   purgeExpired,
   regexCount,
+  sameSite,
+  sameSiteKind,
   scriptCookies,
+  settableCrossSite,
   storeCookie,
 } from '../core/lanes';
+import type { CookieRecord } from '../core/types';
 import { laneTitle, sanitizeRestore, type Lane, type LaneRestore } from '../core/lane-registry';
 import { recentFor, upsertRecent } from '../core/recents';
 import type { Account, AppDef, Identity, Snapshot, WebStorageDump } from '../core/types';
@@ -95,6 +101,51 @@ function warn(what: string) {
 
 /** Rule ids of lanes that ended, still to be removed (by the rules queue, never alongside it). */
 const retired = new Map<string, number[]>();
+/** How many of each lane's rules use a regex (Chrome limits those separately); unknown after a restart. */
+const regexOf = new Map<string, number>();
+
+/** Chrome 145+ can match a request's top-level page (`topDomains`): SameSite then sees frames of other sites. */
+const topDomainsKnown = (): boolean =>
+  Boolean(
+    (chrome.declarativeNetRequest as { RuleConditionKeys?: Record<string, string> } | undefined)?.RuleConditionKeys
+      ?.TOP_DOMAINS,
+  );
+
+/**
+ * Lane tabs whose next navigation is the browser's own (Swapdeck navigates them, or loads one again
+ * that went out without the lane's Strict cookies): rules give it every cookie, as Chrome does for
+ * a navigation no page started (declarative rules can't tell it from another site's link). Until
+ * the page answers, or a few seconds.
+ */
+const navTabs = new Map<number, { at: number; requestId?: string }>();
+const NAV_ALLOWANCE_MS = 15_000;
+
+/** When the lane's cookies were set (key: lane token and cookie slot), for Chrome's two-minute Lax exception. */
+const bornAt = new Map<string, number>();
+const slotKey = (token: string, cookie: Pick<CookieRecord, 'name' | 'domain' | 'path' | 'hostOnly'>) =>
+  `${token}|${cookie.name}|${cookie.domain.replace(/^\./, '').toLowerCase()}|${cookie.path}|${cookie.hostOnly}`;
+const youngTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+/** Lax-by-default cookies of the lane set less than two minutes ago (and when the youngest of them stops being so). */
+function youngCookies(lane: Lane): { young: (cookie: CookieRecord) => boolean; until: number | null } {
+  const now = Date.now();
+  let until: number | null = null;
+  const young = (cookie: CookieRecord) => {
+    if (cookie.sameSite !== 'unspecified') return false;
+    const born = bornAt.get(slotKey(lane.token, cookie));
+    if (born === undefined) return false;
+    const end = born + LAX_ALLOWING_UNSAFE_SECONDS * 1000;
+    if (end <= now) return false;
+    until = until === null ? end : Math.min(until, end);
+    return true;
+  };
+  return {
+    young,
+    get until() {
+      return until;
+    },
+  };
+}
 /**
  * When each lane tab's rules were last in place (after Chrome applied them). A request a tab sent
  * before that carried the browser's cookies, not the lane's: what its response sets isn't the lane's.
@@ -140,12 +191,26 @@ async function applyRules(token: string): Promise<void> {
   }
   lane.jar = purgeExpired(lane.jar);
   const tabIds = [...lane.tabIds];
-  const rules = laneRules({ token, tabIds, domains: app.domains, jar: lane.jar });
+  const now = Date.now();
+  const navTabIds = tabIds.filter((tabId) => (navTabs.get(tabId)?.at ?? 0) > now - NAV_ALLOWANCE_MS);
+  const youth = youngCookies(lane);
+  const rules = laneRules({
+    token,
+    tabIds,
+    domains: app.domains,
+    jar: lane.jar,
+    navTabIds,
+    topDomains: topDomainsKnown(),
+    young: youth.young,
+  });
   const others = allLanes().filter((item) => item !== lane);
   const total = others.reduce((sum, item) => sum + item.ruleIds.length, 0) + rules.length;
-  // Every lane rule but the lane-wide ones uses a regex.
+  // A lane whose rules this worker didn't write: at most all but its lane-wide ones use a regex.
   const regexes =
-    others.reduce((sum, item) => sum + Math.max(0, item.ruleIds.length - LANE_WIDE_RULES), 0) + regexCount(rules);
+    others.reduce(
+      (sum, item) => sum + (regexOf.get(item.token) ?? Math.max(0, item.ruleIds.length - LANE_WIDE_RULES)),
+      0,
+    ) + regexCount(rules);
   if (total > LANE_RULE_BUDGET || regexes > LANE_REGEX_BUDGET) throw new SwapdeckError('BUSY', 'lanes');
   const ids = ruleIdsFor(lane, rules.length);
   await chrome.declarativeNetRequest.updateSessionRules({
@@ -153,15 +218,53 @@ async function applyRules(token: string): Promise<void> {
     addRules: rules.map((rule, index) => ({ ...rule, id: ids[index]! }) as chrome.declarativeNetRequest.Rule),
   });
   lane.ruleIds = ids;
+  regexOf.set(token, regexCount(rules));
   if (laneByToken(token) !== lane) {
     // Ended while the rules were written: take them away again at once.
     await removeRules(ids);
     lane.ruleIds = [];
+    regexOf.delete(token);
     return;
   }
-  const now = Date.now();
-  for (const tabId of tabIds) if (!coveredAt.has(tabId)) coveredAt.set(tabId, now);
+  const applied = Date.now();
+  for (const tabId of tabIds) if (!coveredAt.has(tabId)) coveredAt.set(tabId, applied);
+  // A young Lax-by-default cookie stops going on cross-site POSTs after two minutes.
+  clearTimeout(youngTimers.get(token));
+  youngTimers.delete(token);
+  const until = youth.until;
+  if (until !== null) {
+    youngTimers.set(
+      token,
+      setTimeout(() => void syncRules(token).catch(() => undefined), Math.max(0, until - Date.now()) + 50),
+    );
+  }
   await saveLanes();
+}
+
+/**
+ * The next navigation of a lane tab is the browser's own (Swapdeck's): its rules give it every
+ * cookie of the lane, Strict ones too. Only needed when the lane has Strict cookies.
+ */
+async function allowNav(lane: Lane, tabId: number): Promise<void> {
+  if (!lane.jar.some((cookie) => sameSiteKind(cookie) === 'strict')) return;
+  const nav = { at: Date.now() };
+  navTabs.set(tabId, nav);
+  await syncRules(lane.token).catch(() => undefined);
+  setTimeout(() => {
+    if (navTabs.get(tabId) === nav) endNav(tabId);
+  }, NAV_ALLOWANCE_MS + 100);
+}
+
+/**
+ * The browser's own navigation of a tab got its answer (`requestId`: that navigation's, not one
+ * that was on its way before): its next ones are judged as usual again.
+ */
+function endNav(tabId: number, requestId?: string): void {
+  const nav = navTabs.get(tabId);
+  if (!nav || (requestId !== undefined && nav.requestId !== requestId)) return;
+  navTabs.delete(tabId);
+  const lane = laneOfTab(tabId);
+  if (lane) void syncRules(lane.token).catch(() => undefined);
 }
 
 const dirtyRules = new Set<string>();
@@ -258,6 +361,42 @@ async function refreshMachinery(): Promise<void> {
   }
 
   await syncContentScripts(patterns).catch(warn('lane page scripts'));
+  await hideInOpenPages(patterns).catch(warn('lane page scripts'));
+}
+
+/** Sites whose already open pages got the page script (it hides the lanes' names there). */
+let hiddenIn = new Set<string>();
+
+/**
+ * Pages of a lane's app that were open before its first lane started didn't get the page script
+ * (registered scripts run in pages loaded after): it is put into them now, before any lane's names
+ * exist on the site, so they never see, list or clear them. It only hides there (no lane in those
+ * tabs), and a page that already has it is left as it is.
+ */
+async function hideInOpenPages(patterns: string[]): Promise<void> {
+  const added = patterns.filter((pattern) => !hiddenIn.has(pattern));
+  hiddenIn = new Set(patterns);
+  if (!added.length) return;
+  const tabs = await chrome.tabs.query({ url: added }).catch(() => [] as chrome.tabs.Tab[]);
+  await Promise.all(
+    tabs
+      .filter((tab) => tab.id !== undefined && !laneOfTab(tab.id) && !tab.discarded)
+      .map((tab) =>
+        withTimeout(
+          chrome.scripting.executeScript({
+            target: { tabId: tab.id!, allFrames: true },
+            files: ['content/lane-main.js'],
+            world: 'MAIN' as chrome.scripting.ExecutionWorld,
+            injectImmediately: true,
+          }),
+          3000,
+        ).catch(() => undefined),
+      ),
+  );
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {
+  return Promise.race([promise, new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), ms))]);
 }
 
 async function syncContentScripts(patterns: string[]): Promise<void> {
@@ -333,7 +472,47 @@ async function appsNow(): Promise<AppDef[]> {
  */
 const uncovered = new Set<string>();
 
+/** The page each lane tab shows (its top-level address): a frame inside another site's page is cross-site. */
+const topUrl = new Map<number, string>();
+
+const CALL_TYPES = new Set(['xmlhttprequest', 'other']);
+
+function hostOfOrigin(origin: string | undefined): string | null {
+  if (!origin || origin === 'null') return null;
+  try {
+    return new URL(origin).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+const onAppDomain = (app: AppDef, host: string | null) =>
+  host !== null && app.domains.some((domain) => hostMatchesDomain(host, domain));
+
+/**
+ * What a response of a lane tab may set, as Chrome decides it: `any` cookie on a top-level
+ * navigation or a same-site request (an initiator of the same site, in a top-level page of that
+ * site); only SameSite=None ones (`cross`) on a request of another site's page, or of a frame inside
+ * one; nothing (`none`) on a call of another site's page, which went without cookies (its rules).
+ */
+function cookieContext(
+  details: { type: string; url: string; initiator?: string },
+  app: AppDef,
+  top: string | null | undefined,
+): 'any' | 'cross' | 'none' {
+  if (details.type === 'main_frame') return 'any';
+  const host = new URL(details.url).hostname.toLowerCase();
+  const from = hostOfOrigin(details.initiator);
+  const sameSiteInitiator = from !== null && sameSite(from, host);
+  if (!sameSiteInitiator && CALL_TYPES.has(details.type) && !onAppDomain(app, from)) return 'none';
+  const topHost = parseHttpUrl(top)?.hostname;
+  return sameSiteInitiator && (!topHost || sameSite(topHost, host)) ? 'any' : 'cross';
+}
+
 function onHeadersReceived(details: chrome.webRequest.OnHeadersReceivedDetails): undefined {
+  // The browser's own navigation got its answer (not a redirect): its allowance ends.
+  if (details.type === 'main_frame' && details.frameId === 0 && (details.statusCode < 300 || details.statusCode >= 400))
+    endNav(details.tabId, details.requestId);
   const lane = laneOfTab(details.tabId);
   if (!lane) return undefined;
   if (uncovered.delete(details.requestId)) return undefined;
@@ -344,31 +523,50 @@ function onHeadersReceived(details: chrome.webRequest.OnHeadersReceivedDetails):
   void (async () => {
     const app = (await appsNow()).find((item) => item.id === lane.appId);
     const url = parseHttpUrl(details.url);
-    if (!app || !url || !app.domains.some((domain) => hostMatchesDomain(url.hostname, domain))) return;
-    takeCookies(lane, app, url, lines, 'header');
+    if (!app || !url || !onAppDomain(app, url.hostname)) return;
+    const top =
+      details.type === 'main_frame' ? details.url : (topUrl.get(details.tabId) ?? tabUrl(await getTab(details.tabId)));
+    const context = cookieContext(details, app, top);
+    if (context === 'none') return;
+    takeCookies(lane, app, url, lines, 'header', context === 'cross');
   })().catch(warn('lane cookies'));
   return undefined;
 }
 
-/** Stores cookies set for the lane and, when anything changed, updates its rules. */
-function takeCookies(lane: Lane, app: AppDef, url: URL, lines: string[], from: 'header' | 'script'): boolean {
+/**
+ * Stores cookies set for the lane and, when anything changed, updates its rules. In a cross-site
+ * context (a frame or a request of another site's page) only SameSite=None cookies are set, as in Chrome.
+ */
+function takeCookies(
+  lane: Lane,
+  app: AppDef,
+  url: URL,
+  lines: string[],
+  from: 'header' | 'script',
+  crossSite = false,
+): boolean {
   let changed = false;
   for (const line of lines) {
     const parsed = parseCookie(line, url, from);
-    if (!parsed) continue;
+    if (!parsed || (crossSite && !settableCrossSite(parsed.cookie))) continue;
     if (!app.domains.some((domain) => hostMatchesDomain(parsed.cookie.domain.replace(/^\./, ''), domain))) continue;
+    const key = slotKey(lane.token, parsed.cookie);
+    const existed = lane.jar.some((cookie) => slotKey(lane.token, cookie) === key);
     const next = storeCookie(lane.jar, parsed, from);
     if (next.changed) {
       lane.jar = next.jar;
       changed = true;
+      // A cookie keeps the time it was first set when it is set again (RFC 6265 §5.3).
+      if (parsed.expired) bornAt.delete(key);
+      else if (!existed) bornAt.set(key, Date.now());
     }
   }
   if (changed) {
     void saveLanes();
     void syncRules(lane.token).catch(() => undefined);
     scheduleCapture(lane.token);
-    // Set by a response: the pages' document.cookie learns it (their own writes they know already).
-    if (from === 'header') announceCookies(lane);
+    // The lane's pages and frames learn it (one that wrote it knows already; asking again is harmless).
+    announceCookies(lane);
   }
   return changed;
 }
@@ -384,12 +582,24 @@ function reloadOnce(tabId: number, run: () => Promise<unknown>): void {
   void run().catch(() => undefined);
 }
 
+/** Loads a lane tab's page again as the browser's own navigation (every cookie of the lane goes). */
+function loadAgain(lane: Lane, tabId: number, url: string): void {
+  reloadOnce(tabId, async () => {
+    await allowNav(lane, tabId);
+    await syncRules(lane.token);
+    await chrome.tabs.update(tabId, { url });
+  });
+}
+
 /**
- * A page of a lane went out with other cookies than its lane's (its rules were a moment behind:
- * cookies set by a redirect, a tab that just joined the lane): load it again once the rules are in
- * step. Only GET pages: a form is never sent twice.
+ * A page of a lane went out with other cookies than its lane's — its rules were a moment behind
+ * (cookies set by a redirect, a tab that just joined the lane), or it was the browser's own
+ * navigation (address bar, bookmark), which rules can't tell from another site's link and so sent
+ * without the lane's Strict cookies: load it again once the rules are in step. Only GET pages: a
+ * form is never sent twice.
  */
 function onSendHeaders(details: chrome.webRequest.OnSendHeadersDetails): void {
+  if (details.type === 'main_frame' && details.frameId === 0) void considerCandidate(details);
   const lane = laneOfTab(details.tabId);
   if (!lane) return;
   // Each hop of a redirect is judged on its own.
@@ -400,27 +610,146 @@ function onSendHeaders(details: chrome.webRequest.OnSendHeadersDetails): void {
   } else {
     uncovered.delete(details.requestId);
   }
-  if (details.type !== 'main_frame' || details.frameId !== 0 || details.method !== 'GET') return;
+  if (details.type !== 'main_frame' || details.frameId !== 0) return;
+  topUrl.set(details.tabId, details.url);
+  // The navigation an allowance was given for (the first one sent after it).
+  const nav = navTabs.get(details.tabId);
+  if (nav && nav.requestId === undefined && details.timeStamp >= nav.at) nav.requestId = details.requestId;
+  if (details.method !== 'GET') return;
   const url = parseHttpUrl(details.url);
   if (!url) return;
   const sent = details.requestHeaders?.find((header) => header.name.toLowerCase() === 'cookie')?.value ?? '';
-  const expected = cookieHeader(lane.jar.filter((cookie) => cookieApplies(cookie, url)));
-  if (sent === expected) return;
-  const tabId = details.tabId;
-  reloadOnce(tabId, async () => {
-    await syncRules(lane.token);
-    await chrome.tabs.update(tabId, { url: details.url });
+  const sets = cookieSets(lane.jar.filter((cookie) => cookieApplies(cookie, url)));
+  const full = cookieHeader(sets.full);
+  // Started by a page: every cookie when it is of the same site, Strict ones stay behind for another
+  // site's (what Chrome decides, with its full list of sites). Started by the browser: every cookie.
+  const inStep = details.initiator === undefined ? sent === full : sent === full || sent === cookieHeader(sets.topGet);
+  if (!inStep) loadAgain(lane, details.tabId, details.url);
+}
+
+// --- Tabs a lane's page opens ------------------------------------------------------
+
+/**
+ * Tabs the browser opened from a lane tab's link (middle or Ctrl-click, "Open link in new tab"),
+ * until their first page says who asked for them: they join the lane when its app's page did.
+ * Chrome also gives the active tab as "opener" of tabs other pages and extensions open, so the
+ * opener alone doesn't decide.
+ */
+const candidates = new Map<number, { token: string; at: number }>();
+const CANDIDATE_MS = 10_000;
+
+async function considerCandidate(details: chrome.webRequest.OnSendHeadersDetails): Promise<void> {
+  const candidate = candidates.get(details.tabId);
+  if (!candidate) return;
+  candidates.delete(details.tabId);
+  const lane = laneByToken(candidate.token);
+  if (!lane || Date.now() - candidate.at > CANDIDATE_MS || laneOfTab(details.tabId)) return;
+  const app = (await appsNow()).find((item) => item.id === lane.appId);
+  if (!app || !onAppDomain(app, hostOfOrigin(details.initiator))) return;
+  await joinTab(lane, details.tabId);
+  // Its first page went out before it was the lane's (with the browser's cookies): a GET loads
+  // again; a form is never sent twice (lane-main sends those into a tab that joined first).
+  if (details.method === 'GET') loadAgain(lane, details.tabId, details.url);
+}
+
+/** Puts a tab in a lane (out of any other) and resolves once the lane's rules cover it. */
+async function joinTab(lane: Lane, tabId: number): Promise<void> {
+  const previous = laneOfTab(tabId);
+  if (previous !== lane) {
+    addTabToLane(lane, tabId);
+    await saveLanes();
+    if (previous) void syncRules(previous.token).catch(() => undefined);
+  }
+  await syncRules(lane.token);
+  await groupTab(lane, tabId);
+  await refreshLaneBadge(tabId);
+}
+
+/**
+ * New windows a lane's page is opening (content/lane-main.ts): it opens a blank one, asks here
+ * (`opening`, from the lane tab) and tells the blank one a one-time nonce (`adopt`, from the new tab);
+ * once that tab is in the lane and covered by its rules, the page sends it where it was going. So
+ * a link to a new tab, a form posted into one or window.open never leaves with the browser's cookies.
+ */
+const openings = new Map<string, { token?: string; adoptedBy?: number; at: number; settle?: (ok: boolean) => void }>();
+const OPENING_MS = 4000;
+const NONCE = /^[a-z0-9]{24}$/;
+
+function dropOldOpenings(): void {
+  for (const [nonce, entry] of openings) if (Date.now() - entry.at > OPENING_MS * 2) openings.delete(nonce);
+}
+
+async function settleOpening(nonce: string): Promise<void> {
+  const entry = openings.get(nonce);
+  if (!entry?.token || entry.adoptedBy === undefined) return;
+  openings.delete(nonce);
+  const lane = laneByToken(entry.token);
+  const ok = lane !== null && !ending.has(lane.token);
+  if (ok) await joinTab(lane, entry.adoptedBy).catch(warn('separate tab'));
+  entry.settle?.(ok && laneOfTab(entry.adoptedBy) === lane);
+}
+
+/** The lane tab's page opens a window: answers once the new tab is the lane's (or not, after a while). */
+function onOpening(lane: Lane, nonce: string): Promise<boolean> {
+  dropOldOpenings();
+  // A page opens a few windows at a time, not hundreds.
+  if (openings.size > 100) return Promise.resolve(false);
+  const entry = openings.get(nonce) ?? { at: Date.now() };
+  if (entry.token) return Promise.resolve(false);
+  entry.token = lane.token;
+  openings.set(nonce, entry);
+  return new Promise<boolean>((resolve) => {
+    const timer = setTimeout(() => {
+      openings.delete(nonce);
+      resolve(false);
+    }, OPENING_MS);
+    entry.settle = (ok) => {
+      clearTimeout(timer);
+      resolve(ok);
+    };
+    void settleOpening(nonce);
   });
+}
+
+/** The blank window says which opening it is. */
+async function onAdopt(tabId: number, nonce: string): Promise<void> {
+  dropOldOpenings();
+  if (!openings.has(nonce) && openings.size > 100) return;
+  const entry = openings.get(nonce) ?? { at: Date.now() };
+  if (entry.adoptedBy !== undefined) return;
+  entry.adoptedBy = tabId;
+  openings.set(nonce, entry);
+  await settleOpening(nonce);
 }
 
 // --- Messages from the page relay (content/lane-relay.ts) ------------------------
 
-type RelayMessage = { swapdeckLane: true; kind: string; url?: unknown; token?: unknown; line?: unknown };
+type RelayMessage = {
+  swapdeckLane: true;
+  kind: string;
+  url?: unknown;
+  token?: unknown;
+  line?: unknown;
+  nonce?: unknown;
+};
 /** The relay's answer: whether it was taken and, in a lane, what document.cookie reads at the sender's address. */
 type RelayAnswer = { ok: boolean; cookies?: string };
 
 function isRelayMessage(message: unknown): message is RelayMessage {
   return Boolean(message) && (message as { swapdeckLane?: unknown }).swapdeckLane === true;
+}
+
+/**
+ * The address whose cookies a frame reads and writes: its own, or for an about:blank or srcdoc
+ * frame (no address of its own) its creator's — sent by the relay, and taken only on the origin
+ * Chrome says the frame has.
+ */
+function cookieUrlOf(message: RelayMessage, sender: chrome.runtime.MessageSender): URL | null {
+  const own = parseHttpUrl(sender.url);
+  if (own) return own;
+  if (!/^about:(blank|srcdoc)(?:[?#]|$)/.test(sender.url ?? '')) return null;
+  const claimed = typeof message.url === 'string' ? parseHttpUrl(message.url) : null;
+  return claimed && sender.origin && claimed.origin === sender.origin ? claimed : null;
 }
 
 async function onRelay(message: RelayMessage, sender: chrome.runtime.MessageSender): Promise<RelayAnswer> {
@@ -433,19 +762,35 @@ async function onRelay(message: RelayMessage, sender: chrome.runtime.MessageSend
     // A page of a lane that loaded without it (from the browser's cache, or before the tab joined).
     if (lane && message.token !== lane.token) {
       reloadOnce(tabId, async () => {
+        await allowNav(lane, tabId);
         await syncRules(lane.token);
         await chrome.tabs.reload(tabId, { bypassCache: true });
       });
     }
     return { ok: true };
   }
+  if (message.kind === 'adopt') {
+    // From the blank window a lane page opened (its top frame, still blank).
+    if (
+      sender.frameId === 0 &&
+      sender.url === 'about:blank' &&
+      typeof message.nonce === 'string' &&
+      NONCE.test(message.nonce)
+    )
+      await onAdopt(tabId, message.nonce);
+    return { ok: true };
+  }
   if (!lane) return { ok: false };
-  const url = parseHttpUrl(sender.url);
+  const url = cookieUrlOf(message, sender);
   const app = (await appsNow()).find((item) => item.id === lane.appId);
-  if (!url || !app || !app.domains.some((domain) => hostMatchesDomain(url.hostname, domain))) return { ok: false };
-  const answer = (): RelayAnswer => ({ ok: true, cookies: scriptCookies(lane.jar, url) });
+  if (!url || !app || !onAppDomain(app, url.hostname)) return { ok: false };
+  // A frame inside a page of another site is a cross-site context: SameSite=None cookies only.
+  const topHost = parseHttpUrl(sender.tab.url)?.hostname;
+  const crossSite = sender.frameId !== 0 && !(topHost && sameSite(topHost, url.hostname));
+  const answer = (): RelayAnswer => ({ ok: true, cookies: scriptCookies(lane.jar, url, undefined, crossSite) });
   if (message.kind === 'cookie' && typeof message.line === 'string' && message.line.length <= 8192) {
-    if (takeCookies(lane, app, url, [message.line], 'script')) await syncRules(lane.token).catch(() => undefined);
+    if (takeCookies(lane, app, url, [message.line], 'script', crossSite))
+      await syncRules(lane.token).catch(() => undefined);
     return answer();
   }
   if (message.kind === 'flush') {
@@ -455,6 +800,8 @@ async function onRelay(message: RelayMessage, sender: chrome.runtime.MessageSend
     return answer();
   }
   if (message.kind === 'sync') return answer();
+  if (message.kind === 'opening' && typeof message.nonce === 'string' && NONCE.test(message.nonce))
+    return { ok: await onOpening(lane, message.nonce) };
   if (message.kind === 'sw' && !lane.workerWarning) {
     lane.workerWarning = true;
     await saveLanes();
@@ -509,20 +856,25 @@ async function ungroup(tabIds: number[]): Promise<void> {
   if (grouped.length) await chrome.tabs.ungroup(grouped as [number, ...number[]]).catch(() => undefined);
 }
 
-/** A tab a lane's page opened (a link to a new tab, window.open) belongs to the same lane. */
-async function onTabCreated(tab: chrome.tabs.Tab): Promise<void> {
+/**
+ * A tab the browser opened from a lane tab's link (middle or Ctrl-click, the link's menu) may be
+ * the lane's: it is once its first page shows a page of the app asked for it (`considerCandidate`).
+ * Blank tabs only join when the lane's page asks for them (`opening`): Chrome gives the active tab
+ * as opener of tabs that other pages and extensions open too (window.open of an extension page).
+ */
+function onTabCreated(tab: chrome.tabs.Tab): void {
   if (tab.id === undefined || tab.openerTabId === undefined) return;
-  // Only what the page opened (a link, window.open): not a new tab page the user opened next to it.
   const url = tab.pendingUrl || tab.url || '';
-  if (url && !/^(https?:|about:blank)/.test(url)) return;
-  await lanesReady();
-  const lane = laneOfTab(tab.openerTabId);
-  if (!lane || laneOfTab(tab.id)) return;
-  addTabToLane(lane, tab.id);
-  await saveLanes();
-  await syncRules(lane.token).catch(() => undefined);
-  await groupTab(lane, tab.id);
-  await refreshLaneBadge(tab.id);
+  if (!/^https?:/i.test(url)) return;
+  const id = tab.id;
+  const openerTabId = tab.openerTabId;
+  // Synchronously when the record is in memory: the tab's first request follows at once.
+  const note = () => {
+    const lane = laneOfTab(openerTabId);
+    if (lane && !laneOfTab(id)) candidates.set(id, { token: lane.token, at: Date.now() });
+  };
+  note();
+  if (!candidates.has(id)) void lanesReady().then(note);
 }
 
 async function onTabRemoved(tabId: number): Promise<void> {
@@ -530,6 +882,9 @@ async function onTabRemoved(tabId: number): Promise<void> {
   reloadedAt.delete(tabId);
   coveredAt.delete(tabId);
   welcomed.delete(tabId);
+  navTabs.delete(tabId);
+  topUrl.delete(tabId);
+  candidates.delete(tabId);
   const lane = removeTabFromLane(tabId);
   if (!lane || ending.has(lane.token)) return;
   await saveLanes();
@@ -541,17 +896,27 @@ async function onTabRemoved(tabId: number): Promise<void> {
   await endLane(lane.token, { capture: lane.kind === 'account' }).catch(warn('closing a separate tab'));
 }
 
+/**
+ * Chrome put another tab in a lane tab's place (a discarded tab, a prerendered page): the new tab
+ * takes the old one's place in the lane. A page already loaded there came with the browser's
+ * cookies (it wasn't the lane's tab then) and loads again; a discarded tab loads with the lane's
+ * when it is shown.
+ */
 async function onTabReplaced(added: number, removed: number): Promise<void> {
   await lanesReady();
+  const candidate = candidates.get(removed);
+  candidates.delete(removed);
+  if (candidate) candidates.set(added, candidate);
   const lane = laneOfTab(removed);
   if (!lane) return;
   removeTabFromLane(removed);
-  coveredAt.delete(removed);
-  addTabToLane(lane, added);
-  await saveLanes();
-  await syncRules(lane.token).catch(() => undefined);
+  for (const map of [coveredAt, navTabs, topUrl, reloadedAt]) map.delete(removed);
+  welcomed.delete(removed);
+  await joinTab(lane, added).catch(warn('separate tab'));
+  const tab = await getTab(added);
+  const url = tabUrl(tab);
+  if (tab && !tab.discarded && url && /^https?:/i.test(url)) loadAgain(lane, added, url);
 }
-
 // --- Saving a lane's session -----------------------------------------------------
 
 /** Reads the lane's session: its jar, and its storage from a page of the app (a lane tab when there is one). */
@@ -797,6 +1162,7 @@ async function openLaneNow(request: OpenLaneRequest): Promise<OpenLaneOutcome> {
         await withStagingTab(app, (stagingId) => seedStorage(app, lane, stagingId, snapshot, false));
       for (const [id, url] of adopted) {
         await groupTab(lane, id);
+        await allowNav(lane, id);
         await chrome.tabs.update(id, { url }).catch(() => undefined);
       }
       tabId = [...adopted.keys()][0]!;
@@ -900,6 +1266,9 @@ async function newTab(lane: Lane, request: OpenLaneRequest): Promise<number> {
 async function navigateLaneTab(tabId: number, url: string): Promise<void> {
   welcomed.delete(tabId);
   await refreshLaneBadge(tabId);
+  // Swapdeck's own navigation: every cookie of the lane goes, Strict ones too (as Chrome would send them).
+  const lane = laneOfTab(tabId);
+  if (lane) await allowNav(lane, tabId);
   await navigateAndWait(tabId, url).catch(() => undefined);
 }
 
@@ -976,7 +1345,7 @@ export async function endLane(token: string, options: EndLaneOptions): Promise<P
     retired.set(token, [...lane.ruleIds]);
     lane.ruleIds = [];
     lane.tabIds = [];
-    for (const tabId of tabIds) coveredAt.delete(tabId);
+    forgetLaneMemory(token, tabIds);
     await saveLanes();
     await syncRules(token).catch(() => undefined);
     await refreshMachinery();
@@ -1188,7 +1557,10 @@ export async function onLaneTabUpdated(tabId: number, info: chrome.tabs.OnUpdate
   if (info.status !== 'complete' && !info.url) return;
   await lanesReady();
   const lane = laneOfTab(tabId);
-  if (!lane || seeding.has(lane.token)) return;
+  if (!lane) return;
+  // The page it shows now (a site the lane's rules don't see, too): SameSite judges its frames by it.
+  if (info.url) topUrl.set(tabId, info.url);
+  if (seeding.has(lane.token)) return;
   const state = await readState();
   const app = laneApp(lane, state);
   await refreshLaneBadge(tabId, state);
@@ -1341,8 +1713,7 @@ export async function forgetLanesForTest(): Promise<void> {
   resetLaneState();
   await chrome.storage.session.remove('sd:lanes');
   await lanesReady();
-  welcomed.clear();
-  reloadedAt.clear();
+  forgetAllMemory();
   await refreshMachinery();
 }
 
@@ -1352,11 +1723,33 @@ export async function forgetLanesForTest(): Promise<void> {
  */
 export async function restartWorkerForTest(): Promise<void> {
   resetLaneState();
-  coveredAt.clear();
-  uncovered.clear();
-  reloadedAt.clear();
-  welcomed.clear();
+  forgetAllMemory();
   await startLanes();
+}
+
+/** What the worker keeps in memory about lanes and their tabs, for one lane that ended. */
+function forgetLaneMemory(token: string, tabIds: readonly number[]): void {
+  for (const tabId of tabIds) for (const map of [coveredAt, navTabs, topUrl]) map.delete(tabId);
+  for (const [tabId, candidate] of candidates) if (candidate.token === token) candidates.delete(tabId);
+  for (const key of bornAt.keys()) if (key.startsWith(`${token}|`)) bornAt.delete(key);
+  clearTimeout(youngTimers.get(token));
+  youngTimers.delete(token);
+  regexOf.delete(token);
+}
+
+/** …and for all of them (what a stopped worker loses). */
+function forgetAllMemory(): void {
+  for (const map of [coveredAt, navTabs, topUrl, reloadedAt, candidates, bornAt, regexOf, openings]) map.clear();
+  uncovered.clear();
+  hiddenIn = new Set();
+  welcomed.clear();
+  for (const timer of youngTimers.values()) clearTimeout(timer);
+  youngTimers.clear();
+}
+
+/** For the e2e build: what Chrome does when it puts another tab in a tab's place (prerender, discard). */
+export function replaceTabForTest(added: number, removed: number): Promise<void> {
+  return onTabReplaced(added, removed);
 }
 
 /** Registers the lane listeners (call once, synchronously, when the worker starts). */
@@ -1370,7 +1763,7 @@ export function initLanes(): void {
     );
     return true;
   });
-  chrome.tabs.onCreated.addListener((tab) => void onTabCreated(tab).catch(warn('separate tab')));
+  chrome.tabs.onCreated.addListener((tab) => onTabCreated(tab));
   chrome.tabs.onRemoved.addListener((tabId) => void onTabRemoved(tabId).catch(warn('separate tab')));
   chrome.tabs.onReplaced.addListener(
     (added, removed) => void onTabReplaced(added, removed).catch(warn('separate tab')),

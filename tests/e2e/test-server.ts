@@ -104,10 +104,113 @@ function readBody(request: IncomingMessage): Promise<string> {
   });
 }
 
-async function handle(request: IncomingMessage, response: ServerResponse) {
+/** A request as the server saw it (for tests that check what really went out). */
+export type LoggedRequest = {
+  method: string;
+  host: string;
+  path: string;
+  cookie: string;
+  /** Sec-Fetch-Site as the browser sent it. */
+  site: string;
+  referer: string;
+  body: string;
+};
+
+const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
+
+async function handle(request: IncomingMessage, response: ServerResponse, log: LoggedRequest[]) {
   const url = new URL(request.url ?? '/', 'http://localhost');
   const jar = cookies(request);
   const serverUser = jar.acme_sid;
+  const host = (request.headers.host ?? '').split(':')[0] ?? '';
+  const body = request.method === 'POST' ? await readBody(request) : '';
+  log.push({
+    method: request.method ?? 'GET',
+    host,
+    path: url.pathname + url.search,
+    cookie: request.headers.cookie ?? '',
+    site: String(request.headers['sec-fetch-site'] ?? ''),
+    referer: request.headers.referer ?? '',
+    body,
+  });
+  if (log.length > 2000) log.splice(0, log.length - 2000);
+
+  if (url.pathname === '/echo') {
+    // What the request carried, readable by any page (an API that allows every origin, without credentials).
+    response.writeHead(200, {
+      'content-type': 'application/json',
+      'access-control-allow-origin': '*',
+      ...(url.searchParams.get('cache') ? { 'cache-control': `private, max-age=600` } : {}),
+    });
+    response.end(JSON.stringify({ method: request.method, host, cookie: request.headers.cookie ?? '', body }));
+    return;
+  }
+  if (url.pathname === '/echo-page') {
+    // The same as a page (what a navigation, a form or a frame carried).
+    response.writeHead(200, { 'content-type': 'text/html' });
+    response.end(
+      page(
+        `Echo ${request.method}`,
+        `<pre id="echo">${escapeHtml(JSON.stringify({ method: request.method, cookie: request.headers.cookie ?? '', body }))}</pre>
+        <p>Server sees: <strong id="server-user">${serverUser ?? 'nobody'}</strong></p>`,
+      ),
+    );
+    return;
+  }
+  if (url.pathname === '/samesite') {
+    // One cookie of each kind (None needs Secure: only a secure origin such as localhost keeps it).
+    response.writeHead(200, {
+      'content-type': 'text/html',
+      'set-cookie': [
+        'ss_strict=1; Path=/; SameSite=Strict',
+        'ss_lax=1; Path=/; SameSite=Lax',
+        'ss_default=1; Path=/',
+        'ss_none=1; Path=/; SameSite=None; Secure',
+      ],
+    });
+    response.end(page('SameSite', '<p id="set">set</p>'));
+    return;
+  }
+  if (url.pathname === '/opener') {
+    // A page that opens new tabs every way a site does: links, forms and window.open.
+    const target = url.searchParams.get('target') ?? '_blank';
+    response.writeHead(200, { 'content-type': 'text/html' });
+    response.end(
+      page(
+        'Opener | Acme',
+        `<p>Server sees: <strong id="server-user">${serverUser ?? 'nobody'}</strong></p>
+        <a id="link" href="/echo-page?via=link" target="${target}">link</a>
+        <a id="noopener" href="/echo-page?via=noopener" target="_blank" rel="noopener noreferrer">noopener</a>
+        <form id="post" method="post" action="/echo-page?via=form" target="${target}">
+          <input name="field" value="value" />
+          <button id="submit" name="button" value="pressed" type="submit">Send</button>
+        </form>
+        <form id="get" method="get" action="/echo-page" target="${target}">
+          <input name="via" value="get-form" />
+          <button id="submit-get" type="submit">Go</button>
+        </form>
+        <div id="card"><a id="stopped" href="/echo-page?via=stopped" target="_blank">stopped</a></div>
+        <script>
+          // A clickable card: the link inside stops the click from reaching it (React apps often do).
+          document.getElementById('stopped').addEventListener('click', (event) => event.stopPropagation());
+          document.getElementById('card').addEventListener('click', () => (document.title = 'card clicked'));
+        </script>`,
+      ),
+    );
+    return;
+  }
+  if (url.pathname === '/embedder') {
+    // Another site's page: it frames the app and calls it (src and api come in the query).
+    const frame = url.searchParams.get('frame') ?? '';
+    response.writeHead(200, { 'content-type': 'text/html' });
+    response.end(
+      page(
+        'Another site',
+        `<h1>Another site</h1>${frame ? `<iframe id="frame" src="${escapeHtml(frame)}"></iframe>` : ''}`,
+      ),
+    );
+    return;
+  }
 
   if (url.pathname === '/robots.txt') {
     response.writeHead(200, { 'content-type': 'text/plain' });
@@ -136,7 +239,7 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
     return;
   }
   if (url.pathname === '/api/login' && request.method === 'POST') {
-    const email = (await readBody(request)).trim();
+    const email = body.trim();
     const person = PEOPLE[email] ?? { id: `u-${email}`, name: email };
     const token = fakeJwt({ sub: person.id, email, exp: Math.floor(Date.now() / 1000) + 3600 });
     response.writeHead(200, {
@@ -266,11 +369,18 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
   response.end('Not found');
 }
 
-export type TestServer = { port: number; url: (host: string, path?: string) => string; close: () => Promise<void> };
+export type TestServer = {
+  port: number;
+  url: (host: string, path?: string) => string;
+  /** Every request the server got (most recent last; cleared with `log.length = 0`). */
+  log: LoggedRequest[];
+  close: () => Promise<void>;
+};
 
 export async function startTestServer(): Promise<TestServer> {
+  const log: LoggedRequest[] = [];
   const server: Server = createServer((request, response) => {
-    handle(request, response).catch((error: unknown) => {
+    handle(request, response, log).catch((error: unknown) => {
       response.writeHead(500);
       response.end(String(error));
     });
@@ -300,6 +410,7 @@ export async function startTestServer(): Promise<TestServer> {
   return {
     port,
     url: (host, path = '/') => `http://${host}:${port}${path}`,
+    log,
     close: () =>
       new Promise((resolve) => {
         for (const socket of sockets) socket.destroy();

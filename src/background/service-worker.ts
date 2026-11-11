@@ -11,7 +11,15 @@ import { setupOmnibox } from './omnibox';
 import { listen } from './router';
 import { activeTab, getTab, tabUrl } from './tabs';
 import { syncNow } from './sync';
-import { forgetLanesForTest, initLanes, onLaneTabUpdated, openLane, restartWorkerForTest, restoreLanes } from './lanes';
+import {
+  forgetLanesForTest,
+  initLanes,
+  onLaneTabUpdated,
+  openLane,
+  replaceTabForTest,
+  restartWorkerForTest,
+  restoreLanes,
+} from './lanes';
 import { onTabUpdated } from './watcher';
 import { workspaceStatus } from '../core/workspaces';
 
@@ -22,7 +30,9 @@ initLanes();
 declare const __SWAPDECK_E2E__: boolean;
 // The e2e build lets tests run what Chrome only does on a restart (bringing separate tabs back).
 if (__SWAPDECK_E2E__)
-  Object.assign(globalThis, { swapdeckTest: { restoreLanes, forgetLanesForTest, restartWorkerForTest } });
+  Object.assign(globalThis, {
+    swapdeckTest: { restoreLanes, forgetLanesForTest, restartWorkerForTest, replaceTabForTest },
+  });
 // No switch can be running while the worker starts: rules left by an interrupted one go, and a
 // swap it left halfway (journal in session storage) is undone.
 void clearStaleRules()

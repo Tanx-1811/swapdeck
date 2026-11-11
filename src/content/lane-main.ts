@@ -1,27 +1,25 @@
 /**
  * Runs in the page's own world at document_start on the sites of apps while separate tabs are
- * open (registered by background/lanes.ts). In a separate tab — the document says so through the
- * Server-Timing entry the lane's rules add (core/lanes.ts) — it gives the page its lane's view:
+ * open (registered by background/lanes.ts; put into pages that were already open, too). In a
+ * separate tab — the document says so through the Server-Timing entry the lane's rules add
+ * (core/lanes.ts) — it gives the page its lane's view:
  *
  * - `document.cookie` reads the lane's cookies and writes them through the extension (the browser's
  *   cookie store never sees them); requests wait for pending writes, so the next request carries them;
  * - `localStorage`, IndexedDB names, BroadcastChannel names and Web Locks live under `__sdl:<token>:`;
- * - `cookieStore` is hidden and service workers can't be registered (their requests aren't the tab's).
+ * - `cookieStore` is hidden and service workers can't be registered (their requests aren't the tab's);
+ * - its calls stay out of the browser's HTTP cache (fetch: no-store; XHR: lane-xhr.ts);
+ * - windows it opens join the lane before their first request (lane-open.ts).
  *
- * In other tabs it only hides the lanes' localStorage keys from the page, when there are any.
- * It must not throw, and it never sends anything anywhere but to the extension's relay
- * (content/lane-relay.ts) through DOM events on this document.
+ * In other tabs it only hides the lanes' names from the page (localStorage keys — also from its
+ * clear() — IndexedDB databases and Web Locks). It must not throw, and it never sends anything
+ * anywhere but to the extension's relay (content/lane-relay.ts) through DOM events on a document.
  */
 import { registrableDomain } from '../core/domains';
-import {
-  LANE_CACHE_GUARD,
-  LANE_PREFIX,
-  LANE_TIMING,
-  laneNamespace,
-  parseCookie,
-  parseLaneTiming,
-  pathMatches,
-} from '../core/lanes';
+import { LANE_PREFIX, LANE_TIMING, laneNamespace, parseCookie, parseLaneTiming, pathMatches } from '../core/lanes';
+import type { LanePageKit } from './lane-kit';
+import { installOpenRouting } from './lane-open';
+import { installXhr } from './lane-xhr';
 
 type LaneView = { token: string; cookies: string };
 
@@ -30,8 +28,18 @@ const TO_RELAY = 'swapdeck-lane';
 const FROM_RELAY = 'swapdeck-lane-ack';
 
 (() => {
-  const win = window as unknown as Record<symbol, LaneView | undefined>;
-  if (win[STATE] !== undefined) return;
+  // Once per document (it may also be put into a page that was open before the first lane).
+  if (Object.getOwnPropertyDescriptor(window, STATE)) return;
+
+  const blank = location.protocol === 'about:';
+  const laneIn = (other: Window | null): LaneView | null => {
+    try {
+      if (other && other !== window) return (other as unknown as Record<symbol, LaneView | null>)[STATE] ?? null;
+    } catch {
+      // Another origin.
+    }
+    return null;
+  };
 
   function findLane(): LaneView | null {
     try {
@@ -41,20 +49,18 @@ const FROM_RELAY = 'swapdeck-lane-ack';
     } catch {
       // No timing here.
     }
-    // about:blank and srcdoc frames have no response of their own: they belong to their parent's lane.
-    try {
-      if (window.parent !== window) {
-        const parent = (window.parent as unknown as Record<symbol, LaneView | undefined>)[STATE];
-        if (parent) return parent;
-      }
-    } catch {
-      // A cross-origin parent.
-    }
-    return null;
+    // about:blank and srcdoc frames have no response of their own: they belong to their parent's
+    // lane (a blank window to the lane of the page that opened it).
+    if (window.parent !== window) return laneIn(window.parent);
+    return blank ? laneIn(window.opener as Window | null) : null;
   }
 
   const lane = findLane();
-  Object.defineProperty(window, STATE, { value: lane ?? undefined, configurable: false, enumerable: false });
+  try {
+    Object.defineProperty(window, STATE, { value: lane, configurable: false, enumerable: false });
+  } catch {
+    return;
+  }
 
   // Captured before the page's own scripts run: they may replace these later. Instrumentation
   // (New Relic, Sentry…) wraps timers, promises and events once it loads: the shim's own work goes
@@ -111,11 +117,6 @@ const FROM_RELAY = 'swapdeck-lane-ack';
 
   const lengthOf = (storage: Storage): number => apply(native!.length, storage, []);
   const keyAt = (storage: Storage, index: number): string | null => apply(native!.key, storage, [index]);
-
-  function hasLaneKeys(storage: Storage): boolean {
-    for (let i = 0; i < lengthOf(storage); i++) if (keyAt(storage, i)?.startsWith(LANE_PREFIX)) return true;
-    return false;
-  }
 
   /** What one of our Storage views does, with the real Storage under it. */
   type View = {
@@ -174,7 +175,7 @@ const FROM_RELAY = 'swapdeck-lane-ack';
   }
 
   /** A Storage that shows the page only its own keys: the lane's (prefix stripped), or everything but the lanes'. */
-  function scopedStorage(real: Storage, prefix: string | null): Storage {
+  function scopedStorage(real: Storage, prefix: string | null): { proxy: Storage; view: View } {
     const { proto, getItem, setItem, removeItem } = native!;
     const stored = (key: string) => (prefix ? prefix + key : key);
     const shown = (raw: string): string | null =>
@@ -244,15 +245,19 @@ const FROM_RELAY = 'swapdeck-lane-ack';
       preventExtensions: () => false,
     });
     apply(weakSet, views, [proxy, view]);
-    return proxy;
+    return { proxy, view };
   }
 
   function installStorage(prefix: string | null): void {
     if (!realLocal || !native) return;
-    let view: Storage;
+    let shown: Storage;
     try {
-      view = scopedStorage(realLocal, prefix);
-      Object.defineProperty(window, 'localStorage', { configurable: true, enumerable: true, get: () => view });
+      const scoped = scopedStorage(realLocal, prefix);
+      shown = scoped.proxy;
+      Object.defineProperty(window, 'localStorage', { configurable: true, enumerable: true, get: () => shown });
+      // Outside a lane, the real Storage itself also hides the lanes' keys from its methods and
+      // `length` (a page that kept a reference before this ran, a script put in an open page).
+      if (!prefix) apply(weakSet, views, [realLocal, scoped.view]);
     } catch {
       return;
     }
@@ -287,7 +292,7 @@ const FROM_RELAY = 'swapdeck-lane-ack';
           newValue: event.newValue,
           url: event.url,
         });
-        Object.defineProperty(copy, 'storageArea', { value: view });
+        Object.defineProperty(copy, 'storageArea', { value: shown });
         synthetic.add(copy);
         dispatch(window, copy);
       },
@@ -295,19 +300,57 @@ const FROM_RELAY = 'swapdeck-lane-ack';
     );
   }
 
+  /** IndexedDB databases and Web Locks the page lists: only its own (`own`), or none of the lanes'. */
+  function scopeNames(own: string | null): void {
+    const visible = <T extends { name?: string }>(list: readonly T[] | undefined): T[] =>
+      (list ?? [])
+        .filter((info) => (own ? info.name?.startsWith(own) : !info.name?.startsWith(LANE_PREFIX)))
+        .map((info) => (own ? { ...info, name: info.name!.slice(own.length) } : info));
+    try {
+      const factory = IDBFactory.prototype;
+      const databases = factory.databases;
+      if (databases) {
+        factory.databases = {
+          async databases(this: IDBFactory) {
+            return visible((await apply(databases, this, [])) as IDBDatabaseInfo[]);
+          },
+        }.databases;
+      }
+    } catch {
+      // No IndexedDB.
+    }
+    try {
+      const locks = (window as { LockManager?: { prototype: LockManager } }).LockManager?.prototype;
+      const query = locks?.query;
+      if (locks && query) {
+        locks.query = {
+          async query(this: LockManager) {
+            const snapshot = (await apply(query, this, [])) as LockManagerSnapshot;
+            return { held: visible(snapshot.held), pending: visible(snapshot.pending) };
+          },
+        }.query;
+      }
+    } catch {
+      // No Web Locks.
+    }
+  }
+
   if (!lane) {
-    // Not a separate tab: only keep the lanes' keys out of the page's sight (and out of its clear()).
-    if (realLocal && native && hasLaneKeys(realLocal)) installStorage(null);
+    // Not a separate tab: keep the lanes' names out of the page's sight (and out of its clear()).
+    // Only while lanes exist (this script runs only then), whether their names are there yet or not.
+    installStorage(null);
+    scopeNames(null);
     return;
   }
 
   const ns = laneNamespace(lane.token);
   installStorage(ns);
+  scopeNames(ns);
 
   // --- Messages to the relay ---------------------------------------------------
 
   let nextId = 0;
-  const waiting = new Map<number, () => void>();
+  const waiting = new Map<number, (ok: boolean) => void>();
   /** Cookie writes of the page the worker hasn't answered yet. */
   const writes = new Set<number>();
   /** Requests waiting for the writes made before them. */
@@ -331,10 +374,10 @@ const FROM_RELAY = 'swapdeck-lane-ack';
     const detail = (event as CustomEvent<unknown>).detail;
     if (typeof detail !== 'string') return;
     try {
-      const { id, cookies } = fromJson(detail) as { id?: unknown; cookies?: unknown };
+      const { id, ok, cookies } = fromJson(detail) as { id?: unknown; ok?: unknown; cookies?: unknown };
       if (typeof id === 'number') {
         writeSettled(id);
-        waiting.get(id)?.();
+        waiting.get(id)?.(ok === true);
         waiting.delete(id);
       }
       // What document.cookie reads now in the lane (cookies the site's responses set included, and
@@ -344,23 +387,46 @@ const FROM_RELAY = 'swapdeck-lane-ack';
       // Not ours.
     }
   });
-  /** Sends to the extension; resolves when it has acted, or after a short while regardless. */
-  function tell(kind: string, extra: Record<string, unknown> = {}, timeoutMs = 1500, id = ++nextId): Promise<void> {
-    return new NativePromise<void>((resolve) => {
+  /** Sends to the extension; resolves with whether it was taken, or undefined after a while without an answer. */
+  function tell(
+    kind: string,
+    extra: Record<string, unknown> = {},
+    timeoutMs = 1500,
+    id = ++nextId,
+  ): Promise<boolean | undefined> {
+    return new NativePromise<boolean | undefined>((resolve) => {
       const timer = later(() => {
         waiting.delete(id);
         writeSettled(id);
-        resolve();
+        resolve(undefined);
       }, timeoutMs);
-      waiting.set(id, () => {
+      waiting.set(id, (ok) => {
         cancel(timer);
-        resolve();
+        resolve(ok);
       });
       dispatch(document, new NativeCustomEvent(TO_RELAY, { detail: toJson({ kind, id, ...extra }) }));
     });
   }
 
   // --- document.cookie ---------------------------------------------------------
+
+  /**
+   * The address whose cookies the page reads and writes: its own, or for about:blank and srcdoc
+   * documents the one of the page that made them (their parent, or the page that opened them).
+   */
+  function cookieUrl(): URL {
+    try {
+      let at: Window = window;
+      for (let hops = 0; hops < 10 && at.location.protocol === 'about:'; hops++) {
+        const next = (at.parent !== at ? at.parent : at.opener) as Window | null;
+        if (!next) break;
+        at = next;
+      }
+      return new URL(at.location.href);
+    } catch {
+      return new URL(location.href);
+    }
+  }
 
   /** What document.cookie reads, in the browser's order: a name can come more than once (two paths or domains). */
   let jar: [string, string][] = [];
@@ -388,9 +454,10 @@ const FROM_RELAY = 'swapdeck-lane-ack';
           return;
         }
         const line = String(input);
+        const at = cookieUrl();
         let parsed: ReturnType<typeof parseCookie>;
         try {
-          parsed = parseCookie(line, new URL(location.href), 'script');
+          parsed = /^https?:$/.test(at.protocol) ? parseCookie(line, at, 'script') : null;
         } catch {
           parsed = null;
         }
@@ -398,12 +465,12 @@ const FROM_RELAY = 'swapdeck-lane-ack';
         // prefix, another site's domain, an oversized cookie) changes nothing here either.
         if (!parsed) return;
         const { cookie, expired } = parsed;
-        if (pathMatches(location.pathname || '/', cookie.path)) {
+        if (pathMatches(at.pathname || '/', cookie.path)) {
           // Until the lane answers: the cookie of that name this page sees (the lane's answer is exact).
-          const at = jar.findIndex(([name]) => name === cookie.name);
+          const index = jar.findIndex(([name]) => name === cookie.name);
           if (expired) {
-            if (at !== -1) jar.splice(at, 1);
-          } else if (at !== -1) jar[at] = [cookie.name, cookie.value];
+            if (index !== -1) jar.splice(index, 1);
+          } else if (index !== -1) jar[index] = [cookie.name, cookie.value];
           else jar.push([cookie.name, cookie.value]);
         }
         const id = ++nextId;
@@ -431,10 +498,10 @@ const FROM_RELAY = 'swapdeck-lane-ack';
 
   // --- Requests wait for cookies written just before them ------------------------
 
-  const site = registrableDomain(location.hostname);
+  const site = registrableDomain(cookieUrl().hostname);
   const sameSite = (target: string): boolean => {
     try {
-      const host = new URL(target, location.href).hostname.toLowerCase();
+      const host = new URL(target, document.baseURI).hostname.toLowerCase();
       return host === site || host.endsWith(`.${site}`);
     } catch {
       return false;
@@ -452,6 +519,8 @@ const FROM_RELAY = 'swapdeck-lane-ack';
     typeof value === 'object' &&
     (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
 
+  /** Cache modes that would read the browser's HTTP cache or write to it. */
+  const CACHED = new Set(['default', 'no-cache', 'force-cache', 'reload']);
   const realFetch = window.fetch;
   if (typeof realFetch === 'function') {
     const laneFetch = function fetch(this: unknown, input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -460,11 +529,12 @@ const FROM_RELAY = 'swapdeck-lane-ack';
       try {
         const request = input instanceof Request ? input : null;
         method = String(init?.method ?? request?.method ?? 'GET').toUpperCase();
-        // The browser's cache may hold the site's answers to its own account: the lane's calls to
-        // its site don't use it (rules can't ask for that without a header CORS would preflight).
+        // The browser's cache may hold the site's answers to its own account, and would give the
+        // lane's to the browser's tabs: the lane's calls to its site don't use it (rules can't ask
+        // for that without a header CORS would preflight).
         const url = request ? request.url : input instanceof URL ? input.href : String(input);
-        const cache = init?.cache ?? request?.cache ?? 'default';
-        if (cache === 'default' && (init === undefined || isPlain(init)) && sameSite(url))
+        const cache = String(init?.cache ?? request?.cache ?? 'default');
+        if (CACHED.has(cache) && (init === undefined || isPlain(init)) && sameSite(url))
           options = { ...init, cache: 'no-store' };
       } catch {
         options = init;
@@ -484,56 +554,33 @@ const FROM_RELAY = 'swapdeck-lane-ack';
     window.fetch = laneFetch as typeof fetch;
   }
 
+  const kit: LanePageKit = {
+    apply,
+    later,
+    cancel,
+    dispatch,
+    listen,
+    NativeCustomEvent,
+    NativePromise,
+    toJson,
+    tell: (kind, extra, timeoutMs) => tell(kind, extra, timeoutMs),
+    writesDone,
+    writing: () => writes.size > 0,
+    realFetch,
+    sameSite,
+    sameOrigin,
+  };
+
   try {
-    const xhr = XMLHttpRequest.prototype;
-    const realOpen = xhr.open;
-    const realSend = xhr.send;
-    const realAbort = xhr.abort;
-    const realHeader = xhr.setRequestHeader;
-    /** Each request as last opened: its address, whether it is asynchronous, and which opening it is. */
-    const opened = new WeakMap<XMLHttpRequest, { url: string; async: boolean; at: number }>();
-    let openings = 0;
-    xhr.open = function open(this: XMLHttpRequest, ...args: unknown[]) {
-      const result = apply(realOpen, this, args) as void;
-      // open(method, url) is asynchronous; open(method, url, async, …) is what `async` says.
-      opened.set(this, { url: String(args[1]), async: args.length < 3 || Boolean(args[2]), at: ++openings });
-      return result;
-    } as typeof xhr.open;
-    Object.defineProperty(xhr.open, 'length', { value: 2 });
-    xhr.abort = function abort(this: XMLHttpRequest) {
-      opened.delete(this);
-      return apply(realAbort, this, []) as void;
-    };
-    xhr.send = function send(this: XMLHttpRequest, ...args: unknown[]) {
-      const request = opened.get(this);
-      if (request && this.readyState === XMLHttpRequest.OPENED && sameOrigin(request.url)) {
-        // As for fetch: the browser's cache neither answers nor keeps it (it may answer the
-        // browser's own tabs with it). A same-origin call: no CORS to mind.
-        try {
-          apply(realHeader, this, ['Cache-Control', 'no-cache']);
-          apply(realHeader, this, ['If-Range', LANE_CACHE_GUARD]);
-        } catch {
-          // Sent already: send() throws below, as it always does.
-        }
-      }
-      // Synchronous requests, and anything send() would refuse, go as they are (errors included).
-      if (!writes.size || !request?.async || this.readyState !== XMLHttpRequest.OPENED)
-        return apply(realSend, this, args) as void;
-      // Cookies written just before go along: send once they are in place, unless the page
-      // opened the request again or aborted it meanwhile.
-      const at = request.at;
-      void (async () => {
-        await writesDone();
-        if (opened.get(this)?.at !== at || this.readyState !== XMLHttpRequest.OPENED) return;
-        try {
-          apply(realSend, this, args);
-        } catch {
-          // Sent meanwhile.
-        }
-      })();
-    };
+    installXhr(kit);
   } catch {
     // No XMLHttpRequest here.
+  }
+
+  try {
+    installOpenRouting(kit);
+  } catch {
+    // New windows then open as the browser opens them (the worker adds those it can).
   }
 
   // --- IndexedDB, BroadcastChannel, Web Locks -----------------------------------
@@ -542,21 +589,12 @@ const FROM_RELAY = 'swapdeck-lane-ack';
     const factory = IDBFactory.prototype;
     const open = factory.open;
     const remove = factory.deleteDatabase;
-    const databases = factory.databases;
     factory.open = function (this: IDBFactory, name: string, version?: number) {
       return version === undefined ? open.call(this, ns + name) : open.call(this, ns + name, version);
     };
     factory.deleteDatabase = function (this: IDBFactory, name: string) {
       return remove.call(this, ns + name);
     };
-    if (databases) {
-      factory.databases = async function (this: IDBFactory) {
-        const list = await databases.call(this);
-        return list
-          .filter((info) => info.name?.startsWith(ns))
-          .map((info) => ({ ...info, name: info.name!.slice(ns.length) }));
-      };
-    }
     const nameDescriptor = Object.getOwnPropertyDescriptor(IDBDatabase.prototype, 'name');
     if (nameDescriptor?.get) {
       const getName = nameDescriptor.get;
@@ -599,15 +637,6 @@ const FROM_RELAY = 'swapdeck-lane-ack';
       locks.request = function (this: LockManager, name: string, ...rest: unknown[]) {
         return (request as (...args: unknown[]) => Promise<unknown>).call(this, ns + name, ...rest);
       } as LockManager['request'];
-      const query = locks.query;
-      locks.query = async function (this: LockManager) {
-        const snapshot = await query.call(this);
-        const strip = (list?: LockInfo[]) =>
-          (list ?? [])
-            .filter((info) => info.name?.startsWith(ns))
-            .map((info) => ({ ...info, name: info.name!.slice(ns.length) }));
-        return { held: strip(snapshot.held), pending: strip(snapshot.pending) };
-      };
     }
   } catch {
     // No Web Locks.

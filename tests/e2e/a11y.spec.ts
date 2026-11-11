@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { seedDemo } from './demo-data';
 import { expect, test } from './fixtures';
 import { addAcme, signIn, signOutByHand, storedAccounts } from './helpers';
@@ -124,6 +124,13 @@ for (const accent of ['ngoc', 'cham', 'vang'] as const) {
   });
 }
 
+/** Waits until a dialog has faded in: axe would read its text half transparent. */
+async function settled(dialog: Locator) {
+  await dialog.evaluate((element) =>
+    Promise.all(element.getAnimations({ subtree: true }).map((animation) => animation.finished)),
+  );
+}
+
 // Separate tabs, importing a sign-in and sending an account: the popup in a separate tab (compact,
 // wide, side panel), the flag on the account, and the manager's dialogs with their errors.
 for (const theme of ['light', 'dark'] as const) {
@@ -179,6 +186,7 @@ for (const theme of ['light', 'dark'] as const) {
     await dialog.locator('textarea').fill('not an export');
     await dialog.locator('button[type=submit]').click();
     await expect(dialog.locator('.callout--danger')).toBeVisible();
+    await settled(dialog);
     await audit(manager, 'import a sign-in, unknown format');
     await manager.keyboard.press('Escape');
 
@@ -190,6 +198,7 @@ for (const theme of ['light', 'dark'] as const) {
     await dialog.locator('input[type=password]').first().fill('short');
     await dialog.locator('input[type=password]').nth(1).fill('shorter');
     await expect(dialog.locator('.field__error')).toHaveCount(2);
+    await settled(dialog);
     await audit(manager, 'send to someone, with errors');
   });
 }

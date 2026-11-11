@@ -26,7 +26,7 @@ rồi `npm run package`. Nên chạy thêm `npm run test:live` (kiểm tra mọi
 
 ## 2. Tải gói lên
 
-1. Bấm **Thêm mục mới** (New item) → chọn `release/swapdeck-1.7.0.zip`.
+1. Bấm **Thêm mục mới** (New item) → chọn `release/swapdeck-1.8.0.zip`.
 2. Cửa hàng tự đọc tên, mô tả ngắn (từ `public/_locales/*/messages.json`) và biểu tượng.
 
 ## 3. Thẻ "Trang thông tin cửa hàng" (Store listing)
@@ -36,14 +36,16 @@ rồi `npm run package`. Nên chạy thêm `npm run test:live` (kiểm tra mọi
 - **Danh mục:** Productivity (Năng suất). **Ngôn ngữ:** English, Vietnamese.
 - **Hình ảnh:** biểu tượng 128px, 5 ảnh chụp (bản EN cho tiếng Anh, bản VI cho bản địa hóa tiếng Việt), ảnh quảng bá nhỏ
   và lớn.
+- **Video quảng bá (không bắt buộc):** tải `brand/video/swapdeck-demo-en.mp4` (và bản `-vi`) lên YouTube — để "Không
+  công khai" (Unlisted) cũng được — rồi dán liên kết vào ô _Promo video_. Video 21 giây, không có tiếng.
 - **Trang chủ / hỗ trợ:** `https://github.com/Tanx-1811/swapdeck` và `https://github.com/Tanx-1811/swapdeck/issues`.
 
 ## 4. Thẻ "Quyền riêng tư" (Privacy practices)
 
 - **Mục đích duy nhất:** dán phần _Single purpose_.
 - **Giải trình từng quyền:** dán từng mục trong _Permission justifications_ (storage, unlimitedStorage, cookies,
-  scripting, activeTab, contextMenus, alarms, favicon, declarativeNetRequestWithHostAccess, sidePanel, tabGroups và quyền
-  truy cập trang tùy chọn).
+  scripting, activeTab, contextMenus, alarms, favicon, declarativeNetRequestWithHostAccess, sidePanel, tabGroups,
+  webRequest và quyền truy cập trang tùy chọn).
 - **Dữ liệu sử dụng:** chọn đúng như phần _Data usage_: _Authentication information_ và _Website content_ (chỉ địa chỉ
   và tiêu đề trang của các trang đã thêm), tất cả chỉ lưu trên máy người dùng. Đánh dấu ba cam kết (không bán, không
   dùng ngoài mục đích, không dùng để xét tín dụng).
@@ -68,9 +70,27 @@ mẫu báo lỗ hổng riêng tư của repo; nếu muốn thêm email hỗ tr�
 2. Chạy kiểm thử, `npm run screenshots` nếu giao diện đổi, rồi `npm run package`.
 3. Trong bảng điều khiển: mục Swapdeck → **Gói** (Package) → **Tải gói mới lên** → gửi duyệt lại.
 
+## 8. Microsoft Edge Add-ons (miễn phí, cùng một gói)
+
+Edge chạy được đúng gói zip của Chrome (cùng Manifest V3, cùng các API: side panel, nhóm tab, declarativeNetRequest,
+webRequest). Nộp thêm ở đây để có người dùng Edge mà không tốn thêm công:
+
+1. Mở <https://partner.microsoft.com/dashboard/microsoftedge/overview> bằng tài khoản Microsoft, đăng ký chương trình
+   **Microsoft Edge** (miễn phí, không mất phí như Chrome).
+2. **Create new extension** → tải lên cùng `release/swapdeck-1.8.0.zip`.
+3. **Availability:** Public, mọi thị trường. **Properties:** danh mục _Productivity_, URL chính sách quyền riêng tư như
+   bước 5, website và hỗ trợ như bước 3.
+4. **Store listings:** thêm English và Vietnamese, dán cùng mô tả trong `docs/STORE_LISTING.md`; ảnh chụp 1280×800 và
+   ảnh quảng bá dùng lại từ `brand/store/` (Edge cần thêm ảnh nhỏ 300×300 tùy chọn — có thể bỏ qua).
+5. **Submission options → Notes for certification:** dán phần _Notes for the reviewer_ trong `docs/STORE_LISTING.md`
+   (cách thử nhanh, không cần máy chủ hay tài khoản Swapdeck).
+6. **Publish.** Duyệt thường mất đến 7 ngày làm việc.
+
+Khi cập nhật: tải gói mới ở mục **Packages** của cùng tiện ích, rồi Publish lại.
+
 ## GitHub Actions (CI)
 
-CI **chỉ chạy khi bạn chủ động**: đẩy tag phiên bản (`git tag v1.7.0 && git push origin v1.7.0`) hoặc bấm
+CI **chỉ chạy khi bạn chủ động**: đẩy tag phiên bản (`git tag v1.8.0 && git push origin v1.8.0`) hoặc bấm
 GitHub → Actions → CI → **Run workflow** (`gh workflow run CI`). Đẩy nhánh hay mở pull request không chạy gì.
 Mỗi lần chạy gồm lint, kiểm tra
 kiểu, unit test, build, end-to-end + accessibility trên Chrome for Testing, và test của Swapdeck Desktop trên macOS.

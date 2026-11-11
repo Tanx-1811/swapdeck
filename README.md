@@ -89,6 +89,16 @@ Không cần đăng xuất, không gõ lại mật khẩu, không cần thêm h�
   **Tiếng Việt và tiếng Anh**. Giao diện riêng **“sơn mài & giấy dó”** (mực trên giấy ấm, sơn mài đen, dấu son
   “đang dùng”), sáng/tối, bốn màu nhấn.
 
+### Vì sao Swapdeck?
+
+|                                                   | Swapdeck      | Hồ sơ Chrome             | Cửa sổ ẩn danh      |
+| ------------------------------------------------- | ------------- | ------------------------ | ------------------- |
+| Chuyển tài khoản ngay trong tab đang mở           | ✓ một cú nhấp | mở cửa sổ của hồ sơ khác | —                   |
+| Chuyển cả một bên (mọi ứng dụng) cùng lúc         | ✓             | —                        | —                   |
+| Hai tài khoản cạnh nhau trong **cùng một cửa sổ** | ✓ tab riêng   | hai cửa sổ               | thêm đúng một phiên |
+| Dùng chung tiện ích, dấu trang, lịch sử           | ✓             | mỗi hồ sơ một bộ riêng   | không lưu lịch sử   |
+| Đăng nhập còn nguyên sau khi đóng                 | ✓             | ✓                        | mất khi đóng cửa sổ |
+
 ### Swapdeck Desktop: mỗi bên một hồ sơ Chrome
 
 Muốn tách hẳn từng bên? [**Swapdeck Desktop**](desktop/README.md) là app trên thanh menu macOS: mỗi bên là một hồ sơ
@@ -247,6 +257,16 @@ click. No signing out, no retyping passwords, no extra Chrome profiles.
 - A full manager: overview, workspaces, apps & accounts, history, backup, security, settings, help. **English and
   Vietnamese**. Its own **lacquer & paper** look (ink on warm paper, black lacquer, a vermilion "in use" seal), light
   and dark, four accent colors.
+
+### Why Swapdeck?
+
+|                                                  | Swapdeck        | Chrome profiles                 | Incognito                |
+| ------------------------------------------------ | --------------- | ------------------------------- | ------------------------ |
+| Switch accounts in the tab you're on             | ✓ one click     | open the other profile's window | —                        |
+| Switch a whole client (every app) at once        | ✓               | —                               | —                        |
+| Two accounts side by side in **the same window** | ✓ separate tabs | two windows                     | exactly one more session |
+| Same extensions, bookmarks and history           | ✓               | a separate set per profile      | no history               |
+| Still signed in after closing                    | ✓               | ✓                               | gone with the window     |
 
 ### Swapdeck Desktop: one Chrome profile per workspace
 

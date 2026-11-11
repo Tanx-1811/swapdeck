@@ -353,6 +353,44 @@ test.describe('pages in and beside separate tabs keep working', () => {
     expect(await site.evaluate(socket, url)).toBe('bob@acme.test');
   });
 
+  test("never shares the browser's HTTP cache with the other tabs, either way", async ({ context, server, call }) => {
+    const acme = await addAcme(call, server);
+    const { site, alice } = await aliceAndBob(context, acme);
+    const lane = await openLane(context, call as Call, { appId: acme.id, accountId: alice.id });
+    // Pages the site lets the browser keep for ten minutes, opened as a link would (the cache is used).
+    const visit = async (page: Page, path: string) => {
+      await page.evaluate((url) => (location.href = url), `${acme.origin}${path}`);
+      await page.waitForURL(`**${path}`);
+      return page.locator('#server-user').textContent();
+    };
+    expect(await visit(lane.page, '/cached?page=1')).toBe('alice@acme.test');
+    expect(await visit(site, '/cached?page=1')).toBe('bob@acme.test');
+    expect(await visit(site, '/cached?page=2')).toBe('bob@acme.test');
+    expect(await visit(lane.page, '/cached?page=2')).toBe('alice@acme.test');
+
+    // The same for the page's own calls (same origin).
+    const load = (page: Page, path: string, how: 'fetch' | 'xhr') =>
+      page.evaluate(
+        ([url, kind]) =>
+          (kind === 'fetch'
+            ? fetch(url!).then((response) => response.text())
+            : new Promise<string>((resolve) => {
+                const request = new XMLHttpRequest();
+                request.open('GET', url!);
+                request.onload = () => resolve(request.responseText);
+                request.send();
+              })
+          ).then((text) => /server-user">([^<]*)</.exec(text)?.[1]),
+        [`${acme.origin}${path}`, how] as const,
+      );
+    for (const how of ['fetch', 'xhr'] as const) {
+      expect(await load(lane.page, `/cached?${how}=1`, how)).toBe('alice@acme.test');
+      expect(await load(site, `/cached?${how}=1`, how)).toBe('bob@acme.test');
+      expect(await load(site, `/cached?${how}=2`, how)).toBe('bob@acme.test');
+      expect(await load(lane.page, `/cached?${how}=2`, how)).toBe('alice@acme.test');
+    }
+  });
+
   test('document.cookie reads like a browser after writes; requests keep their semantics', async ({
     context,
     server,

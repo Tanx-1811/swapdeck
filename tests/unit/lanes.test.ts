@@ -3,6 +3,7 @@ import {
   cookieApplies,
   cookieHeader,
   defaultPath,
+  LANE_CACHE_GUARD,
   laneJar,
   laneRules,
   laneTiming,
@@ -317,6 +318,11 @@ describe('lane rules', () => {
       'no-store',
     );
     expect(headerFor(rules, 'https://app.acme.test/', 'cache-control', 'sub_frame', 'request')).toBe('no-cache');
+    // Pages pass Chrome's HTTP cache by (neither read nor kept): their response headers a rule sets
+    // come too late for it.
+    expect(headerFor(rules, 'https://app.acme.test/', 'if-range', 'main_frame', 'request')).toBe(LANE_CACHE_GUARD);
+    expect(headerFor(rules, 'https://app.acme.test/', 'if-range', 'sub_frame', 'request')).toBe(LANE_CACHE_GUARD);
+    expect(headerFor(rules, 'https://api.acme.test/v1', 'if-range', 'xmlhttprequest', 'request')).toBeNull();
   });
 
   it('stays small', () => {

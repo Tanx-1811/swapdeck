@@ -306,12 +306,19 @@ const FRAMES = ['sub_frame'] as chrome.declarativeNetRequest.ResourceType[];
 const NAVIGATIONS = ['main_frame', 'sub_frame'] as chrome.declarativeNetRequest.ResourceType[];
 /**
  * The same for calls of the page (fetch, XHR…), where CORS applies: a header a rule adds that isn't
- * CORS-safelisted (cache-control, pragma) can make a cross-origin call need a preflight its API
- * doesn't answer. Rules only remove request headers there; lane-main.ts asks for no cache instead.
+ * CORS-safelisted (cache-control, pragma, if-range) can make a cross-origin call need a preflight
+ * its API doesn't answer. Rules only remove request headers there; lane-main.ts keeps the calls out
+ * of the cache instead (fetch: no-store; same-origin XHR: the If-Range guard).
  */
 const CALLS = ['xmlhttprequest', 'other'] as chrome.declarativeNetRequest.ResourceType[];
 
 export type LaneRule = Omit<chrome.declarativeNetRequest.Rule, 'id'>;
+
+/**
+ * An If-Range value for a lane's own requests: with it, Chrome's HTTP cache passes the request
+ * through (neither reads nor stores the answer), and a server ignores it (there is no Range).
+ */
+export const LANE_CACHE_GUARD = '"swapdeck-lane"';
 
 const HEADER = {
   set: 'set' as chrome.declarativeNetRequest.HeaderOperation,
@@ -378,6 +385,10 @@ export function laneRules(options: {
           { header: 'if-modified-since', operation: HEADER.remove },
           { header: 'cache-control', operation: HEADER.set, value: 'no-cache' },
           { header: 'pragma', operation: HEADER.set, value: 'no-cache' },
+          // Chrome's HTTP cache neither reads nor stores a request with If-Range (servers ignore it
+          // without Range): the response headers a rule changes come too late for the cache, which
+          // would otherwise give the lane's page to the browser's own tabs.
+          { header: 'if-range', operation: HEADER.set, value: LANE_CACHE_GUARD },
         ],
         responseHeaders: [{ header: 'cache-control', operation: HEADER.set, value: 'no-store' }],
       },

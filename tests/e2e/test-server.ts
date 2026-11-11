@@ -251,6 +251,12 @@ async function handle(request: IncomingMessage, response: ServerResponse) {
     );
     return;
   }
+  if (url.pathname === '/cached') {
+    // A signed-in page the browser may keep for a while (some apps allow it for their own pages).
+    response.writeHead(200, { 'content-type': 'text/html', 'cache-control': 'private, max-age=600' });
+    response.end(appPage(serverUser, 'Cached | Acme'));
+    return;
+  }
   if (url.pathname === '/plain') {
     response.writeHead(200, { 'content-type': 'text/html' });
     response.end(page('Plain site', '<h1>Just a page</h1>'));

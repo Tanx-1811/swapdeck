@@ -13,7 +13,15 @@
  * (content/lane-relay.ts) through DOM events on this document.
  */
 import { registrableDomain } from '../core/domains';
-import { LANE_PREFIX, LANE_TIMING, laneNamespace, parseCookie, parseLaneTiming, pathMatches } from '../core/lanes';
+import {
+  LANE_CACHE_GUARD,
+  LANE_PREFIX,
+  LANE_TIMING,
+  laneNamespace,
+  parseCookie,
+  parseLaneTiming,
+  pathMatches,
+} from '../core/lanes';
 
 type LaneView = { token: string; cookies: string };
 
@@ -455,9 +463,11 @@ const FROM_RELAY = 'swapdeck-lane-ack';
     xhr.send = function send(this: XMLHttpRequest, ...args: unknown[]) {
       const request = opened.get(this);
       if (request && this.readyState === XMLHttpRequest.OPENED && sameOrigin(request.url)) {
-        // As for fetch: no answer from the browser's cache (a same-origin call, so no CORS to mind).
+        // As for fetch: the browser's cache neither answers nor keeps it (it may answer the
+        // browser's own tabs with it). A same-origin call: no CORS to mind.
         try {
           apply(realHeader, this, ['Cache-Control', 'no-cache']);
+          apply(realHeader, this, ['If-Range', LANE_CACHE_GUARD]);
         } catch {
           // Sent already: send() throws below, as it always does.
         }

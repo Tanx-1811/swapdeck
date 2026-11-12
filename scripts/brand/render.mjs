@@ -6,7 +6,7 @@
 //   node scripts/brand/render.mjs --html /tmp/x   # also write the composed HTML
 //
 // Logos are rendered with resvg; the wordmark is outlined from
-// brand/fonts/Fraunces-SemiBold-latin.ttf (Fraunces 600, SIL OFL), so the
+// brand/fonts/BeVietnamPro-Bold-latin.ttf (Be Vietnam Pro 700, SIL OFL), so the
 // published SVGs need no fonts. Promo and social images are rendered with
 // Playwright's Chromium, with the brand fonts embedded from @fontsource.
 // Both run fully offline, on any OS.
@@ -24,7 +24,7 @@ import * as readmeBanner from '../../brand/templates/readme-banner.mjs';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const BRAND = join(ROOT, 'brand');
-const WORDMARK_FONT = join(BRAND, 'fonts', 'Fraunces-SemiBold-latin.ttf');
+const WORDMARK_FONT = join(BRAND, 'fonts', 'BeVietnamPro-Bold-latin.ttf');
 const TEMPLATES = { marquee, small, githubSocial, readmeBanner };
 
 const args = process.argv.slice(2);

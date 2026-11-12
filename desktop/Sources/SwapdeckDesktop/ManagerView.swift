@@ -103,11 +103,6 @@ struct ManagerView: View {
             .padding(.horizontal, 8)
             .frame(height: 32)
             .background(RoundedRectangle(cornerRadius: 8).fill(selected ? Theme.lacquerActive : .clear))
-            .overlay(alignment: .leading) {
-                if selected {
-                    RoundedRectangle(cornerRadius: 1.5).fill(Theme.lacquerAccent).frame(width: 3, height: 16).offset(x: -10)
-                }
-            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

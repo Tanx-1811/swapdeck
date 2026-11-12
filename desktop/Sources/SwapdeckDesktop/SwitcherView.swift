@@ -305,16 +305,18 @@ struct WorkspaceCard: View {
         }
     }
 
-    /// Card stock; the workspace in front sits on top of the deck.
+    /// A white card; the workspace in front wears a soft accent ring, flat.
     private func card(isFront: Bool) -> some View {
         let shape = RoundedRectangle(cornerRadius: 11, style: .continuous)
         return ZStack {
-            if isFront {
-                shape.fill(Theme.card).overlay(shape.strokeBorder(Theme.lineStrong, lineWidth: 1)).offset(x: 3, y: 3)
-            }
             shape.fill(hovering || highlighted ? Theme.hover : Theme.card)
-            shape.strokeBorder(isFront || highlighted ? Theme.lineStrong : Theme.line, lineWidth: 1)
+            if isFront {
+                shape.strokeBorder(Theme.accent.opacity(0.12), lineWidth: 4).padding(-2)
+                shape.strokeBorder(Theme.accent.opacity(0.5), lineWidth: 1)
+            } else {
+                shape.strokeBorder(highlighted ? Theme.lineStrong : Theme.line, lineWidth: 1)
+            }
         }
-        .shadow(color: .black.opacity(isFront ? 0.1 : 0.04), radius: isFront ? 6 : 1.5, y: isFront ? 4 : 1)
+        .shadow(color: .black.opacity(0.04), radius: 1.5, y: 1)
     }
 }

@@ -54,37 +54,36 @@ const CAPTIONS = {
 
 function frame(lang: 'en' | 'vi', index: number, inner: string, extraCss = ''): string {
   const [title, sub] = CAPTIONS[lang][index]!;
-  // Black lacquer around the warm-paper product, captions in the brand faces.
+  // The product on the deep ink of the manager sidebar, captions in the brand face. Flat: no sheen.
   return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><style>
   ${fontFacesCss()}
   * { box-sizing: border-box; margin: 0; }
   body { position: relative; width: 1280px; height: 800px; overflow: hidden; font-family: ${FONTS.text};
-    background: ${PALETTE.lacquer}; color: ${PALETTE.eggshell}; -webkit-font-smoothing: antialiased; }
-  ${backgroundCss('lacquer')}
+    background: ${PALETTE.night}; color: ${PALETTE.onNight}; -webkit-font-smoothing: antialiased; }
+  ${backgroundCss('night')}
   .cap { position: absolute; left: 72px; top: 40px; right: 72px; display: flex; align-items: center; gap: 20px; }
-  .cap svg { width: 52px; height: 52px; flex: none; border-radius: 13px;
-    box-shadow: 0 0 0 1px rgba(241, 233, 220, .14), 0 10px 24px rgba(0, 0, 0, .5); }
-  .cap h1 { font: 600 34px/1.12 ${FONTS.display}; letter-spacing: -0.02em; }
-  .cap p { margin-top: 7px; font-size: 18px; color: ${PALETTE.eggshell2}; }
+  .cap svg { width: 52px; height: 52px; flex: none; border-radius: 13px; }
+  .cap h1 { font: 700 34px/1.12 ${FONTS.display}; letter-spacing: -0.03em; }
+  .cap p { margin-top: 7px; font-size: 18px; color: ${PALETTE.onNight2}; }
   .window { position: absolute; left: 72px; right: 72px; top: 142px; bottom: -14px; border-radius: 14px 14px 0 0; overflow: hidden;
-    box-shadow: 0 30px 80px rgba(0, 0, 0, .6), 0 0 0 1px rgba(241, 233, 220, .16); background: ${PALETTE.paper}; }
-  .chrome { height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 14px; background: #e8e2d7; border-bottom: 1px solid #d5ccbc; }
-  .chrome i { width: 11px; height: 11px; border-radius: 50%; background: #cdc3b2; }
+    box-shadow: 0 30px 80px rgba(0, 0, 0, .6), 0 0 0 1px rgba(242, 241, 255, .12); background: ${PALETTE.paper}; }
+  .chrome { height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 14px; background: #e9ebf1; border-bottom: 1px solid #d7dae3; }
+  .chrome i { width: 11px; height: 11px; border-radius: 50%; background: #c3c7d3; }
   .chrome span { margin-left: 14px; flex: 1; max-width: 560px; height: 24px; border-radius: 12px; background: ${PALETTE.card};
     color: ${PALETTE.ink2}; font-size: 12.5px; line-height: 24px; padding: 0 12px; }
   .chrome b { margin-left: auto; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px;
-    background: ${PALETTE.card}; box-shadow: 0 0 0 2px ${PALETTE.son}; position: relative; }
+    background: ${PALETTE.card}; box-shadow: 0 0 0 2px ${PALETTE.iris}; position: relative; }
   .chrome b svg { width: 18px; height: 18px; border-radius: 4px; }
   .chrome b em { position: absolute; right: -6px; bottom: -5px; font: 700 9px/1 ${FONTS.text}; font-style: normal; color: #fff;
-    background: ${PALETTE.son}; border-radius: 4px; padding: 2px 4px; }
+    background: ${PALETTE.iris}; border-radius: 4px; padding: 2px 4px; }
   .body img { display: block; }
-  .site { position: absolute; inset: 38px 0 0 0; background: #f7f4ee; padding: 28px 34px; display: grid; grid-template-columns: 200px 1fr; gap: 26px; }
+  .site { position: absolute; inset: 38px 0 0 0; background: #f6f7fb; padding: 28px 34px; display: grid; grid-template-columns: 200px 1fr; gap: 26px; }
   .site .nav { display: grid; gap: 12px; align-content: start; }
-  .site .nav div, .site .main div { border-radius: 10px; background: #e9e3d9; }
+  .site .nav div, .site .main div { border-radius: 10px; background: #e6e8ef; }
   .site .main { display: grid; gap: 16px; align-content: start; grid-template-columns: repeat(3, 1fr); }
   .site .main .wide { grid-column: 1 / -1; height: 46px; background: ${PALETTE.hairline}; }
   .popup { position: absolute; top: 46px; right: 16px; width: 720px; border-radius: 12px; overflow: hidden;
-    box-shadow: 0 24px 60px rgba(26, 23, 20, .35), 0 0 0 1px rgba(26, 23, 20, .14); }
+    box-shadow: 0 24px 60px rgba(16, 18, 31, .35), 0 0 0 1px rgba(16, 18, 31, .14); }
   ${extraCss}
   </style></head><body>
   <div class="bg"></div>
@@ -170,7 +169,8 @@ for (const lang of ['en', 'vi'] as const) {
     await menuPopup.waitForTimeout(400);
     const rowBox = (await row.boundingBox())!;
     const menuBox = (await menu.boundingBox())!;
-    const top = Math.max(0, rowBox.y - 10);
+    // Close above the row: the ring of the account in use, just above it, stays out of the picture.
+    const top = Math.max(0, rowBox.y - 3);
     const clip = {
       x: 0,
       y: top,
@@ -182,7 +182,7 @@ for (const lang of ['en', 'vi'] as const) {
     const tabsCss = `${sceneCss(lang)}
       .tag { opacity: 1; }
       .callout { position: absolute; left: 118px; bottom: 96px; width: 380px; border-radius: 12px; overflow: hidden;
-        box-shadow: 0 24px 60px rgba(26, 23, 20, .4), 0 0 0 1px rgba(26, 23, 20, .16); }`;
+        box-shadow: 0 24px 60px rgba(16, 18, 31, .4), 0 0 0 1px rgba(16, 18, 31, .16); }`;
     await compose(page, frame(lang, 2, tabsScene, tabsCss), `${lang}-3-tabs.png`);
   });
 }

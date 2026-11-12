@@ -326,8 +326,10 @@ describe('settings', () => {
 
   it('keeps known accents only', () => {
     for (const accent of ACCENTS) expect(parseSettings({ accent }).accent).toBe(accent);
-    expect(parseSettings({ accent: 'neon' }).accent).toBe('son');
-    expect(parseSettings({ accent: 42 }).accent).toBe('son');
+    expect(parseSettings({ accent: 'neon' }).accent).toBe('iris');
+    expect(parseSettings({ accent: 42 }).accent).toBe('iris');
+    // The vermilion default before the new look.
+    expect(parseSettings({ accent: 'son' }).accent).toBe('iris');
   });
 });
 

@@ -1,49 +1,49 @@
 /*
- * Swapdeck design language — "sơn mài & giấy dó" (lacquer & paper).
- * Light: ink on warm paper. Dark: eggshell on black lacquer. One accent
- * (vermilion "son" by default; jade, indigo or gold leaf by choice) marks what
- * is in use, like a red seal on a document. Accounts are index cards.
+ * Swapdeck design language — flat and quiet. Cool grey surfaces, one ink, one
+ * accent (iris by default; blue, jade or amber by choice) for what is in use and
+ * the main action. Colours are solid: no gradients, no sheen, no coloured edge
+ * strips; state is shown with a tinted background, a dot or a label.
  */
 
 :root {
   color-scheme: light;
-  --bg: #f4f0e8;
-  --bg-elev: #fbf9f5;
-  --bg-sunken: #ede7dc;
-  --bg-hover: #eee8de;
-  --bg-active: #e7dfd2;
-  --border: #e1d9cb;
-  --border-strong: #cbbfab;
-  --text: #1a1714;
-  --text-2: #57504a;
-  --text-3: #6f665b;
-  --ink: #1a1714;
-  --ink-hover: #2c2621;
-  --on-ink: #fbf9f5;
-  --accent: #c8402b;
-  --accent-hover: #b33724;
-  --accent-text: #a8331e;
-  --accent-soft: #f6e2d9;
+  --bg: #f6f7fb;
+  --bg-elev: #ffffff;
+  --bg-sunken: #eef0f6;
+  --bg-hover: #f1f2f8;
+  --bg-active: #e7e9f3;
+  --border: #e3e5ee;
+  --border-strong: #cacedc;
+  --text: #10121f;
+  --text-2: #474d63;
+  --text-3: #5f657b;
+  --ink: #16152b;
+  --ink-hover: #26243f;
+  --on-ink: #ffffff;
+  --accent: #5046e5;
+  --accent-hover: #4338ca;
+  --accent-text: #4338ca;
+  --accent-soft: #eeedfe;
   --on-accent: #ffffff;
-  --success: #1f6b52;
-  --success-soft: #e1ede6;
-  --warning: #8f5a12;
-  --warning-soft: #f5e9d3;
-  --danger: #b3261e;
-  --danger-soft: #f7e0dc;
+  --success: #047857;
+  --success-soft: #e7f6ef;
+  --warning: #a04d0a;
+  --warning-soft: #fdf3e2;
+  --danger: #b42318;
+  --danger-soft: #fdecea;
   --on-danger: #ffffff;
-  --info: #2f4e86;
-  --info-soft: #e2e8f2;
-  --gold: #8a6a1f;
-  /* The lacquer frame: popup lid and manager sidebar. */
-  --lacquer: #1a1714;
-  --lacquer-hover: #2a241f;
-  --lacquer-active: #352d27;
-  --lacquer-border: #2f2823;
-  --on-lacquer: #f4ede1;
-  --on-lacquer-2: #bdb1a0;
-  --lacquer-accent: #ef6d52;
-  --tile-ring: rgb(26 23 20 / 0.1);
+  --info: #1d4ed8;
+  --info-soft: #e8effe;
+  --gold: #a15c07;
+  /* The frame: popup header and manager sidebar. */
+  --lacquer: #16152b;
+  --lacquer-hover: #23213f;
+  --lacquer-active: #2c2950;
+  --lacquer-border: #2a2847;
+  --on-lacquer: #f2f1ff;
+  --on-lacquer-2: #a9a6cc;
+  --lacquer-accent: #aca8ff;
+  --tile-ring: rgb(16 18 31 / 0.08);
   /* Kept for components written against the first palette. */
   --brand: var(--accent);
   --brand-hover: var(--accent-hover);
@@ -51,182 +51,180 @@
   --brand-soft: var(--accent-soft);
   --on-brand: var(--on-accent);
   --focus-ring: 0 0 0 2px var(--bg-elev), 0 0 0 4px color-mix(in srgb, var(--accent) 70%, transparent);
-  --shadow-sm: 0 1px 0 rgb(26 23 20 / 0.03), 0 1px 2px rgb(26 23 20 / 0.06);
-  --shadow-md: 0 1px 2px rgb(26 23 20 / 0.06), 0 10px 24px -10px rgb(26 23 20 / 0.22);
-  --shadow-lg: 0 2px 6px rgb(26 23 20 / 0.08), 0 24px 56px -16px rgb(26 23 20 / 0.4);
+  --shadow-sm: 0 1px 2px rgb(16 18 31 / 0.06);
+  --shadow-md: 0 1px 2px rgb(16 18 31 / 0.05), 0 8px 20px -8px rgb(16 18 31 / 0.16);
+  --shadow-lg: 0 2px 6px rgb(16 18 31 / 0.06), 0 20px 48px -16px rgb(16 18 31 / 0.3);
   --r-xs: 4px;
   --r-sm: 6px;
   --r-md: 8px;
   --r-lg: 11px;
   --r-xl: 14px;
   --font: 'Be Vietnam Pro', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --display: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  /* Headings are the text face, heavier and tighter. */
+  --display: var(--font);
   --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
-  /* A faint fibre, like dó paper. */
-  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .1 0 0 0 0 .08 0 0 0 0 .06 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --grain: none;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --bg: #141110;
-    --bg-elev: #1c1816;
-    --bg-sunken: #100e0c;
-    --bg-hover: #262019;
-    --bg-active: #2d2620;
-    --border: #332b25;
-    --border-strong: #4a3f36;
-    --text: #f1e9dc;
-    --text-2: #c2b6a5;
-    --text-3: #9c9080;
-    --ink: #f1e9dc;
+    --bg: #0e0f15;
+    --bg-elev: #171821;
+    --bg-sunken: #0a0b10;
+    --bg-hover: #1e202b;
+    --bg-active: #262836;
+    --border: #262835;
+    --border-strong: #3a3d4f;
+    --text: #ecedf5;
+    --text-2: #a9aec2;
+    --text-3: #8b90a6;
+    --ink: #ecedf5;
     --ink-hover: #ffffff;
-    --on-ink: #141110;
-    --accent: #e0573c;
-    --accent-hover: #e86a50;
-    --accent-text: #f08a6c;
-    --accent-soft: #3a1d15;
-    --on-accent: #141110;
-    --success: #6fc39e;
-    --success-soft: #13281f;
-    --warning: #e3a957;
-    --warning-soft: #2b2010;
-    --danger: #f07b6f;
-    --danger-soft: #33161a;
-    --on-danger: #141110;
-    --info: #93b1e8;
-    --info-soft: #172036;
-    --gold: #d4ae5e;
-    --lacquer: #0d0b0a;
-    --lacquer-hover: #1c1815;
-    --lacquer-active: #26201b;
-    --lacquer-border: #2a231e;
-    --tile-ring: rgb(255 255 255 / 0.12);
+    --on-ink: #0e0f15;
+    --accent: #8c87ff;
+    --accent-hover: #a09cff;
+    --accent-text: #a5a1ff;
+    --accent-soft: #23214a;
+    --on-accent: #0e0f15;
+    --success: #5fd3a0;
+    --success-soft: #10261c;
+    --warning: #f0b45a;
+    --warning-soft: #2b1f0d;
+    --danger: #f38b80;
+    --danger-soft: #331618;
+    --on-danger: #0e0f15;
+    --info: #8db2ff;
+    --info-soft: #142038;
+    --gold: #f0b44e;
+    --lacquer: #0a0a12;
+    --lacquer-hover: #1a1a28;
+    --lacquer-active: #232336;
+    --lacquer-border: #20202f;
+    --tile-ring: rgb(255 255 255 / 0.1);
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
     --shadow-md: 0 1px 2px rgb(0 0 0 / 0.5), 0 12px 28px -10px rgb(0 0 0 / 0.6);
     --shadow-lg: 0 24px 60px -12px rgb(0 0 0 / 0.75);
-    --grain: none;
   }
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #141110;
-  --bg-elev: #1c1816;
-  --bg-sunken: #100e0c;
-  --bg-hover: #262019;
-  --bg-active: #2d2620;
-  --border: #332b25;
-  --border-strong: #4a3f36;
-  --text: #f1e9dc;
-  --text-2: #c2b6a5;
-  --text-3: #9c9080;
-  --ink: #f1e9dc;
+  --bg: #0e0f15;
+  --bg-elev: #171821;
+  --bg-sunken: #0a0b10;
+  --bg-hover: #1e202b;
+  --bg-active: #262836;
+  --border: #262835;
+  --border-strong: #3a3d4f;
+  --text: #ecedf5;
+  --text-2: #a9aec2;
+  --text-3: #8b90a6;
+  --ink: #ecedf5;
   --ink-hover: #ffffff;
-  --on-ink: #141110;
-  --accent: #e0573c;
-  --accent-hover: #e86a50;
-  --accent-text: #f08a6c;
-  --accent-soft: #3a1d15;
-  --on-accent: #141110;
-  --success: #6fc39e;
-  --success-soft: #13281f;
-  --warning: #e3a957;
-  --warning-soft: #2b2010;
-  --danger: #f07b6f;
-  --danger-soft: #33161a;
-  --on-danger: #141110;
-  --info: #93b1e8;
-  --info-soft: #172036;
-  --gold: #d4ae5e;
-  --lacquer: #0d0b0a;
-  --lacquer-hover: #1c1815;
-  --lacquer-active: #26201b;
-  --lacquer-border: #2a231e;
-  --tile-ring: rgb(255 255 255 / 0.12);
+  --on-ink: #0e0f15;
+  --accent: #8c87ff;
+  --accent-hover: #a09cff;
+  --accent-text: #a5a1ff;
+  --accent-soft: #23214a;
+  --on-accent: #0e0f15;
+  --success: #5fd3a0;
+  --success-soft: #10261c;
+  --warning: #f0b45a;
+  --warning-soft: #2b1f0d;
+  --danger: #f38b80;
+  --danger-soft: #331618;
+  --on-danger: #0e0f15;
+  --info: #8db2ff;
+  --info-soft: #142038;
+  --gold: #f0b44e;
+  --lacquer: #0a0a12;
+  --lacquer-hover: #1a1a28;
+  --lacquer-active: #232336;
+  --lacquer-border: #20202f;
+  --tile-ring: rgb(255 255 255 / 0.1);
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
   --shadow-md: 0 1px 2px rgb(0 0 0 / 0.5), 0 12px 28px -10px rgb(0 0 0 / 0.6);
   --shadow-lg: 0 24px 60px -12px rgb(0 0 0 / 0.75);
-  --grain: none;
 }
 
 /* Accent choices (Settings → Accent color). */
-:root[data-accent='ngoc'] {
-  --accent: #1f6b52;
-  --accent-hover: #185a45;
-  --accent-text: #1f6b52;
-  --accent-soft: #e1ede6;
+:root[data-accent='cham'] {
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-text: #1d4ed8;
+  --accent-soft: #e8effe;
   --on-accent: #ffffff;
-  --lacquer-accent: #62bd96;
+  --lacquer-accent: #9dbdff;
 }
 
-:root[data-accent='cham'] {
-  --accent: #2f4e86;
-  --accent-hover: #264171;
-  --accent-text: #2f4e86;
-  --accent-soft: #e2e8f2;
+:root[data-accent='ngoc'] {
+  --accent: #0f7a5f;
+  --accent-hover: #0b654f;
+  --accent-text: #0b6b53;
+  --accent-soft: #e3f4ee;
   --on-accent: #ffffff;
-  --lacquer-accent: #8eaae2;
+  --lacquer-accent: #7addb7;
 }
 
 :root[data-accent='vang'] {
-  --accent: #8a6a1f;
-  --accent-hover: #765a19;
-  --accent-text: #7a5d19;
-  --accent-soft: #f3ead3;
+  --accent: #a15c07;
+  --accent-hover: #8a4e06;
+  --accent-text: #8f5206;
+  --accent-soft: #fbf0dc;
   --on-accent: #ffffff;
-  --lacquer-accent: #d8b467;
+  --lacquer-accent: #f5c978;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root[data-accent='ngoc']:not([data-theme='light']) {
-    --accent: #5db892;
-    --accent-hover: #72c6a3;
-    --accent-text: #7ccba8;
-    --accent-soft: #13281f;
-    --on-accent: #141110;
+  :root[data-accent='cham']:not([data-theme='light']) {
+    --accent: #7aa7ff;
+    --accent-hover: #94b8ff;
+    --accent-text: #9dbdff;
+    --accent-soft: #13213d;
+    --on-accent: #0e0f15;
   }
 
-  :root[data-accent='cham']:not([data-theme='light']) {
-    --accent: #7f9fdc;
-    --accent-hover: #93afe3;
-    --accent-text: #9db6ea;
-    --accent-soft: #172036;
-    --on-accent: #141110;
+  :root[data-accent='ngoc']:not([data-theme='light']) {
+    --accent: #4fcb9c;
+    --accent-hover: #6ad6ae;
+    --accent-text: #7addb7;
+    --accent-soft: #0f2a21;
+    --on-accent: #0e0f15;
   }
 
   :root[data-accent='vang']:not([data-theme='light']) {
-    --accent: #d4ae5e;
-    --accent-hover: #dcbb73;
-    --accent-text: #e2c27c;
-    --accent-soft: #2b2310;
-    --on-accent: #141110;
+    --accent: #f0b44e;
+    --accent-hover: #f4c26c;
+    --accent-text: #f5c978;
+    --accent-soft: #2d2110;
+    --on-accent: #0e0f15;
   }
 }
 
-:root[data-theme='dark'][data-accent='ngoc'] {
-  --accent: #5db892;
-  --accent-hover: #72c6a3;
-  --accent-text: #7ccba8;
-  --accent-soft: #13281f;
-  --on-accent: #141110;
+:root[data-theme='dark'][data-accent='cham'] {
+  --accent: #7aa7ff;
+  --accent-hover: #94b8ff;
+  --accent-text: #9dbdff;
+  --accent-soft: #13213d;
+  --on-accent: #0e0f15;
 }
 
-:root[data-theme='dark'][data-accent='cham'] {
-  --accent: #7f9fdc;
-  --accent-hover: #93afe3;
-  --accent-text: #9db6ea;
-  --accent-soft: #172036;
-  --on-accent: #141110;
+:root[data-theme='dark'][data-accent='ngoc'] {
+  --accent: #4fcb9c;
+  --accent-hover: #6ad6ae;
+  --accent-text: #7addb7;
+  --accent-soft: #0f2a21;
+  --on-accent: #0e0f15;
 }
 
 :root[data-theme='dark'][data-accent='vang'] {
-  --accent: #d4ae5e;
-  --accent-hover: #dcbb73;
-  --accent-text: #e2c27c;
-  --accent-soft: #2b2310;
-  --on-accent: #141110;
+  --accent: #f0b44e;
+  --accent-hover: #f4c26c;
+  --accent-text: #f5c978;
+  --accent-soft: #2d2110;
+  --on-accent: #0e0f15;
 }
 
 *,
@@ -244,10 +242,6 @@ body {
   font-family: var(--font);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-}
-
-body {
-  background-image: var(--grain);
 }
 
 button,
@@ -310,8 +304,8 @@ kbd {
 
 .display {
   font-family: var(--display);
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 /* --- Buttons ------------------------------------------------------------ */
@@ -377,17 +371,16 @@ kbd {
   background: var(--bg-elev);
 }
 
-/* Primary actions are written in ink. */
+/* The main action of a view, in the accent. Flat: no inner highlight. */
 .btn--primary {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--on-ink);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08);
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
 }
 
 .btn--primary:hover:not(:disabled) {
-  background: var(--ink-hover);
-  border-color: var(--ink-hover);
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
 .btn--accent {
@@ -807,7 +800,7 @@ kbd {
   margin-left: -3px;
 }
 
-/* App tiles carry the app's initial in the title face. */
+/* App tiles carry the app's initial, in the heading weight. */
 .app-icon {
   display: inline-grid;
   flex: none;
@@ -817,8 +810,8 @@ kbd {
   border-radius: 8px;
   color: #fff;
   font-family: var(--display);
-  font-weight: 600;
-  font-size: 16px;
+  font-weight: 700;
+  font-size: 15px;
   overflow: hidden;
   box-shadow: inset 0 0 0 1px var(--tile-ring);
 }
@@ -884,31 +877,36 @@ kbd {
   margin-left: -2px;
 }
 
-/* --- The seal: what is in use ---------------------------------------------- */
+/* --- What is in use: a tinted label with a dot ------------------------------ */
 
 .seal {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 4px;
-  padding: 1px 6px 1px 7px;
-  border: 1.5px solid var(--accent);
-  border-radius: var(--r-xs);
+  gap: 5px;
+  padding: 1px 8px 1px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
   color: var(--accent-text);
-  font-size: 9.5px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
   line-height: 1.5;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
   white-space: nowrap;
-  transform: rotate(-2deg);
-  animation: stamp 0.24s var(--ease);
+  animation: seal-in 0.18s var(--ease);
 }
 
-/* The seal lands like a stamp; its ink stays fully opaque so it is always readable. */
-@keyframes stamp {
+.seal::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* Fades in; its text stays fully opaque so it is always readable. */
+@keyframes seal-in {
   from {
-    transform: rotate(-7deg) scale(1.3);
+    transform: scale(0.92);
   }
 }
 
@@ -917,16 +915,14 @@ kbd {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 3px;
-  padding: 1px 6px 1px 4px;
-  border-radius: var(--r-xs);
+  gap: 4px;
+  padding: 1px 8px 1px 6px;
+  border-radius: 999px;
   background: var(--danger);
   color: var(--on-danger);
-  font-size: 9.5px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
   line-height: 1.5;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
   white-space: nowrap;
 }
 
@@ -941,17 +937,14 @@ kbd {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 3px;
-  padding: 0 6px 0 4px;
-  border: 1px solid var(--warning);
-  border-radius: var(--r-xs);
+  gap: 4px;
+  padding: 1px 8px 1px 6px;
+  border-radius: 999px;
   background: var(--warning-soft);
   color: var(--warning);
-  font-size: 9.5px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
   line-height: 1.5;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
   white-space: nowrap;
 }
 
@@ -962,24 +955,21 @@ kbd {
 }
 
 /*
- * Open in a separate tab (its own sign-in, apart from the browser's other tabs): indigo (chàm),
- * so it never reads as the seal of the account in use.
+ * Open in a separate tab (its own sign-in, apart from the browser's other tabs): blue, so it never
+ * reads as the in-use label.
  */
 .flag-lane {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 3px;
-  padding: 0 6px 0 4px;
-  border: 1px solid var(--info);
-  border-radius: var(--r-xs);
+  gap: 4px;
+  padding: 1px 8px 1px 6px;
+  border-radius: 999px;
   background: var(--info-soft);
   color: var(--info);
-  font-size: 9.5px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
   line-height: 1.5;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
   white-space: nowrap;
 }
 
@@ -995,8 +985,7 @@ kbd {
   display: flex;
   gap: 10px;
   padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--tone, var(--info));
+  border: 1px solid color-mix(in srgb, var(--tone, var(--info)) 22%, transparent);
   border-radius: var(--r-md);
   background: var(--tone-soft, var(--bg-elev));
   font-size: 12.5px;

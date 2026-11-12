@@ -9,7 +9,7 @@ Two accounts of the same site, side by side: **separate tabs**.
 - **Open in a separate tab** (popup or manager: ⋯ next to an account; right-click a page or a link; works for any saved
   account but the one your tabs use): the account opens in a new tab with its own sign-in, while your other tabs keep
   theirs — same window, no Chrome profile. Its tabs are grouped under the account's name and colour, the toolbar badge
-  shows it, links it opens in new tabs stay with it, and important accounts keep their red strip there.
+  shows it, links it opens in new tabs stay with it, and important accounts keep their red tag there.
 - **Scratch tab** (popup, manager, right-click, or a shortcut you set): a separate tab with nobody signed in. Sign in with
   anyone; close it and it's gone, or **Save as account** from the popup — the tab then becomes that account's.
 - In a separate tab the popup says so: who is signed in there, which account your other tabs keep, and **Use in all
@@ -54,6 +54,19 @@ Two accounts of the same site, side by side: **separate tabs**.
 - New permission `webRequest` (no install warning): separate tabs read the cookies your added sites set there, so they
   stay in that tab instead of Chrome's cookie store. Privacy policy and store listing updated.
 - Store screenshots and a 21-second demo video (`npm run video`) show separate tabs; the README shows the demo.
+
+**A new look**
+
+- **New mark:** a deck of three account cards on a flat iris tile, the account in use in front — clearer at 16 px in
+  the toolbar than the old fanned deck with its stamp. New icons, store art, social images and Swapdeck Desktop icon.
+- **Flat and quiet:** cool grey surfaces and one iris accent instead of warm paper, black lacquer and vermilion; no
+  gradients, sheen or paper grain, and no coloured edge strips — not on callouts, the open page in the sidebar, the
+  selected app, messages on a page, or along the top of a page (an important account keeps its red tag there).
+- **In use** is a dot on a tinted label instead of a tilted stamp; the card in use has a soft accent ring instead of a
+  card drawn behind it. Main buttons are in the accent.
+- Titles in Be Vietnam Pro, the interface's own face (Fraunces is no longer bundled: a smaller download).
+- Accent colors: **iris** (new default), blue, jade, amber. Vermilion, the old default, now reads as iris.
+- Swapdeck Desktop follows: same colors, mark, in-use label and flat cards.
 
 ## 1.7.0 — 2026-11-06
 

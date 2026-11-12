@@ -1,10 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
-  <rect width="16" height="16" rx="3.5" fill="#1A1714"/>
-  <rect x="0.5" y="0.5" width="15" height="15" rx="3" fill="none" stroke="#F1E9DC" stroke-opacity="0.2"/>
-  <rect x="6" y="2" width="8" height="6" rx="1" fill="#B08A3A"/>
-  <rect x="4" y="4" width="10" height="6" rx="1" fill="#D9CDB8"/>
-  <rect x="2" y="6" width="11" height="8" rx="1" fill="#FBF9F5"/>
-  <rect x="4" y="8" width="5" height="1" fill="#1A1714"/>
-  <rect x="4" y="10" width="3" height="1" fill="#1A1714" fill-opacity="0.35"/>
-  <rect x="8" y="10" width="4" height="2" fill="#C8402B"/>
+  <defs>
+    <clipPath id="sd-front">
+      <rect x="2" y="6" width="8" height="8" rx="1.5"/>
+    </clipPath>
+  </defs>
+  <rect width="16" height="16" rx="3.5" fill="#5046E5"/>
+  <rect x="7" y="2" width="7" height="7" rx="1.5" fill="#8A84F0"/>
+  <rect x="5" y="4" width="7" height="7" rx="1.5" fill="#A9A4F5"/>
+  <rect x="2" y="6" width="8" height="8" rx="1.5" fill="#FFFFFF"/>
+  <g clip-path="url(#sd-front)" fill="#5046E5">
+    <circle cx="6" cy="8.75" r="1.5"/>
+    <rect x="3.5" y="11" width="5" height="5" rx="2.5"/>
+  </g>
 </svg>

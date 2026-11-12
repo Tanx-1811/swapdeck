@@ -5,23 +5,25 @@ import AppKit
 enum MenuBarIcon {
     static func image() -> NSImage {
         let image = NSImage(size: NSSize(width: 18, height: 18), flipped: true) { _ in
-            NSColor.black.setStroke()
-            NSColor.black.setFill()
-            // Two cards behind, as outlines.
-            let back = NSBezierPath(roundedRect: NSRect(x: 7.5, y: 2.5, width: 8.5, height: 6), xRadius: 1.4, yRadius: 1.4)
-            back.lineWidth = 1.2
-            NSColor.black.withAlphaComponent(0.55).setStroke()
-            back.stroke()
-            let middle = NSBezierPath(roundedRect: NSRect(x: 4.8, y: 4.8, width: 10, height: 7), xRadius: 1.5, yRadius: 1.5)
-            middle.lineWidth = 1.2
-            NSColor.black.withAlphaComponent(0.8).setStroke()
-            middle.stroke()
-            // The card in front, solid, with a name line and the seal cut out.
-            let front = NSBezierPath(roundedRect: NSRect(x: 2, y: 7.5, width: 11.5, height: 8.5), xRadius: 1.8, yRadius: 1.8)
-            front.append(NSBezierPath(roundedRect: NSRect(x: 4, y: 9.8, width: 5, height: 1.4), xRadius: 0.7, yRadius: 0.7).reversed)
-            front.append(NSBezierPath(rect: NSRect(x: 8.3, y: 12.4, width: 3.4, height: 1.8)).reversed)
+            // Two cards behind, stepped up and to the right as in the mark.
+            NSColor.black.withAlphaComponent(0.45).setFill()
+            NSBezierPath(roundedRect: NSRect(x: 8, y: 2, width: 8, height: 8), xRadius: 2, yRadius: 2).fill()
+            NSColor.black.withAlphaComponent(0.7).setFill()
+            NSBezierPath(roundedRect: NSRect(x: 5, y: 5, width: 8, height: 8), xRadius: 2, yRadius: 2).fill()
+            // The card in front, solid, with a gap around it and the person cut out.
+            NSGraphicsContext.current?.compositingOperation = .clear
+            NSBezierPath(roundedRect: NSRect(x: 1, y: 7, width: 10, height: 10), xRadius: 2.6, yRadius: 2.6).fill()
+            NSGraphicsContext.current?.compositingOperation = .sourceOver
+            let front = NSBezierPath(roundedRect: NSRect(x: 2, y: 8, width: 8, height: 8), xRadius: 2, yRadius: 2)
             NSColor.black.setFill()
             front.fill()
+            NSGraphicsContext.saveGraphicsState()
+            front.addClip()
+            NSGraphicsContext.current?.compositingOperation = .clear
+            NSBezierPath(ovalIn: NSRect(x: 4.75, y: 9.4, width: 2.5, height: 2.5)).fill()
+            NSBezierPath(roundedRect: NSRect(x: 3.6, y: 13.2, width: 4.8, height: 4), xRadius: 2, yRadius: 2).fill()
+            NSGraphicsContext.current?.compositingOperation = .sourceOver
+            NSGraphicsContext.restoreGraphicsState()
             return true
         }
         image.isTemplate = true

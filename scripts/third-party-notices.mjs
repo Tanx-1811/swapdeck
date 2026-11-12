@@ -10,14 +10,13 @@ import { dirname, join, resolve } from 'node:path';
 const require = createRequire(import.meta.url);
 const root = resolve(import.meta.dirname, '..');
 
-// Everything Vite bundles into dist/: React (with its scheduler), the icons and the three typefaces.
+// Everything Vite bundles into dist/: React (with its scheduler), the icons and the two typefaces.
 const BUNDLED = [
   'react',
   'react-dom',
   'scheduler',
   'lucide-react',
   '@fontsource/be-vietnam-pro',
-  '@fontsource/fraunces',
   '@fontsource/jetbrains-mono',
 ];
 

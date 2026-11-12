@@ -478,24 +478,24 @@ export function showOverlay(text: OverlayText): void {
   const dark =
     text.theme === 'dark' ||
     (text.theme === 'system' && typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches);
-  const bg = dark ? '#141110' : '#f4f0e8';
-  const fg = dark ? '#f1e9dc' : '#1a1714';
-  const muted = dark ? '#c2b6a5' : '#57504a';
-  const paper = dark ? '#1c1816' : '#fbf9f5';
-  const line = dark ? '#4a3f36' : '#cbbfab';
-  // A small deck: the account's card lifts off the pile while the swap runs.
+  const bg = dark ? '#0e0f15' : '#f6f7fb';
+  const fg = dark ? '#ecedf5' : '#10121f';
+  const muted = dark ? '#a9aec2' : '#474d63';
+  const paper = dark ? '#171821' : '#ffffff';
+  const line = dark ? '#3a3d4f' : '#cacedc';
+  // A small deck: the account's card lifts off the pile while the swap runs. Flat, unrotated.
   sheet.replaceSync(`
     .wrap { position: fixed; inset: 0; display: grid; place-items: center; background: ${bg}; color: ${fg};
       font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
     .card { display: grid; justify-items: center; gap: 14px; text-align: center; padding: 24px; }
     .deck { position: relative; width: 56px; height: 42px; margin-bottom: 6px; }
     .deck i { position: absolute; inset: 0; border-radius: 8px; border: 1px solid ${line}; background: ${paper}; }
-    .deck i:first-child { transform: rotate(-9deg) translate(-5px, 3px); }
+    .deck i:first-child { transform: translate(6px, -6px); }
     .deck i:last-child { border-color: transparent; background: ${text.color};
-      box-shadow: 0 8px 18px -6px rgba(26, 23, 20, .45); animation: lift 1.1s cubic-bezier(.2, .7, .2, 1) infinite alternate; }
-    .title { font: 600 19px/1.3 ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia, serif; margin: 0; }
+      animation: lift 1.1s cubic-bezier(.2, .7, .2, 1) infinite alternate; }
+    .title { font: 600 19px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; letter-spacing: -0.01em; margin: 0; }
     .sub { color: ${muted}; margin: 0; max-width: 420px; }
-    @keyframes lift { from { transform: rotate(2deg); } to { transform: translate(10px, -9px) rotate(8deg); } }
+    @keyframes lift { from { transform: translate(0, 0); } to { transform: translate(6px, -6px); } }
     @media (prefers-reduced-motion: reduce) { .deck i:last-child { animation-duration: 3s; } }
   `);
   root.adoptedStyleSheets = [sheet];
@@ -548,27 +548,29 @@ export function showToast(content: ToastContent): void {
     (content.theme === 'system' &&
       typeof matchMedia === 'function' &&
       matchMedia('(prefers-color-scheme: dark)').matches);
-  const bg = dark ? '#1c1816' : '#fbf9f5';
-  const fg = dark ? '#f1e9dc' : '#1a1714';
-  const muted = dark ? '#c2b6a5' : '#57504a';
-  const border = dark ? '#332b25' : '#e1d9cb';
-  const hover = dark ? '#262019' : '#eee8de';
+  const bg = dark ? '#171821' : '#ffffff';
+  const fg = dark ? '#ecedf5' : '#10121f';
+  const muted = dark ? '#a9aec2' : '#474d63';
+  const border = dark ? '#262835' : '#e3e5ee';
+  const hover = dark ? '#1e202b' : '#f1f2f8';
   const tones = dark
-    ? { warning: '#e3a957', info: '#93b1e8', success: '#6fc39e' }
-    : { warning: '#8f5a12', info: '#2f4e86', success: '#1f6b52' };
+    ? { warning: '#f0b45a', info: '#8db2ff', success: '#5fd3a0' }
+    : { warning: '#a04d0a', info: '#1d4ed8', success: '#047857' };
   const accent = tones[content.tone];
   sheet.replaceSync(`
     .toast { display: flex; align-items: center; gap: 12px; min-width: 260px; max-width: 380px; padding: 12px 10px 12px 13px;
-      background: ${bg}; color: ${fg}; border: 1px solid ${border}; border-left: 3px solid ${accent}; border-radius: 10px;
-      box-shadow: 0 1px 2px rgba(26, 23, 20, .08), 0 16px 36px -12px rgba(26, 23, 20, .4);
+      background: ${bg}; color: ${fg}; border: 1px solid ${border}; border-radius: 10px;
+      box-shadow: 0 1px 2px rgba(16, 18, 31, .06), 0 16px 36px -12px rgba(16, 18, 31, .35);
       font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; animation: in .22s cubic-bezier(.2, .7, .2, 1); }
     .badge { flex: none; width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center;
       background: ${content.color}; color: ${content.badgeText}; font-weight: 700; font-size: 12.5px; letter-spacing: .03em;
-      box-shadow: inset 0 0 0 1px rgba(26, 23, 20, .1); }
+      box-shadow: inset 0 0 0 1px rgba(16, 18, 31, .08); }
     .text { flex: 1; min-width: 0; }
     .title { margin: 0; font-weight: 600; font-size: 13.5px; }
     .body { margin: 2px 0 0; color: ${muted}; overflow-wrap: anywhere; }
-    .brand { margin: 0 0 2px; font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: ${muted}; }
+    .brand { display: flex; align-items: center; gap: 5px; margin: 0 0 2px; font-size: 10px; font-weight: 700;
+      letter-spacing: .12em; text-transform: uppercase; color: ${muted}; }
+    .brand::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: ${accent}; }
     button { flex: none; width: 26px; height: 26px; border: 0; border-radius: 6px; background: transparent; color: ${muted};
       font-size: 18px; line-height: 1; cursor: pointer; }
     button:hover { background: ${hover}; color: ${fg}; }
@@ -627,16 +629,16 @@ export type RibbonContent = {
 };
 
 /**
- * A strip along the top of the page, with a small tag: red while an important
- * account is in use, or a quiet one in the account's color when every account
- * is shown. It never takes clicks. `null` removes it.
+ * A small tag at the top of the page: red while an important account is in
+ * use, or a quiet one with the account's color when every account is shown.
+ * No coloured strip along the edge. It never takes clicks. `null` removes it.
  */
 export function showRibbon(content: RibbonContent | null): void {
   const id = 'swapdeck-ribbon';
   document.getElementById(id)?.remove();
   if (!content) return;
   const calm = content.tone === 'calm';
-  const accent = calm && content.color && /^#[0-9a-f]{6}$/i.test(content.color) ? content.color : '#6f665b';
+  const accent = calm && content.color && /^#[0-9a-f]{6}$/i.test(content.color) ? content.color : '#646a80';
   const host = document.createElement('div');
   host.id = id;
   host.dataset.tone = calm ? 'calm' : 'important';
@@ -646,26 +648,22 @@ export function showRibbon(content: RibbonContent | null): void {
   sheet.replaceSync(
     calm
       ? `
-    .bar { position: fixed; top: 0; left: 0; right: 0; height: 2px; background: ${accent}; opacity: .85; pointer-events: none; }
     .tag { position: fixed; top: 0; left: 50%; transform: translateX(-50%); max-width: 60vw; padding: 1px 10px 3px 8px;
-      display: flex; align-items: center; gap: 6px; border-radius: 0 0 7px 7px; background: rgba(26, 23, 20, .82);
-      color: #f4f0e8; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      box-shadow: 0 2px 8px rgba(26, 23, 20, .22); font: 500 11px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-    .tag i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: ${accent}; box-shadow: 0 0 0 1px rgba(244, 240, 232, .5); }
+      display: flex; align-items: center; gap: 6px; border-radius: 0 0 8px 8px; background: rgba(22, 21, 43, .86);
+      color: #f2f1ff; pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      font: 500 11px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .tag i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: ${accent}; box-shadow: 0 0 0 1px rgba(242, 241, 255, .5); }
     .tag b { font-weight: 700; }
   `
       : `
-    .bar { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: #b3261e; pointer-events: none; }
-    .tag { position: fixed; top: 0; left: 50%; transform: translateX(-50%); max-width: 60vw; padding: 1px 10px 3px;
-      border-radius: 0 0 7px 7px; background: #b3261e; color: #fff; pointer-events: none; white-space: nowrap;
-      overflow: hidden; text-overflow: ellipsis; box-shadow: 0 2px 8px rgba(26, 23, 20, .28);
-      font: 600 11px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .tag { position: fixed; top: 0; left: 50%; transform: translateX(-50%); max-width: 60vw; padding: 2px 12px 4px;
+      border-radius: 0 0 8px 8px; background: #b42318; color: #fff; pointer-events: none; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+      font: 600 11.5px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
     .tag b { font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
   `,
   );
   root.adoptedStyleSheets = [sheet];
-  const bar = document.createElement('div');
-  bar.className = 'bar';
   const tag = document.createElement('div');
   tag.className = 'tag';
   tag.setAttribute('role', 'note');
@@ -673,7 +671,7 @@ export function showRibbon(content: RibbonContent | null): void {
   strong.textContent = content.tag;
   if (calm) tag.append(document.createElement('i'));
   tag.append(strong, ` · ${content.label}`);
-  root.append(bar, tag);
+  root.append(tag);
   document.documentElement.append(host);
 }
 
@@ -771,20 +769,20 @@ export function askOnPage(content: AskContent): Promise<boolean> {
       (content.theme === 'system' &&
         typeof matchMedia === 'function' &&
         matchMedia('(prefers-color-scheme: dark)').matches);
-    const paper = dark ? '#1c1816' : '#fbf9f5';
-    const ink = dark ? '#f1e9dc' : '#1a1714';
-    const muted = dark ? '#c2b6a5' : '#57504a';
-    const line = dark ? '#4a3f36' : '#cbbfab';
-    const danger = dark ? '#f07b6f' : '#b3261e';
-    const onDanger = dark ? '#141110' : '#ffffff';
+    const paper = dark ? '#171821' : '#ffffff';
+    const ink = dark ? '#ecedf5' : '#10121f';
+    const muted = dark ? '#a9aec2' : '#474d63';
+    const line = dark ? '#3a3d4f' : '#cacedc';
+    const danger = dark ? '#f38b80' : '#b42318';
+    const onDanger = dark ? '#0e0f15' : '#ffffff';
     const sheet = new CSSStyleSheet();
     sheet.replaceSync(`
-      .backdrop { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(20, 17, 16, .45);
+      .backdrop { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(14, 15, 21, .45);
         font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
       .dialog { width: min(440px, 100%); padding: 20px; border: 1px solid ${line}; border-radius: 14px; background: ${paper}; color: ${ink};
         box-shadow: 0 24px 60px -12px rgba(0, 0, 0, .55); }
       .brand { margin: 0 0 6px; font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: ${muted}; }
-      h2 { margin: 0 0 8px; font: 600 19px/1.3 ui-serif, "Iowan Old Style", Georgia, serif; }
+      h2 { margin: 0 0 8px; font: 600 18px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; letter-spacing: -0.01em; }
       p { margin: 0; color: ${muted}; }
       ul { margin: 10px 0 0; padding-left: 18px; color: ${ink}; }
       li { margin: 2px 0; overflow-wrap: anywhere; }
@@ -909,22 +907,22 @@ export function askLinkOnPage(content: LinkAskContent): Promise<LinkAnswer> {
       (content.theme === 'system' &&
         typeof matchMedia === 'function' &&
         matchMedia('(prefers-color-scheme: dark)').matches);
-    const paper = dark ? '#1c1816' : '#fbf9f5';
-    const ink = dark ? '#f1e9dc' : '#1a1714';
-    const muted = dark ? '#c2b6a5' : '#57504a';
-    const line = dark ? '#4a3f36' : '#cbbfab';
-    const hover = dark ? '#262019' : '#eee8de';
-    const accent = dark ? '#93b1e8' : '#2f4e86';
+    const paper = dark ? '#171821' : '#ffffff';
+    const ink = dark ? '#ecedf5' : '#10121f';
+    const muted = dark ? '#a9aec2' : '#474d63';
+    const line = dark ? '#3a3d4f' : '#cacedc';
+    const hover = dark ? '#1e202b' : '#f1f2f8';
+    const accent = dark ? '#8c87ff' : '#5046e5';
     const sheet = new CSSStyleSheet();
     sheet.replaceSync(`
-      .card { width: min(360px, calc(100vw - 32px)); padding: 14px 14px 14px 15px; border: 1px solid ${line};
-        border-left: 3px solid ${accent}; border-radius: 12px; background: ${paper}; color: ${ink};
-        box-shadow: 0 1px 2px rgba(26, 23, 20, .08), 0 18px 40px -12px rgba(26, 23, 20, .45);
+      .card { width: min(360px, calc(100vw - 32px)); padding: 14px; border: 1px solid ${line};
+        border-radius: 12px; background: ${paper}; color: ${ink};
+        box-shadow: 0 1px 2px rgba(16, 18, 31, .06), 0 18px 40px -12px rgba(16, 18, 31, .4);
         font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; animation: in .22s cubic-bezier(.2, .7, .2, 1); }
       .head { display: flex; align-items: flex-start; gap: 11px; }
       .badge { flex: none; width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center;
         background: ${content.color}; color: ${content.badgeText}; font-weight: 700; font-size: 12.5px;
-        box-shadow: inset 0 0 0 1px rgba(26, 23, 20, .1); }
+        box-shadow: inset 0 0 0 1px rgba(16, 18, 31, .08); }
       .text { flex: 1; min-width: 0; }
       .brand { margin: 0 0 2px; font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: ${muted}; }
       .title { margin: 0; font-weight: 600; font-size: 13.5px; overflow-wrap: anywhere; }
@@ -938,7 +936,7 @@ export function askLinkOnPage(content: LinkAskContent): Promise<LinkAnswer> {
       .no { border: 1px solid transparent; background: transparent; color: ${muted}; }
       .no:hover { background: ${hover}; color: ${ink}; }
       .always { border: 1px solid ${line}; background: transparent; color: ${ink}; }
-      .switch { border: 1px solid ${ink}; background: ${ink}; color: ${paper}; }
+      .switch { border: 1px solid ${accent}; background: ${accent}; color: ${dark ? '#0e0f15' : '#ffffff'}; }
       button:focus-visible { outline: 2px solid ${accent}; outline-offset: 2px; }
       @keyframes in { from { opacity: 0; transform: translateY(-6px); } }
       @media (prefers-reduced-motion: reduce) { .card { animation: none; } }

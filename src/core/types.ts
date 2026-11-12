@@ -209,8 +209,11 @@ export type Workspace = {
 };
 
 export type PopupLayout = 'auto' | 'compact' | 'wide';
-/** Accent colors of the lacquer palette: son (vermilion), ngọc (jade), chàm (indigo), vàng (gold leaf). */
-export type Accent = 'son' | 'ngoc' | 'cham' | 'vang';
+/**
+ * Accent colors: iris (the brand's, the default), chàm (blue), ngọc (jade), vàng (amber). 'son', the
+ * vermilion default before 1.8.0's new look, is read as iris.
+ */
+export type Accent = 'iris' | 'cham' | 'ngoc' | 'vang';
 export type ActionOpens = 'popup' | 'panel';
 
 export type LanguagePreference = 'auto' | 'en' | 'vi';

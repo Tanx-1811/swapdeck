@@ -201,13 +201,10 @@ body {
   border-color: var(--border-strong);
 }
 
-/* The account in use sits on top of the deck. */
+/* The account in use: an accent ring, flat. */
 .account--active {
-  border-color: var(--border-strong);
-  box-shadow:
-    3px 3px 0 -1px var(--bg-elev),
-    3px 3px 0 0 var(--border-strong),
-    var(--shadow-md);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .account > .btn {
@@ -557,7 +554,6 @@ body {
   gap: 8px;
   padding: 11px 12px;
   border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
-  border-left: 3px solid var(--accent);
   border-radius: var(--r-md);
   background: var(--accent-soft);
 }
@@ -656,16 +652,9 @@ html.mode-panel .popup {
   box-shadow: var(--shadow-sm);
 }
 
-/* A ribbon marks the open drawer card. */
-.columns__side .app-row--selected::before {
-  content: '';
-  position: absolute;
-  top: 9px;
-  bottom: 9px;
-  left: -1px;
-  width: 3px;
-  border-radius: 0 3px 3px 0;
-  background: var(--accent);
+/* The open drawer card: the accent ring of selection, no coloured edge strip. */
+.columns__side .app-row--selected {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
 }
 
 .app-panel {

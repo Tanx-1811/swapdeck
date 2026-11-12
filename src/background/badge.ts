@@ -5,7 +5,7 @@ import { translatorFor } from './engine';
 import { refreshLaneBadge } from './lanes';
 import { tabUrl } from './tabs';
 
-const NEUTRAL = '#6f665b';
+const NEUTRAL = '#646a80';
 
 /** Shows the active account of the tab's app on the toolbar icon (initials in its color). */
 export async function refreshBadge(tab: chrome.tabs.Tab, known?: State): Promise<void> {

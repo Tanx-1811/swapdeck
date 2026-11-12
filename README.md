@@ -86,8 +86,8 @@ Không cần đăng xuất, không gõ lại mật khẩu, không cần thêm h�
   hay tài khoản tạo riêng ở hai máy được nhận ra thay vì chép trùng; xoá ở một máy thì các máy kia cũng xoá, còn thứ chỉ
   bị mất ở một máy thì được lấy lại chứ không biến mất khắp nơi.
 - Trang quản lý đầy đủ: tổng quan, các bên, ứng dụng & tài khoản, lịch sử, sao lưu, bảo mật, cài đặt, hướng dẫn.
-  **Tiếng Việt và tiếng Anh**. Giao diện riêng **“sơn mài & giấy dó”** (mực trên giấy ấm, sơn mài đen, dấu son
-  “đang dùng”), sáng/tối, bốn màu nhấn.
+  **Tiếng Việt và tiếng Anh**. Giao diện phẳng, gọn (nền xám mát, một màu nhấn tím iris, nhãn “đang dùng” có
+  chấm màu), sáng/tối, bốn màu nhấn.
 
 ### Vì sao Swapdeck?
 
@@ -255,7 +255,7 @@ click. No signing out, no retyping passwords, no extra Chrome profiles.
   account set up on two computers is recognised instead of copied; what you remove on one computer is removed on the
   others, while something that only went missing on one computer comes back instead of disappearing everywhere.
 - A full manager: overview, workspaces, apps & accounts, history, backup, security, settings, help. **English and
-  Vietnamese**. Its own **lacquer & paper** look (ink on warm paper, black lacquer, a vermilion "in use" seal), light
+  Vietnamese**. A flat, quiet look (cool grey surfaces, one iris accent, an "In use" label with a dot), light
   and dark, four accent colors.
 
 ### Why Swapdeck?
@@ -402,5 +402,5 @@ Dự án cộng đồng: rất hoan nghênh báo lỗi, đề xuất trang mới
 
 ## License
 
-[MIT](LICENSE) © 2026 Tanx-1811 and the Swapdeck contributors. The bundled fonts (Be Vietnam Pro, Fraunces, JetBrains
-Mono) are under the SIL Open Font License 1.1; see `public/THIRD_PARTY_NOTICES.txt`.
+[MIT](LICENSE) © 2026 Tanx-1811 and the Swapdeck contributors. The bundled fonts (Be Vietnam Pro, JetBrains Mono) are
+under the SIL Open Font License 1.1; see `public/THIRD_PARTY_NOTICES.txt`.

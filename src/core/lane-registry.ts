@@ -78,7 +78,7 @@ export function sanitizeLane(value: unknown): Lane | null {
     ruleIds: Array.isArray(item.ruleIds) ? item.ruleIds.filter(isTabId) : [],
     createdAt: typeof item.createdAt === 'number' ? item.createdAt : 0,
     title: typeof item.title === 'string' ? item.title.slice(0, 80) : '',
-    color: color(item.color, '#6f665b'),
+    color: color(item.color, '#646a80'),
     groups,
   };
   if (typeof item.capturedAt === 'number') lane.capturedAt = item.capturedAt;

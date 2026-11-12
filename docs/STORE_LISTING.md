@@ -90,7 +90,7 @@ Swapdeck recognises the account, the new one is saved automatically.
 • Expired sessions are marked, so you sign in again before you need the account, not after.
 • A "Get started" checklist, and a "Check for updates" button for copies installed from GitHub.
 • Asks before a switch would reload tabs holding unsaved work.
-• A calm lacquer-and-paper design, light and dark, a full manager with workspaces, history and settings, English and Vietnamese.
+• A flat, quiet design, light and dark, a full manager with workspaces, history and settings, English and Vietnamese.
 
 **Good to know**
 Don't press a site's own “Sign out” — it ends the session on the site's server, so the saved copy stops working too. Use
@@ -162,7 +162,7 @@ Etsy…), mạng xã hội và dịch vụ Việt Nam (Shopee Kênh Người Bá
 • Đánh dấu phiên đã hết hạn, để bạn đăng nhập lại trước khi cần tới tài khoản đó.
 • Danh sách "Bắt đầu với Swapdeck", và nút "Kiểm tra bản mới" cho bản cài từ GitHub.
 • Hỏi trước khi đổi tài khoản làm tải lại các tab còn nội dung chưa lưu.
-• Giao diện “sơn mài & giấy dó” sáng/tối, trang quản lý đầy đủ với các bên, lịch sử và cài đặt, tiếng Việt và tiếng Anh.
+• Giao diện phẳng, gọn, sáng/tối, trang quản lý đầy đủ với các bên, lịch sử và cài đặt, tiếng Việt và tiếng Anh.
 
 **Cần biết**
 Đừng bấm “Đăng xuất” trên trang web — việc đó kết thúc phiên trên máy chủ của trang, nên bản đã lưu cũng hết hiệu lực.

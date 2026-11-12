@@ -146,16 +146,22 @@ tests, demo data and screenshots (use `*.example`/`*.test` addresses). Contribut
 - The extension's backup format (`swapdeck-backup` v1, PBKDF2-SHA-256 + AES-256-GCM) is read by `BackupImport`; if it
   changes, update both and regenerate the fixture with `node desktop/scripts/make-backup-fixture.mjs`.
 
-## Design ("sơn mài & giấy dó", lacquer & paper)
+## Design (flat and quiet, since 1.8.0)
 
-- Colors are tokens in `src/styles/ui.css`: ink on warm paper (light), eggshell on lacquer (dark), `--lacquer*` for the
-  popup lid and the manager sidebar, `--accent*` switched by `<html data-accent>` (Settings → accent: son, ngọc, chàm,
-  vàng). Components use tokens, never raw colors. Keep the brand kit (`brand/README.md`) in step.
-- What is in use wears the **seal** (`.seal`) and, for cards, the deck shadow (`.account--active`,
-  `.account-card--active`, `.workspace-card--active`). Primary buttons are ink (`btn--primary`); "add another" is
-  `btn--dashed`.
-- Fonts are bundled from @fontsource (`src/styles/fonts.ts`): Be Vietnam Pro (text), Fraunces 600 (titles, figures,
-  `.display`), JetBrains Mono. Never load web fonts from the network.
+- Colors are tokens in `src/styles/ui.css`: cool grey surfaces and one ink, light and dark; `--lacquer*` is the deep-ink
+  frame (popup header, manager sidebar); `--accent*` is iris by default, switched by `<html data-accent>` (Settings →
+  accent: iris, chàm/blue, ngọc/jade, vàng/amber; a stored `son` reads as iris). Components use tokens, never raw
+  colors. Keep the brand kit (`brand/README.md`), the desktop `Theme.swift` and the page scripts in step.
+- **Flat:** no gradients, sheen, grain or rotated "stamps"; no coloured edge strips (border-top/left accents, bars along
+  the page edge). State is a tinted background, an accent ring, a dot or a label.
+- What is in use wears the **in-use label** (`.seal`: a dot on an accent-soft pill) and, for cards, an accent ring
+  (`.account--active`, `.account-card--active`, `.workspace-card--active`). Primary buttons are the accent
+  (`btn--primary`); "add another" is `btn--dashed`.
+- Fonts are bundled from @fontsource (`src/styles/fonts.ts`): Be Vietnam Pro (text and titles: `--display` is the same
+  face, 600–700), JetBrains Mono. Never load web fonts from the network.
+- The mark is a deck of three account cards on a flat iris tile (`assets/icon.svg`, `assets/icon-small.svg` on the
+  16-px grid, `src/ui/Logo.tsx`, `markShapes()` in `brand/templates/shared.mjs`, `MarkView` in the desktop app): change
+  them together, then `npm run icons` and `npm run brand`.
 - Account/workspace symbols are `ACCOUNT_ICONS` (`src/core/util.ts`, drawn in `src/ui/icons.tsx`); colors come from
   `ACCOUNT_COLORS` with names in `COLOR_NAMES` (`color.*` messages) through `ColorPicker`/`IconPicker`. Emoji are legacy
   (still shown, no longer offered).

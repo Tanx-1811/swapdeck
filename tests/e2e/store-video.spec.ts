@@ -164,37 +164,36 @@ function stageHtml(lang: 'en' | 'vi', cap: Captures) {
   ${fontFacesCss()}
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { position: relative; width: 1280px; height: 800px; overflow: hidden; font-family: ${FONTS.text};
-    background: ${PALETTE.lacquer}; color: ${PALETTE.eggshell}; -webkit-font-smoothing: antialiased; }
-  ${backgroundCss('lacquer')}
+    background: ${PALETTE.night}; color: ${PALETTE.onNight}; -webkit-font-smoothing: antialiased; }
+  ${backgroundCss('night')}
   #stage { position: absolute; inset: 0; }
   .cap { position: absolute; left: 72px; top: 40px; right: 72px; display: flex; align-items: center; gap: 20px; opacity: 0; }
-  .cap svg { width: 52px; height: 52px; flex: none; border-radius: 13px;
-    box-shadow: 0 0 0 1px rgba(241, 233, 220, .14), 0 10px 24px rgba(0, 0, 0, .5); }
-  .cap h1 { font: 600 34px/1.12 ${FONTS.display}; letter-spacing: -0.02em; }
-  .cap p { margin-top: 7px; font-size: 18px; color: ${PALETTE.eggshell2}; }
+  .cap svg { width: 52px; height: 52px; flex: none; border-radius: 13px; }
+  .cap h1 { font: 700 34px/1.12 ${FONTS.display}; letter-spacing: -0.03em; }
+  .cap p { margin-top: 7px; font-size: 18px; color: ${PALETTE.onNight2}; }
   ${sceneCss(lang)}
   .popup { position: absolute; top: 78px; right: 14px; border-radius: 12px; opacity: 0; transform-origin: top right;
-    box-shadow: 0 24px 60px rgba(26, 23, 20, .35), 0 0 0 1px rgba(26, 23, 20, .14); }
+    box-shadow: 0 24px 60px rgba(16, 18, 31, .35), 0 0 0 1px rgba(16, 18, 31, .14); }
   #cursor { position: absolute; left: 0; top: 0; width: 26px; height: 26px; z-index: 10; opacity: 0;
     filter: drop-shadow(0 2px 3px rgba(0,0,0,.45)); }
   #ripple { position: absolute; width: 44px; height: 44px; margin: -22px 0 0 -22px; border-radius: 50%; z-index: 9;
-    border: 3px solid ${PALETTE.son}; opacity: 0; }
+    border: 3px solid ${PALETTE.iris}; opacity: 0; }
   #end { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; text-align: center; opacity: 0; }
   .lockup { display: flex; align-items: center; gap: 22px; }
-  .lockup svg { width: 96px; height: 96px; border-radius: 24px; box-shadow: 0 0 0 1px rgba(241, 233, 220, .14), 0 16px 40px rgba(0,0,0,.5); }
-  .lockup span { font: 600 72px/1 ${FONTS.display}; letter-spacing: -0.02em; }
-  .tagline { margin-top: 18px; font-size: 24px; color: ${PALETTE.eggshell2}; }
+  .lockup svg { width: 96px; height: 96px; border-radius: 24px; }
+  .lockup span { font: 700 72px/1 ${FONTS.display}; letter-spacing: -0.03em; }
+  .tagline { margin-top: 18px; font-size: 24px; color: ${PALETTE.onNight2}; }
   #end ul { list-style: none; margin-top: 40px; display: grid; gap: 14px; justify-items: start; font-size: 20px; }
   #end li { display: flex; align-items: center; gap: 14px; }
-  .dot { width: 12px; height: 12px; border-radius: 3px; background: ${PALETTE.sonOnDark}; transform: rotate(45deg); }
-  .where { margin-top: 44px; font: 500 16px/1 ${FONTS.mono}; color: ${PALETTE.eggshell2}; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: ${PALETTE.irisOnNight}; }
+  .where { margin-top: 44px; font: 500 16px/1 ${FONTS.mono}; color: ${PALETTE.onNight2}; }
   #fade { position: absolute; inset: 0; background: #000; z-index: 20; }
   </style></head><body>
   <div class="bg"></div>
   <div id="stage">${captions}${browserOne}${splitWindowHtml(lang)}${end}
     <div id="ripple"></div>
     <svg id="cursor" viewBox="0 0 24 24"><path d="M4 2 L4 19 L8.6 14.8 L11.6 21.6 L14.6 20.3 L11.7 13.6 L18 13.6 Z"
-      fill="#fff" stroke="#1a1714" stroke-width="1.4" stroke-linejoin="round"/></svg>
+      fill="#fff" stroke="#10121f" stroke-width="1.4" stroke-linejoin="round"/></svg>
   </div>
   <div id="fade"></div>
   <script>window.CAP = ${JSON.stringify({

@@ -12,7 +12,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoLockMinutes: 30,
   popupLayout: 'auto',
   actionOpens: 'popup',
-  accent: 'son',
+  accent: 'iris',
   vaultNudgeUntil: 0,
   guardUnsaved: true,
   lastBackupAt: 0,
@@ -25,8 +25,8 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export const AUTO_LOCK_CHOICES = [0, 5, 15, 30, 60, 240] as const;
 
-/** The accent choices, vermilion first (the default). */
-export const ACCENTS: readonly Accent[] = ['son', 'ngoc', 'cham', 'vang'];
+/** The accent choices, iris first (the default). */
+export const ACCENTS: readonly Accent[] = ['iris', 'cham', 'ngoc', 'vang'];
 
 const time = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0);
 
@@ -52,7 +52,7 @@ export function parseSettings(value: unknown): Settings {
         : DEFAULT_SETTINGS.autoLockMinutes,
     popupLayout: input.popupLayout === 'compact' || input.popupLayout === 'wide' ? input.popupLayout : 'auto',
     actionOpens: input.actionOpens === 'panel' ? 'panel' : 'popup',
-    accent: ACCENTS.includes(input.accent as Accent) ? (input.accent as Accent) : 'son',
+    accent: ACCENTS.includes(input.accent as Accent) ? (input.accent as Accent) : 'iris',
     vaultNudgeUntil: time(input.vaultNudgeUntil),
     guardUnsaved: bool('guardUnsaved'),
     lastBackupAt: time(input.lastBackupAt),

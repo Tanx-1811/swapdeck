@@ -1,4 +1,4 @@
-// README header banner, 1600 × 500. A self-contained paper panel with a
+// README header banner, 1600 × 500. A self-contained light panel with a
 // hairline edge and rounded, transparent corners, so it sits well on GitHub's
 // light and dark themes.
 import { COPY, deckHtml, FONTS, NAME, page, PALETTE } from './shared.mjs';
@@ -31,14 +31,14 @@ export function html({ lockup, lang = 'en' }) {
 </div>
 ${deckHtml({
   lang,
-  x: 1110,
-  y: 168,
+  x: 1040,
+  y: 204,
   scale: 0.98,
   fan: [
-    [-2, 0, 0],
-    [-7, -70, -14],
-    [-12, -136, -22],
-    [-17, -198, -24],
+    [0, 0, 0],
+    [0, 34, -34],
+    [0, 68, -68],
+    [0, 102, -102],
   ],
 })}
 </div>`;

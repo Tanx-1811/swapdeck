@@ -17,7 +17,7 @@ does. Product scope and decisions are in [PLAN.md](PLAN.md); privacy in [PRIVACY
 | Page scripts   | `src/background/page-scripts.ts`              | Self-contained functions injected with `chrome.scripting.executeScript` (isolated world): read/write web storage and IndexedDB, probe the page, overlay, in-page toast, warning strip for important accounts.                                         |
 | Core           | `src/core/`                                   | Pure, unit-tested logic: types, presets (164), domains, identity detection, save decisions, workspaces (status, suggestions, tab-group colours), search ranking, cookies, crypto, backup format, validation, settings.                                |
 | Shared         | `src/shared/`                                 | Storage layout and readers (`store.ts`), typed messaging (`protocol.ts`), app helpers (`apps.ts`).                                                                                                                                                    |
-| UI kit         | `src/ui/`, `src/styles/ui.css`                | Shared React components (dialogs, menus, toasts, avatars, app icons, account editor, icon and color pickers), hooks, i18n provider, design tokens (lacquer & paper, light/dark, accent colors), bundled fonts.                                        |
+| UI kit         | `src/ui/`, `src/styles/ui.css`                | Shared React components (dialogs, menus, toasts, avatars, app icons, account editor, icon and color pickers), hooks, i18n provider, design tokens (flat, cool grey and iris, light/dark, accent colors), bundled fonts.                               |
 | i18n           | `src/i18n/en.ts`, `vi.ts`                     | Every UI string, English and Vietnamese. Manifest strings live in `public/_locales/{en,vi}`.                                                                                                                                                          |
 
 ### Service worker modules (`src/background/`)
@@ -249,10 +249,10 @@ On `tabs.onUpdated` for tabs of an added app (with access, not incognito, not th
   (session storage) and answering with `ask.answer`. The `cycle` request is the guarded "next account". A cancelled
   (or failed) menu switch rebuilds the menus (`refreshMenus`): Chrome has already moved the radio check.
 - **Important accounts** (`Account.important`): after each reconcile of an app that has any, `markAccount` injects
-  `showRibbon` — a red strip and tag along the top of the page (closed shadow root, no pointer events) — when the
+  `showRibbon` — a red tag at the top of the page, no strip along the edge (closed shadow root, no pointer events) — when the
   account really signed in there (the recognised identity, else the active account unless the page shows nobody) is
   important, and removes it otherwise. With `settings.pageRibbon: 'all'` ("Show the account on its pages: every
-  account") other accounts get a quiet strip in their color naming the workspace in use that holds them, else the
+  account") other accounts get a quiet dark tag with a dot in their color naming the workspace in use that holds them, else the
   app, and the account ("Client X · Work"). The switch toast turns to a warning; the popup, side panel, manager and
   workspace switches confirm first (`importantTargets` in `core/workspaces.ts` lists them for a workspace).
 - **Single-page apps** sign in without reloading (the Supabase dashboard does), so a tab is checked again 0.9 s after

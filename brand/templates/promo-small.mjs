@@ -24,14 +24,14 @@ export function html({ lockup, lang = 'en' }) {
 <h1 class="headline display">${copy.headline}</h1>
 ${deckHtml({
   lang,
-  x: 172,
-  y: 146,
+  x: 176,
+  y: 152,
   scale: 0.6,
   compact: true,
   fan: [
-    [-2, 0, 0],
-    [-7, -66, -4],
-    [-12, -128, -4],
+    [0, 0, 0],
+    [0, 24, -24],
+    [0, 48, -48],
   ],
 })}`;
 

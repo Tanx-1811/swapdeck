@@ -537,7 +537,7 @@ describe('the lane record (untrusted when read back)', () => {
     expect(a.groups).toEqual({ '7': 3 });
     // Tab 2 already belongs to the first lane.
     expect(registry.lanes.bbbbbbbbbbbb!.tabIds).toEqual([3]);
-    expect(registry.lanes.bbbbbbbbbbbb!.color).toBe('#6f665b');
+    expect(registry.lanes.bbbbbbbbbbbb!.color).toBe('#646a80');
     expect({ ...registry.tabs }).toEqual({ 1: 'aaaaaaaaaaaa', 2: 'aaaaaaaaaaaa', 3: 'bbbbbbbbbbbb' });
     expect(summarize(a)).not.toHaveProperty('jar');
     expect(laneTitle('x'.repeat(80), 'Acme')).toHaveLength(60);

@@ -2,40 +2,41 @@ import AppKit
 import SwapdeckCore
 import SwiftUI
 
-/// "Sơn mài & giấy dó" (lacquer & paper), the Swapdeck identity: ink on warm
-/// paper in light mode, eggshell on black lacquer in dark mode, one vermilion
-/// accent for what is in use. The same tokens as the extension's ui.css.
+/// The Swapdeck identity: flat and quiet — cool grey surfaces, one ink, one
+/// iris accent for what is in use and the main action; no gradients, no sheen,
+/// no coloured edge strips. The same tokens as the extension's ui.css.
 enum Theme {
-    static let paper = dynamic(light: 0xf4f0e8, dark: 0x141110)
-    static let card = dynamic(light: 0xfbf9f5, dark: 0x1c1816)
-    static let sunken = dynamic(light: 0xede7dc, dark: 0x100e0c)
-    static let hover = dynamic(light: 0xeee8de, dark: 0x262019)
-    static let selected = dynamic(light: 0xe7dfd2, dark: 0x2d2620)
-    static let line = dynamic(light: 0xe1d9cb, dark: 0x332b25)
-    static let lineStrong = dynamic(light: 0xcbbfab, dark: 0x4a3f36)
-    static let ink = dynamic(light: 0x1a1714, dark: 0xf1e9dc)
-    static let ink2 = dynamic(light: 0x57504a, dark: 0xc2b6a5)
-    static let ink3 = dynamic(light: 0x6f665b, dark: 0x9c9080)
-    static let onInk = dynamic(light: 0xfbf9f5, dark: 0x141110)
-    static let accent = dynamic(light: 0xc8402b, dark: 0xe0573c)
-    static let accentText = dynamic(light: 0xa8331e, dark: 0xf08a6c)
-    static let accentSoft = dynamic(light: 0xf6e2d9, dark: 0x3a1d15)
-    static let warning = dynamic(light: 0x8f5a12, dark: 0xe3a957)
-    static let warningSoft = dynamic(light: 0xf5e9d3, dark: 0x2b2010)
-    static let danger = dynamic(light: 0xb3261e, dark: 0xf07b6f)
-    static let success = dynamic(light: 0x1f6b52, dark: 0x6fc39e)
-    /// The lacquer frame: switcher lid and manager sidebar.
-    static let lacquer = dynamic(light: 0x1a1714, dark: 0x0d0b0a)
-    static let lacquerHover = dynamic(light: 0x2a241f, dark: 0x1c1815)
-    static let lacquerActive = dynamic(light: 0x352d27, dark: 0x26201b)
-    static let lacquerLine = dynamic(light: 0x2f2823, dark: 0x2a231e)
-    static let onLacquer = Color(hex: 0xf4ede1)
-    static let onLacquer2 = Color(hex: 0xbdb1a0)
-    static let lacquerAccent = Color(hex: 0xef6d52)
-    static let gold = Color(hex: 0xb08a3a)
+    static let paper = dynamic(light: 0xf6f7fb, dark: 0x0e0f15)
+    static let card = dynamic(light: 0xffffff, dark: 0x171821)
+    static let sunken = dynamic(light: 0xeef0f6, dark: 0x0a0b10)
+    static let hover = dynamic(light: 0xf1f2f8, dark: 0x1e202b)
+    static let selected = dynamic(light: 0xe7e9f3, dark: 0x262836)
+    static let line = dynamic(light: 0xe3e5ee, dark: 0x262835)
+    static let lineStrong = dynamic(light: 0xcacedc, dark: 0x3a3d4f)
+    static let ink = dynamic(light: 0x10121f, dark: 0xecedf5)
+    static let ink2 = dynamic(light: 0x474d63, dark: 0xa9aec2)
+    static let ink3 = dynamic(light: 0x5f657b, dark: 0x8b90a6)
+    static let onInk = dynamic(light: 0xffffff, dark: 0x0e0f15)
+    static let accent = dynamic(light: 0x5046e5, dark: 0x8c87ff)
+    static let accentText = dynamic(light: 0x4338ca, dark: 0xa5a1ff)
+    static let accentSoft = dynamic(light: 0xeeedfe, dark: 0x23214a)
+    static let onAccent = dynamic(light: 0xffffff, dark: 0x0e0f15)
+    static let warning = dynamic(light: 0xa04d0a, dark: 0xf0b45a)
+    static let warningSoft = dynamic(light: 0xfdf3e2, dark: 0x2b1f0d)
+    static let danger = dynamic(light: 0xb42318, dark: 0xf38b80)
+    static let success = dynamic(light: 0x047857, dark: 0x5fd3a0)
+    /// The frame: switcher header and manager sidebar, in deep ink.
+    static let lacquer = dynamic(light: 0x16152b, dark: 0x0a0a12)
+    static let lacquerHover = dynamic(light: 0x23213f, dark: 0x1a1a28)
+    static let lacquerActive = dynamic(light: 0x2c2950, dark: 0x232336)
+    static let lacquerLine = dynamic(light: 0x2a2847, dark: 0x20202f)
+    static let onLacquer = Color(hex: 0xf2f1ff)
+    static let onLacquer2 = Color(hex: 0xa9a6cc)
+    static let lacquerAccent = Color(hex: 0xaca8ff)
+    static let iris = Color(hex: 0x5046e5)
 
-    /// Titles in the system serif (New York), like Fraunces in the extension.
-    static func display(_ size: CGFloat) -> Font { .system(size: size, weight: .semibold, design: .serif) }
+    /// Titles in the system face, heavier and tighter, like Be Vietnam Pro 600 in the extension.
+    static func display(_ size: CGFloat) -> Font { .system(size: size, weight: .semibold) }
     static func text(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font { .system(size: size, weight: weight) }
     static func mono(_ size: CGFloat) -> Font { .system(size: size, weight: .medium, design: .monospaced) }
     /// Small capitals: section labels, seals.
@@ -67,7 +68,7 @@ extension Color {
         self.init(nsColor: NSColor(hex: hex))
     }
 
-    /// "#rrggbb" (anything else falls back to vermilion).
+    /// "#rrggbb" (anything else falls back to the first account colour).
     init(hexString: String) {
         let value = Palette.isHex(hexString) ? UInt32(hexString.dropFirst(), radix: 16) ?? 0xc8402b : 0xc8402b
         self.init(hex: value)

@@ -47,7 +47,7 @@ Everything is removed when you uninstall the extension, or with **Security → D
 
 - Only on **sites you added**, and only to save or restore their sign-in: it reads and replaces their cookies and the
   stored data of their main address, shows a "switching" screen and a small confirmation on the page (and, for an
-  account you marked important, a red warning strip along the top of the page). Before a switch reloads the site's
+  account you marked important, a red warning tag at the top of the page). Before a switch reloads the site's
   tabs, it checks them for unsaved work (an edited form, text being typed, the page's own "leave site?" warning) and
   only learns yes or no; and a switch started by a shortcut can ask on the page. Besides that it
   only notes the page address and title (for each account's last page and recent items); it doesn't read page content,
@@ -176,7 +176,7 @@ Mọi dữ liệu bị xóa khi gỡ tiện ích, hoặc bằng **Bảo mật �
 
 - Chỉ trên **các trang bạn đã thêm**, và chỉ để lưu hoặc khôi phục đăng nhập: đọc và thay cookie cùng dữ liệu lưu trữ
   của địa chỉ chính, hiện màn hình "đang chuyển" và một thông báo nhỏ trên trang (với tài khoản bạn đánh dấu quan trọng:
-  thêm một dải cảnh báo đỏ ở mép trên trang). Trước khi đổi tài khoản làm tải lại các tab của trang, tiện ích kiểm tra
+  thêm một nhãn cảnh báo đỏ ở đầu trang). Trước khi đổi tài khoản làm tải lại các tab của trang, tiện ích kiểm tra
   xem có nội dung chưa lưu không (biểu mẫu đã sửa, chữ đang gõ, cảnh báo "rời trang?" của chính trang) và chỉ biết có
   hay không; khi đổi bằng phím tắt, tiện ích có thể hỏi ngay trên trang. Ngoài ra chỉ ghi nhận địa chỉ và tiêu
   đề trang (cho trang cuối và mục gần đây của mỗi tài khoản); không đọc nội dung trang, biểu mẫu hay những gì bạn gõ.

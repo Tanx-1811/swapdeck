@@ -1,5 +1,5 @@
 // Chrome Web Store marquee promo tile, 1400 × 560 (English and Vietnamese).
-// The lacquer ("sơn mài") variant: paper cards on black lacquer.
+// The night variant: white cards on the deep ink of the manager sidebar.
 import { COPY, deckHtml, FONTS, NAME, page, PALETTE, tilesHtml } from './shared.mjs';
 
 export const width = 1400;
@@ -17,8 +17,8 @@ export function html({ lockup, lang = 'en' }) {
 .copy-block { position: absolute; left: 96px; top: 0; bottom: 0; width: 640px;
   display: flex; flex-direction: column; justify-content: center; }
 .lockup { display: block; height: ${lockupHeight}px; width: ${Math.round(lockupHeight * lockup.night.ratio)}px; }
-.headline { margin-top: 40px; font-size: ${lang === 'vi' ? 56 : 64}px; line-height: 1.04; color: ${PALETTE.eggshell}; }
-.sub { margin-top: 20px; font: 400 19px/1.55 ${FONTS.text}; color: ${PALETTE.eggshell2}; white-space: nowrap; }
+.headline { margin-top: 40px; font-size: ${lang === 'vi' ? 56 : 64}px; line-height: 1.04; color: ${PALETTE.onNight}; }
+.sub { margin-top: 20px; font: 400 19px/1.55 ${FONTS.text}; color: ${PALETTE.onNight2}; white-space: nowrap; }
 .tiles { margin-top: 30px; }
 `;
 
@@ -31,16 +31,16 @@ export function html({ lockup, lang = 'en' }) {
 </div>
 ${deckHtml({
   lang,
-  x: 920,
-  y: 214,
+  x: 830,
+  y: 232,
   scale: 1.04,
   fan: [
-    [-2, 0, 0],
-    [-7, -72, -14],
-    [-12, -140, -22],
-    [-17, -204, -24],
+    [0, 0, 0],
+    [0, 34, -34],
+    [0, 68, -68],
+    [0, 102, -102],
   ],
 })}`;
 
-  return page({ width, height, css, body, lang, theme: 'lacquer' });
+  return page({ width, height, css, body, lang, theme: 'night' });
 }

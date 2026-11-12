@@ -112,7 +112,7 @@ export function demoStorage({
   const projectUrl = (ref: string) => `${supabaseOrigin}/dashboard/project/${ref}`;
   const vi = language === 'vi';
   const accounts = [
-    account('acc_work', 'app_supabase', vi ? 'Công ty' : 'Work', 'minh@company.example', '#c8402b', 0, {
+    account('acc_work', 'app_supabase', vi ? 'Công ty' : 'Work', 'minh@company.example', '#8c2f55', 0, {
       icon: 'briefcase',
       note: vi ? 'Dự án chính · chủ thanh toán' : 'Main projects · billing owner',
       recents: [
@@ -216,7 +216,7 @@ export function demoStorage({
       {
         id: 'ws_company',
         name: vi ? 'Công ty' : 'Company',
-        color: '#c8402b',
+        color: '#8c2f55',
         icon: 'building',
         note: vi ? 'Tài khoản công việc chính' : 'Main work accounts',
         members: {

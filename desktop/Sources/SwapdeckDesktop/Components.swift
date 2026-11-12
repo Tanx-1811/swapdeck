@@ -31,20 +31,22 @@ struct WorkspaceBadge: View {
     }
 }
 
-/// The vermilion seal that marks what is in use, slightly tilted like a hand stamp.
+/// The label that marks what is in use: a dot and the words on a tinted pill, flat.
 struct Seal: View {
     let text: String
 
     var body: some View {
-        Text(text.uppercased())
-            .font(Theme.caps(8.5))
-            .tracking(1.1)
-            .foregroundStyle(Theme.accentText)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1)
-            .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(Theme.accent, lineWidth: 1.4))
-            .rotationEffect(.degrees(-2))
-            .fixedSize()
+        HStack(spacing: 4) {
+            Circle().fill(Theme.accent).frame(width: 5, height: 5)
+            Text(text)
+                .font(Theme.text(10, .semibold))
+                .foregroundStyle(Theme.accentText)
+        }
+        .padding(.leading, 6)
+        .padding(.trailing, 7)
+        .padding(.vertical, 1.5)
+        .background(Capsule().fill(Theme.accentSoft))
+        .fixedSize()
     }
 }
 
@@ -78,7 +80,7 @@ struct Kbd: View {
     }
 }
 
-/// A note with a colored rule on its left: warnings, results, hints.
+/// A note on a tinted background, its tone in the icon: warnings, results, hints. No coloured edge strip.
 struct Callout<Actions: View>: View {
     enum Tone { case info, warning, danger, success }
     let tone: Tone
@@ -100,7 +102,7 @@ struct Callout<Actions: View>: View {
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 8).fill(soft))
-        .overlay(alignment: .leading) { Rectangle().fill(color).frame(width: 3).clipShape(RoundedRectangle(cornerRadius: 1.5)) }
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(color.opacity(0.22), lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
@@ -138,17 +140,17 @@ extension Callout where Actions == EmptyView {
 
 // MARK: - Buttons
 
-/// Primary actions are written in ink.
+/// The main action, in the accent. Flat.
 struct InkButtonStyle: ButtonStyle {
     var small = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(Theme.text(small ? 11.5 : 12.5, .semibold))
-            .foregroundStyle(Theme.onInk)
+            .foregroundStyle(Theme.onAccent)
             .padding(.horizontal, small ? 9 : 12)
             .frame(minHeight: small ? 24 : 28)
-            .background(RoundedRectangle(cornerRadius: 7).fill(Theme.ink.opacity(configuration.isPressed ? 0.85 : 1)))
+            .background(RoundedRectangle(cornerRadius: 7).fill(Theme.accent.opacity(configuration.isPressed ? 0.85 : 1)))
             .contentShape(Rectangle())
     }
 }
@@ -201,8 +203,8 @@ struct LidButtonStyle: ButtonStyle {
 
 // MARK: - The mark
 
-/// The Swapdeck mark (assets/icon.svg): a fanned deck of cards on black
-/// lacquer, the front card stamped with a vermilion seal.
+/// The Swapdeck mark (assets/icon.svg): a deck of account cards on a flat
+/// iris tile, the account in use in front with a person cut out of it.
 struct MarkView: View {
     var size: CGFloat = 22
 
@@ -212,37 +214,19 @@ struct MarkView: View {
             func rect(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat) -> CGRect {
                 CGRect(x: x * s, y: y * s, width: w * s, height: h * s)
             }
-            func rotated(_ degrees: Double, about x: CGFloat, _ y: CGFloat, draw: (inout GraphicsContext) -> Void) {
-                var copy = context
-                copy.translateBy(x: x * s, y: y * s)
-                copy.rotate(by: .degrees(degrees))
-                copy.translateBy(x: -x * s, y: -y * s)
-                draw(&copy)
-            }
-            let tile = Path(roundedRect: rect(0, 0, 128, 128), cornerRadius: 28 * s, style: .continuous)
-            context.fill(tile, with: .color(Color(hex: 0x1a1714)))
-            context.fill(tile, with: .linearGradient(
-                Gradient(stops: [
-                    .init(color: Color(hex: 0xf1e9dc).opacity(0.1), location: 0),
-                    .init(color: Color(hex: 0xf1e9dc).opacity(0), location: 0.45),
-                ]),
-                startPoint: .zero,
-                endPoint: CGPoint(x: 0, y: canvasSize.height)
-            ))
-            context.stroke(
-                Path(roundedRect: rect(1.5, 1.5, 125, 125), cornerRadius: 26.5 * s, style: .continuous),
-                with: .color(Color(hex: 0xf1e9dc).opacity(0.16)),
-                lineWidth: 3 * s
-            )
-            rotated(-14, about: 75, 46) { $0.fill(Path(roundedRect: rect(38, 20, 74, 52), cornerRadius: 9 * s), with: .color(Color(hex: 0xb08a3a))) }
-            rotated(-6, about: 68, 57) { $0.fill(Path(roundedRect: rect(30, 30, 76, 54), cornerRadius: 9 * s), with: .color(Color(hex: 0xd9cdb8))) }
-            context.fill(Path(roundedRect: rect(17, 46, 84, 58), cornerRadius: 10 * s), with: .color(Color(hex: 0xfbf9f5)))
-            context.fill(Path(roundedRect: rect(28, 59, 34, 7), cornerRadius: 3.5 * s), with: .color(Color(hex: 0x1a1714)))
-            context.fill(Path(roundedRect: rect(28, 72, 22, 7), cornerRadius: 3.5 * s), with: .color(Color(hex: 0x1a1714).opacity(0.35)))
-            rotated(-8, about: 80, 87) {
-                $0.stroke(Path(roundedRect: rect(64.5, 77, 31, 20), cornerRadius: 3.5 * s), with: .color(Color(hex: 0xc8402b)), lineWidth: 3.5 * s)
-                $0.fill(Path(roundedRect: rect(70.5, 84, 19, 6), cornerRadius: 1.5 * s), with: .color(Color(hex: 0xc8402b)))
-            }
+            let iris = Color(hex: 0x5046e5)
+            context.fill(Path(roundedRect: rect(0, 0, 128, 128), cornerRadius: 28 * s, style: .continuous), with: .color(iris))
+            context.fill(Path(roundedRect: rect(51, 20, 56, 56), cornerRadius: 13 * s), with: .color(Color(hex: 0x8a84f0)))
+            // Thin tile-coloured gaps keep the cards apart.
+            context.fill(Path(roundedRect: rect(35, 32, 62, 62), cornerRadius: 15.5 * s), with: .color(iris))
+            context.fill(Path(roundedRect: rect(37, 34, 58, 58), cornerRadius: 13.5 * s), with: .color(Color(hex: 0xbdb9f7)))
+            context.fill(Path(roundedRect: rect(19, 46, 64, 64), cornerRadius: 16 * s), with: .color(iris))
+            let front = Path(roundedRect: rect(21, 48, 60, 60), cornerRadius: 14 * s)
+            context.fill(front, with: .color(.white))
+            var person = context
+            person.clip(to: front)
+            person.fill(Path(ellipseIn: rect(40, 59, 22, 22)), with: .color(iris))
+            person.fill(Path(roundedRect: rect(30, 86, 42, 30), cornerRadius: 15 * s), with: .color(iris))
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)

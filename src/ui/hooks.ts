@@ -50,7 +50,7 @@ export function useTheme(theme: ThemePreference | undefined, accent?: Accent): v
     const root = document.documentElement;
     if (!theme || theme === 'system') delete root.dataset.theme;
     else root.dataset.theme = theme;
-    if (!accent || accent === 'son') delete root.dataset.accent;
+    if (!accent || accent === 'iris') delete root.dataset.accent;
     else root.dataset.accent = accent;
   }, [theme, accent]);
 }

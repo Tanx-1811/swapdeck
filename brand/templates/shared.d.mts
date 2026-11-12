@@ -8,22 +8,25 @@ export const PALETTE: Record<
   | 'ink'
   | 'ink2'
   | 'ink3'
-  | 'lacquer'
-  | 'lacquer2'
-  | 'lacquerLine'
-  | 'eggshell'
-  | 'eggshell2'
-  | 'son'
-  | 'sonOnDark'
-  | 'sonDeep'
+  | 'night'
+  | 'night2'
+  | 'nightLine'
+  | 'onNight'
+  | 'onNight2'
+  | 'iris'
+  | 'irisText'
+  | 'irisSoft'
+  | 'irisOnNight'
+  | 'deckBack'
+  | 'deckMid'
+  | 'deckMidSmall'
   | 'jade'
   | 'cham'
-  | 'gold'
-  | 'cardShade',
+  | 'amber',
   string
 >;
 export const FONTS: { display: string; text: string; mono: string };
 /** @font-face rules for the brand fonts, with the woff2 files inlined. */
 export function fontFacesCss(): string;
-/** CSS for a `.bg` layer: warm paper or black lacquer, with grain. */
-export function backgroundCss(theme: 'paper' | 'lacquer'): string;
+/** CSS for a flat `.bg` layer: light paper or the deep ink of the night variant. */
+export function backgroundCss(theme: 'paper' | 'night'): string;
